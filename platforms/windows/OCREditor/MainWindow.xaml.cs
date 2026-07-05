@@ -40,7 +40,7 @@ namespace OCREditor
             public double RelHeight { get; set; }
             
             public bool IsRemoved { get; set; }
-            public bool IsEdited { get; set; } = true;
+            public bool IsEdited { get; set; } = false;
             
             // Formatting properties
             public double FontSize { get; set; } = 14;
@@ -717,7 +717,23 @@ namespace OCREditor
             return GetQuadrantBackgroundColor(region.RelX, region.RelY);
         }
 
-        private System.Windows.Media.Brush CreateBackgroundCoverBrush(OCRRegion region)
+        private bool HasMoved(OCRRegion region)
+        {
+            return Math.Abs(region.RelX - region.OriginalRelX) > 0.0001 ||
+                   Math.Abs(region.RelY - region.OriginalRelY) > 0.0001;
+        }
+
+        private bool NeedsOriginalTextCover(OCRRegion region)
+        {
+            return region.IsRemoved || region.IsEdited || HasMoved(region);
+        }
+
+        private bool ShouldRenderReplacementText(OCRRegion region)
+        {
+            return region.IsEdited || HasMoved(region);
+        }
+
+        private System.Windows.Media.Brush CreateBackgroundCoverBrush(OCRRegion region, int coverPadding)
         {
             lock (_bitmapLock)
             {
@@ -728,11 +744,16 @@ namespace OCREditor
                         int imgW = _originalBitmap.Width;
                         int imgH = _originalBitmap.Height;
 
-                        int boxX = (int)Math.Round(region.OriginalRelX * imgW);
-                        int boxY = (int)Math.Round(region.OriginalRelY * imgH);
-                        int patchW = Math.Max(1, (int)Math.Round(region.RelWidth * imgW));
-                        int patchH = Math.Max(1, (int)Math.Round(region.RelHeight * imgH));
+                        int originalX = (int)Math.Round(region.OriginalRelX * imgW);
+                        int originalY = (int)Math.Round(region.OriginalRelY * imgH);
+                        int originalW = Math.Max(1, (int)Math.Round(region.RelWidth * imgW));
+                        int originalH = Math.Max(1, (int)Math.Round(region.RelHeight * imgH));
+                        int boxX = Math.Max(0, originalX - coverPadding);
+                        int boxY = Math.Max(0, originalY - coverPadding);
+                        int patchW = Math.Max(1, Math.Min(imgW - boxX, originalW + coverPadding * 2));
+                        int patchH = Math.Max(1, Math.Min(imgH - boxY, originalH + coverPadding * 2));
                         int sampleGap = Math.Max(2, Math.Min(18, Math.Min(patchW, patchH) / 3));
+                        int feather = Math.Max(1, Math.Min(coverPadding, 8));
 
                         var pixels = new byte[patchW * patchH * 4];
                         var leftEdge = new System.Windows.Media.Color[patchH];
@@ -774,7 +795,7 @@ namespace OCREditor
                                 pixels[index] = color.B;
                                 pixels[index + 1] = color.G;
                                 pixels[index + 2] = color.R;
-                                pixels[index + 3] = 255;
+                                pixels[index + 3] = CalculateFeatherAlpha(x, y, patchW, patchH, feather);
                             }
                         }
 
@@ -803,6 +824,20 @@ namespace OCREditor
             }
 
             return new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
+        }
+
+        private byte CalculateFeatherAlpha(int x, int y, int width, int height, int feather)
+        {
+            if (feather <= 0)
+                return 255;
+
+            int distanceToEdge = Math.Min(Math.Min(x, width - 1 - x), Math.Min(y, height - 1 - y));
+            if (distanceToEdge >= feather)
+                return 255;
+
+            double t = Math.Max(0.0, Math.Min(1.0, (double)distanceToEdge / feather));
+            t = t * t * (3.0 - 2.0 * t);
+            return (byte)Math.Round(255 * t);
         }
 
         private System.Windows.Media.Color SampleBackgroundPixel(int x, int y, int stepX, int stepY)
@@ -864,18 +899,21 @@ namespace OCREditor
             // 1. First, draw static background covers to erase/inpaint the original text printed on the background image
             foreach (var region in _regions)
             {
-                if (region.IsRemoved || region.RelX != region.OriginalRelX || region.RelY != region.OriginalRelY || region.IsEdited)
+                if (NeedsOriginalTextCover(region))
                 {
-                    double sLeft = region.OriginalRelX * _imgWidth;
-                    double sTop = region.OriginalRelY * _imgHeight;
-                    double sWidth = region.RelWidth * _imgWidth;
-                    double sHeight = region.RelHeight * _imgHeight;
+                    double baseWidth = region.RelWidth * _imgWidth;
+                    double baseHeight = region.RelHeight * _imgHeight;
+                    double coverPadding = Math.Max(2.0, Math.Min(8.0, Math.Min(baseWidth, baseHeight) * 0.22));
+                    double sLeft = Math.Max(0.0, region.OriginalRelX * _imgWidth - coverPadding);
+                    double sTop = Math.Max(0.0, region.OriginalRelY * _imgHeight - coverPadding);
+                    double sWidth = Math.Min(_imgWidth - sLeft, baseWidth + coverPadding * 2);
+                    double sHeight = Math.Min(_imgHeight - sTop, baseHeight + coverPadding * 2);
 
                     var staticCover = new System.Windows.Controls.Border
                     {
                         Width = sWidth,
                         Height = sHeight,
-                        Background = CreateBackgroundCoverBrush(region),
+                        Background = CreateBackgroundCoverBrush(region, (int)Math.Ceiling(coverPadding)),
                         BorderThickness = new Thickness(0)
                     };
                     Canvas.SetLeft(staticCover, sLeft);
@@ -898,7 +936,7 @@ namespace OCREditor
                 {
                     Width = width,
                     Height = height,
-                    Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor),
+                    Background = System.Windows.Media.Brushes.Transparent,
                     BorderThickness = new Thickness(1),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = region
@@ -927,7 +965,7 @@ namespace OCREditor
                     if (region != _selectedRegion)
                     {
                         border.BorderBrush = System.Windows.Media.Brushes.Orange;
-                        border.Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
+                        border.Background = System.Windows.Media.Brushes.Transparent;
                     }
                 };
                 
@@ -999,21 +1037,28 @@ namespace OCREditor
                     scale = _imgHeight / SourceImage.Source.Height;
                 }
                 
-                var textBlock = new System.Windows.Controls.TextBlock
+                if (ShouldRenderReplacementText(region))
                 {
-                    Text = region.CurrentText,
-                    Foreground = new System.Windows.Media.SolidColorBrush(region.TextColor),
-                    FontFamily = new System.Windows.Media.FontFamily("Microsoft JhengHei"),
-                    FontSize = region.FontSize * scale,
-                    FontWeight = region.IsBold ? FontWeights.Bold : FontWeights.Normal,
-                    FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    TextAlignment = TextAlignment.Center
-                };
-                
-                border.Child = textBlock;
-                region.TextVisual = textBlock;
+                    var textBlock = new System.Windows.Controls.TextBlock
+                    {
+                        Text = region.CurrentText,
+                        Foreground = new System.Windows.Media.SolidColorBrush(region.TextColor),
+                        FontFamily = new System.Windows.Media.FontFamily("Microsoft JhengHei"),
+                        FontSize = region.FontSize * scale,
+                        FontWeight = region.IsBold ? FontWeights.Bold : FontWeights.Normal,
+                        FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        TextAlignment = TextAlignment.Center
+                    };
+
+                    border.Child = textBlock;
+                    region.TextVisual = textBlock;
+                }
+                else
+                {
+                    region.TextVisual = null;
+                }
                 region.BorderElement = border;
                 
                 Canvas.SetLeft(border, left);
