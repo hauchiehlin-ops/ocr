@@ -517,25 +517,28 @@ namespace OCREditor
 
         private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
         {
-            if (_currentImagePath == null || !File.Exists(_currentImagePath))
-                return System.Windows.Media.Color.FromRgb(243, 244, 246);
-            
-            try
+            // 1. Primary Attempt: Read pixels directly from the WPF BitmapSource in memory
+            // This is extremely fast, avoids all file locks, and works for any image format.
+            if (SourceImage.Source is BitmapSource bitmapSource)
             {
-                using (var bmp = new Bitmap(_currentImagePath))
+                try
                 {
-                    int x = (int)(region.RelX * bmp.Width);
-                    int y = (int)(region.RelY * bmp.Height);
-                    int w = (int)(region.RelWidth * bmp.Width);
-                    int h = (int)(region.RelHeight * bmp.Height);
-                    
-                    x = Math.Max(0, Math.Min(x, bmp.Width - 1));
-                    y = Math.Max(0, Math.Min(y, bmp.Height - 1));
-                    w = Math.Max(1, Math.Min(w, bmp.Width - x));
-                    h = Math.Max(1, Math.Min(h, bmp.Height - y));
-                    
-                    // Sample 8 outer points surrounding the box (5 pixels outside)
-                    // to accurately capture the surrounding background color.
+                    BitmapSource source = bitmapSource;
+                    if (bitmapSource.Format != PixelFormats.Bgra32 && bitmapSource.Format != PixelFormats.Bgr32)
+                    {
+                        source = new FormatConvertedBitmap(bitmapSource, PixelFormats.Bgra32, null, 0);
+                    }
+
+                    int x = (int)(region.RelX * source.PixelWidth);
+                    int y = (int)(region.RelY * source.PixelHeight);
+                    int w = (int)(region.RelWidth * source.PixelWidth);
+                    int h = (int)(region.RelHeight * source.PixelHeight);
+
+                    x = Math.Max(0, Math.Min(x, source.PixelWidth - 1));
+                    y = Math.Max(0, Math.Min(y, source.PixelHeight - 1));
+                    w = Math.Max(1, Math.Min(w, source.PixelWidth - x));
+                    h = Math.Max(1, Math.Min(h, source.PixelHeight - y));
+
                     int offset = 5;
                     var samplePoints = new List<System.Drawing.Point>
                     {
@@ -548,22 +551,25 @@ namespace OCREditor
                         new System.Drawing.Point(x + w / 2, y + h + offset),
                         new System.Drawing.Point(x + w + offset, y + h + offset)
                     };
-                    
+
                     long sumR = 0, sumG = 0, sumB = 0;
                     int count = 0;
-                    
+
                     foreach (var pt in samplePoints)
                     {
-                        int px = Math.Max(0, Math.Min(pt.X, bmp.Width - 1));
-                        int py = Math.Max(0, Math.Min(pt.Y, bmp.Height - 1));
-                        
-                        var pixel = bmp.GetPixel(px, py);
-                        sumR += pixel.R;
-                        sumG += pixel.G;
-                        sumB += pixel.B;
+                        int px = Math.Max(0, Math.Min(pt.X, source.PixelWidth - 1));
+                        int py = Math.Max(0, Math.Min(pt.Y, source.PixelHeight - 1));
+
+                        byte[] pixelData = new byte[4];
+                        var rect = new Int32Rect(px, py, 1, 1);
+                        source.CopyPixels(rect, pixelData, 4, 0);
+
+                        sumB += pixelData[0];
+                        sumG += pixelData[1];
+                        sumR += pixelData[2];
                         count++;
                     }
-                    
+
                     if (count > 0)
                     {
                         int r = (int)(sumR / count);
@@ -572,13 +578,75 @@ namespace OCREditor
                         return System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b);
                     }
                 }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"WPF direct pixel copy failed: {ex.Message}");
+                }
             }
-            catch
+
+            // 2. Secondary Fallback: Load the file using GDI+ but with safe FileShare.ReadWrite sharing
+            if (_currentImagePath != null && File.Exists(_currentImagePath))
             {
-                // Fallback to default off-white if anything fails
+                try
+                {
+                    using (var stream = new FileStream(_currentImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (var bmp = new Bitmap(stream))
+                    {
+                        int x = (int)(region.RelX * bmp.Width);
+                        int y = (int)(region.RelY * bmp.Height);
+                        int w = (int)(region.RelWidth * bmp.Width);
+                        int h = (int)(region.RelHeight * bmp.Height);
+
+                        x = Math.Max(0, Math.Min(x, bmp.Width - 1));
+                        y = Math.Max(0, Math.Min(y, bmp.Height - 1));
+                        w = Math.Max(1, Math.Min(w, bmp.Width - x));
+                        h = Math.Max(1, Math.Min(h, bmp.Height - y));
+
+                        int offset = 5;
+                        var samplePoints = new List<System.Drawing.Point>
+                        {
+                            new System.Drawing.Point(x - offset, y - offset),
+                            new System.Drawing.Point(x + w / 2, y - offset),
+                            new System.Drawing.Point(x + w + offset, y - offset),
+                            new System.Drawing.Point(x - offset, y + h / 2),
+                            new System.Drawing.Point(x + w + offset, y + h / 2),
+                            new System.Drawing.Point(x - offset, y + h + offset),
+                            new System.Drawing.Point(x + w / 2, y + h + offset),
+                            new System.Drawing.Point(x + w + offset, y + h + offset)
+                        };
+
+                        long sumR = 0, sumG = 0, sumB = 0;
+                        int count = 0;
+
+                        foreach (var pt in samplePoints)
+                        {
+                            int px = Math.Max(0, Math.Min(pt.X, bmp.Width - 1));
+                            int py = Math.Max(0, Math.Min(pt.Y, bmp.Height - 1));
+
+                            var pixel = bmp.GetPixel(px, py);
+                            sumR += pixel.R;
+                            sumG += pixel.G;
+                            sumB += pixel.B;
+                            count++;
+                        }
+
+                        if (count > 0)
+                        {
+                            int r = (int)(sumR / count);
+                            int g = (int)(sumG / count);
+                            int b = (int)(sumB / count);
+                            return System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"GDI fallback sampling failed: {ex.Message}");
+                }
             }
-            
-            return System.Windows.Media.Color.FromRgb(243, 244, 246);
+
+            // Final fallback cream/soft color
+            return System.Windows.Media.Color.FromRgb(240, 240, 240);
         }
 
         private void SourceImage_SizeChanged(object sender, SizeChangedEventArgs e)
