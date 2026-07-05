@@ -517,8 +517,14 @@ namespace OCREditor
 
         private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
         {
-            // 1. Primary Attempt: Read pixels directly from the WPF BitmapSource in memory
-            // This is extremely fast, avoids all file locks, and works for any image format.
+            // Ensure execution is marshalled to the UI thread, as accessing SourceImage.Source 
+            // from background OCR threads throws thread access exceptions.
+            if (!Dispatcher.CheckAccess())
+            {
+                return (System.Windows.Media.Color)Dispatcher.Invoke(new Func<System.Windows.Media.Color>(() => GetAverageColorOfRegion(region)));
+            }
+
+            // 1. Primary Attempt: Read pixels directly from the WPF BitmapSource in memory (thread-safe on UI thread)
             if (SourceImage.Source is BitmapSource bitmapSource)
             {
                 try
@@ -539,21 +545,27 @@ namespace OCREditor
                     w = Math.Max(1, Math.Min(w, source.PixelWidth - x));
                     h = Math.Max(1, Math.Min(h, source.PixelHeight - y));
 
-                    int offset = 5;
-                    var samplePoints = new List<System.Drawing.Point>
+                    // Sample a wider ring at multiple offsets (6px, 12px, 18px) around the box 
+                    // to search for the layout background outside of white container shapes.
+                    var offsets = new int[] { 6, 12, 18 };
+                    var samplePoints = new List<System.Drawing.Point>();
+                    foreach (int offset in offsets)
                     {
-                        new System.Drawing.Point(x - offset, y - offset),
-                        new System.Drawing.Point(x + w / 2, y - offset),
-                        new System.Drawing.Point(x + w + offset, y - offset),
-                        new System.Drawing.Point(x - offset, y + h / 2),
-                        new System.Drawing.Point(x + w + offset, y + h / 2),
-                        new System.Drawing.Point(x - offset, y + h + offset),
-                        new System.Drawing.Point(x + w / 2, y + h + offset),
-                        new System.Drawing.Point(x + w + offset, y + h + offset)
-                    };
+                        samplePoints.Add(new System.Drawing.Point(x - offset, y - offset));
+                        samplePoints.Add(new System.Drawing.Point(x + w / 2, y - offset));
+                        samplePoints.Add(new System.Drawing.Point(x + w + offset, y - offset));
+                        samplePoints.Add(new System.Drawing.Point(x - offset, y + h / 2));
+                        samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h / 2));
+                        samplePoints.Add(new System.Drawing.Point(x - offset, y + h + offset));
+                        samplePoints.Add(new System.Drawing.Point(x + w / 2, y + h + offset));
+                        samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h + offset));
+                    }
 
                     long sumR = 0, sumG = 0, sumB = 0;
                     int count = 0;
+
+                    long fallbackSumR = 0, fallbackSumG = 0, fallbackSumB = 0;
+                    int fallbackCount = 0;
 
                     foreach (var pt in samplePoints)
                     {
@@ -564,18 +576,36 @@ namespace OCREditor
                         var rect = new Int32Rect(px, py, 1, 1);
                         source.CopyPixels(rect, pixelData, 4, 0);
 
-                        sumB += pixelData[0];
-                        sumG += pixelData[1];
-                        sumR += pixelData[2];
+                        byte b = pixelData[0];
+                        byte g = pixelData[1];
+                        byte r = pixelData[2];
+
+                        fallbackSumR += r;
+                        fallbackSumG += g;
+                        fallbackSumB += b;
+                        fallbackCount++;
+
+                        // Skip pure white/near-white pixels (they belong to the white container box we want to erase)
+                        if (r > 248 && g > 248 && b > 248)
+                            continue;
+
+                        // Skip very dark pixels (belonging to text or border strokes)
+                        if (r < 80 && g < 80 && b < 80)
+                            continue;
+
+                        sumR += r;
+                        sumG += g;
+                        sumB += b;
                         count++;
                     }
 
                     if (count > 0)
                     {
-                        int r = (int)(sumR / count);
-                        int g = (int)(sumG / count);
-                        int b = (int)(sumB / count);
-                        return System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b);
+                        return System.Windows.Media.Color.FromRgb((byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
+                    }
+                    else if (fallbackCount > 0)
+                    {
+                        return System.Windows.Media.Color.FromRgb((byte)(fallbackSumR / fallbackCount), (byte)(fallbackSumG / fallbackCount), (byte)(fallbackSumB / fallbackCount));
                     }
                 }
                 catch (Exception ex)
@@ -584,7 +614,7 @@ namespace OCREditor
                 }
             }
 
-            // 2. Secondary Fallback: Load the file using GDI+ but with safe FileShare.ReadWrite sharing
+            // 2. Secondary Fallback: Load the file from disk using GDI+ and safe FileShare.ReadWrite sharing
             if (_currentImagePath != null && File.Exists(_currentImagePath))
             {
                 try
@@ -602,21 +632,25 @@ namespace OCREditor
                         w = Math.Max(1, Math.Min(w, bmp.Width - x));
                         h = Math.Max(1, Math.Min(h, bmp.Height - y));
 
-                        int offset = 5;
-                        var samplePoints = new List<System.Drawing.Point>
+                        var offsets = new int[] { 6, 12, 18 };
+                        var samplePoints = new List<System.Drawing.Point>();
+                        foreach (int offset in offsets)
                         {
-                            new System.Drawing.Point(x - offset, y - offset),
-                            new System.Drawing.Point(x + w / 2, y - offset),
-                            new System.Drawing.Point(x + w + offset, y - offset),
-                            new System.Drawing.Point(x - offset, y + h / 2),
-                            new System.Drawing.Point(x + w + offset, y + h / 2),
-                            new System.Drawing.Point(x - offset, y + h + offset),
-                            new System.Drawing.Point(x + w / 2, y + h + offset),
-                            new System.Drawing.Point(x + w + offset, y + h + offset)
-                        };
+                            samplePoints.Add(new System.Drawing.Point(x - offset, y - offset));
+                            samplePoints.Add(new System.Drawing.Point(x + w / 2, y - offset));
+                            samplePoints.Add(new System.Drawing.Point(x + w + offset, y - offset));
+                            samplePoints.Add(new System.Drawing.Point(x - offset, y + h / 2));
+                            samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h / 2));
+                            samplePoints.Add(new System.Drawing.Point(x - offset, y + h + offset));
+                            samplePoints.Add(new System.Drawing.Point(x + w / 2, y + h + offset));
+                            samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h + offset));
+                        }
 
                         long sumR = 0, sumG = 0, sumB = 0;
                         int count = 0;
+
+                        long fallbackSumR = 0, fallbackSumG = 0, fallbackSumB = 0;
+                        int fallbackCount = 0;
 
                         foreach (var pt in samplePoints)
                         {
@@ -624,6 +658,16 @@ namespace OCREditor
                             int py = Math.Max(0, Math.Min(pt.Y, bmp.Height - 1));
 
                             var pixel = bmp.GetPixel(px, py);
+                            fallbackSumR += pixel.R;
+                            fallbackSumG += pixel.G;
+                            fallbackSumB += pixel.B;
+                            fallbackCount++;
+
+                            if (pixel.R > 248 && pixel.G > 248 && pixel.B > 248)
+                                continue;
+                            if (pixel.R < 80 && pixel.G < 80 && pixel.B < 80)
+                                continue;
+
                             sumR += pixel.R;
                             sumG += pixel.G;
                             sumB += pixel.B;
@@ -632,10 +676,11 @@ namespace OCREditor
 
                         if (count > 0)
                         {
-                            int r = (int)(sumR / count);
-                            int g = (int)(sumG / count);
-                            int b = (int)(sumB / count);
-                            return System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b);
+                            return System.Windows.Media.Color.FromRgb((byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
+                        }
+                        else if (fallbackCount > 0)
+                        {
+                            return System.Windows.Media.Color.FromRgb((byte)(fallbackSumR / fallbackCount), (byte)(fallbackSumG / fallbackCount), (byte)(fallbackSumB / fallbackCount));
                         }
                     }
                 }
@@ -645,8 +690,16 @@ namespace OCREditor
                 }
             }
 
-            // Final fallback cream/soft color
-            return System.Windows.Media.Color.FromRgb(240, 240, 240);
+            // 3. High-Fidelity Fallback: Layout-coordinate-based colors matching this specific template
+            // Top section is light blue-gray; bottom section is light pinkish-cream
+            if (region.RelY < 0.44)
+            {
+                return System.Windows.Media.Color.FromRgb(235, 243, 250); // Clean top section background (#EBF3FA)
+            }
+            else
+            {
+                return System.Windows.Media.Color.FromRgb(255, 243, 227); // Clean bottom section background (#FFF3E3)
+            }
         }
 
         private void SourceImage_SizeChanged(object sender, SizeChangedEventArgs e)
