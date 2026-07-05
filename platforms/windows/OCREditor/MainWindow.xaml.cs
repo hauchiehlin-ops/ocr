@@ -31,15 +31,17 @@ namespace OCREditor
             // Relative coordinates (0.0 to 1.0)
             public double RelX { get; set; }
             public double RelY { get; set; }
+            public double OriginalRelX { get; set; }
+            public double OriginalRelY { get; set; }
             public double RelWidth { get; set; }
             public double RelHeight { get; set; }
             
             public bool IsRemoved { get; set; }
-            public bool IsEdited { get; set; }
+            public bool IsEdited { get; set; } = true;
             
             // Formatting properties
             public double FontSize { get; set; } = 14;
-            public bool IsBold { get; set; } = false;
+            public bool IsBold { get; set; } = true;
             public bool IsItalic { get; set; } = false;
             public System.Windows.Media.Color TextColor { get; set; } = System.Windows.Media.Colors.Black;
             public System.Windows.Media.Color BackgroundColor { get; set; } = System.Windows.Media.Colors.Transparent;
@@ -226,6 +228,8 @@ namespace OCREditor
                         CurrentText = "Edit text here",
                         RelX = x / _imgWidth,
                         RelY = y / _imgHeight,
+                        OriginalRelX = x / _imgWidth,
+                        OriginalRelY = y / _imgHeight,
                         RelWidth = w / _imgWidth,
                         RelHeight = h / _imgHeight,
                         FontSize = Math.Max(12, h * 0.75),
@@ -432,6 +436,8 @@ namespace OCREditor
                                     CurrentText = line.Text,
                                     RelX = boxX / origW,
                                     RelY = boxY / origH,
+                                    OriginalRelX = boxX / origW,
+                                    OriginalRelY = boxY / origH,
                                     RelWidth = boxW / origW,
                                     RelHeight = boxH / origH,
                                     FontSize = estFontSize
@@ -595,8 +601,34 @@ namespace OCREditor
             
             if (_imgWidth <= 0 || _imgHeight <= 0) return;
             
+            // 1. First, draw static background covers to erase/inpaint the original text printed on the background image
             foreach (var region in _regions)
             {
+                if (region.IsRemoved || region.RelX != region.OriginalRelX || region.RelY != region.OriginalRelY || region.IsEdited)
+                {
+                    double sLeft = region.OriginalRelX * _imgWidth;
+                    double sTop = region.OriginalRelY * _imgHeight;
+                    double sWidth = region.RelWidth * _imgWidth;
+                    double sHeight = region.RelHeight * _imgHeight;
+
+                    var staticCover = new System.Windows.Controls.Border
+                    {
+                        Width = sWidth,
+                        Height = sHeight,
+                        Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor),
+                        BorderThickness = new Thickness(0)
+                    };
+                    Canvas.SetLeft(staticCover, sLeft);
+                    Canvas.SetTop(staticCover, sTop);
+                    OverlayCanvas.Children.Add(staticCover);
+                }
+            }
+
+            // 2. Next, draw interactive, draggable text layers on top of the static covers
+            foreach (var region in _regions)
+            {
+                if (region.IsRemoved) continue; // If marked as removed, don't show the interactive border layer
+
                 double left = region.RelX * _imgWidth;
                 double top = region.RelY * _imgHeight;
                 double width = region.RelWidth * _imgWidth;
@@ -606,8 +638,8 @@ namespace OCREditor
                 {
                     Width = width,
                     Height = height,
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0)), // Light orange default highlight
-                    BorderThickness = new Thickness(1.5),
+                    Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor),
+                    BorderThickness = new Thickness(1),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = region
                 };
@@ -615,7 +647,7 @@ namespace OCREditor
                 if (region == _selectedRegion)
                 {
                     border.BorderBrush = System.Windows.Media.Brushes.DodgerBlue;
-                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 30, 144, 255)); // Deeper blue for selected
+                    border.BorderThickness = new Thickness(1.5);
                 }
                 else
                 {
@@ -635,9 +667,10 @@ namespace OCREditor
                     if (region != _selectedRegion)
                     {
                         border.BorderBrush = System.Windows.Media.Brushes.Orange;
-                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0));
+                        border.Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
                     }
                 };
+                
                 border.MouseDown += (s, e) =>
                 {
                     if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
@@ -686,40 +719,34 @@ namespace OCREditor
                         _draggingRegion = null;
                         border.ReleaseMouseCapture();
                         
-                        RenderRegions(); // Re-render to refresh final styles and layout
+                        RenderRegions(); // Re-render to finalize and refresh layout
                         StatusLabel.Text = "Repositioned text layer.";
                         e.Handled = true;
                     }
                 };
-                
-                if (region.IsRemoved)
+
+                // Render the TextBlock dynamically inside the border
+                double scale = 1.0;
+                if (SourceImage.Source != null && SourceImage.Source.Height > 0)
                 {
-                    // Full inpainting background
-                    border.Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
-                    border.BorderThickness = new Thickness(0);
-                }
-                else if (region.IsEdited)
-                {
-                    // Render custom text overlay in real-time
-                    border.Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
-                    border.BorderThickness = new Thickness(0);
-                    
-                    var textBlock = new System.Windows.Controls.TextBlock
-                    {
-                        Text = region.CurrentText,
-                        Foreground = new System.Windows.Media.SolidColorBrush(region.TextColor),
-                        FontFamily = new System.Windows.Media.FontFamily("Microsoft JhengHei"),
-                        FontSize = region.FontSize * (_imgHeight / SourceImage.Source.Height), // Scale font dynamically
-                        FontWeight = region.IsBold ? FontWeights.Bold : FontWeights.Normal,
-                        FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        TextAlignment = TextAlignment.Center
-                    };
-                    border.Child = textBlock;
-                    region.TextVisual = textBlock;
+                    scale = _imgHeight / SourceImage.Source.Height;
                 }
                 
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    Text = region.CurrentText,
+                    Foreground = new System.Windows.Media.SolidColorBrush(region.TextColor),
+                    FontFamily = new System.Windows.Media.FontFamily("Microsoft JhengHei"),
+                    FontSize = region.FontSize * scale,
+                    FontWeight = region.IsBold ? FontWeights.Bold : FontWeights.Normal,
+                    FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    TextAlignment = TextAlignment.Center
+                };
+                
+                border.Child = textBlock;
+                region.TextVisual = textBlock;
                 region.BorderElement = border;
                 
                 Canvas.SetLeft(border, left);
