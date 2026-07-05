@@ -192,6 +192,13 @@
 
                     <!-- OCR Language Selection -->
                     <ComboBox x:Name="LanguageComboBox" Width="160" Height="26" VerticalAlignment="Center" SelectedIndex="0" Margin="0,0,15,0" Background="#2D2D30" Foreground="White" BorderBrush="#3F3F46">
+                        <ComboBox.Resources>
+                            <Style TargetType="ComboBoxItem">
+                                <Setter Property="Background" Value="#2D2D30"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="Padding" Value="6,4"/>
+                            </Style>
+                        </ComboBox.Resources>
                         <ComboBoxItem Content="Auto (System)" Tag="auto"/>
                         <ComboBoxItem Content="繁體中文 (zh-Hant)" Tag="zh-Hant"/>
                         <ComboBoxItem Content="English (en)" Tag="en"/>
