@@ -191,8 +191,8 @@
                                                 CornerRadius="4">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <Grid.ColumnDefinition Width="*"/>
-                                                    <Grid.ColumnDefinition Width="20"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="20"/>
                                                 </Grid.ColumnDefinitions>
                                                 <!-- Arrow -->
                                                 <Path x:Name="Arrow" 
