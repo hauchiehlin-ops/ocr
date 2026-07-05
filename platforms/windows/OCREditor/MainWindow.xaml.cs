@@ -88,14 +88,17 @@ namespace OCREditor
                 {
                     _currentImagePath = openFileDialog.FileName;
                     
-                    // Load image
-                    var bitmapUri = new Uri(_currentImagePath);
-                    var bitmapImage = new BitmapImage(bitmapUri);
-                    SourceImage.Source = bitmapImage;
+                    // Load image synchronously to guarantee metadata is immediately available
+                    var bitmapImage = new BitmapImage();
+                    bitmapImage.BeginInit();
+                    bitmapImage.UriSource = new Uri(_currentImagePath);
+                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad; // Force immediate load
+                    bitmapImage.EndInit();
                     
+                    SourceImage.Source = bitmapImage;
                     StatusLabel.Text = $"Loaded: {Path.GetFileName(_currentImagePath)}";
                     
-                    // Initialize dimensions immediately from the image metadata
+                    // Initialize dimensions immediately
                     _imgWidth = bitmapImage.Width;
                     _imgHeight = bitmapImage.Height;
                     
@@ -236,8 +239,8 @@ namespace OCREditor
                 {
                     Width = width,
                     Height = height,
-                    Background = System.Windows.Media.Brushes.Transparent,
-                    BorderThickness = new Thickness(1),
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0)), // Light orange default highlight
+                    BorderThickness = new Thickness(2),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = region
                 };
@@ -245,27 +248,27 @@ namespace OCREditor
                 if (region == _selectedRegion)
                 {
                     border.BorderBrush = System.Windows.Media.Brushes.DodgerBlue;
-                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 30, 144, 255));
+                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 30, 144, 255)); // Deeper blue for selected
                 }
                 else
                 {
-                    border.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 122, 204));
+                    border.BorderBrush = System.Windows.Media.Brushes.Orange;
                 }
                 
                 border.MouseEnter += (s, e) =>
                 {
                     if (region != _selectedRegion)
                     {
-                        border.BorderBrush = System.Windows.Media.Brushes.DeepSkyBlue;
-                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 0, 191, 255));
+                        border.BorderBrush = System.Windows.Media.Brushes.Red;
+                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 255, 0, 0)); // Red tint on hover
                     }
                 };
                 border.MouseLeave += (s, e) =>
                 {
                     if (region != _selectedRegion)
                     {
-                        border.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 0, 122, 204));
-                        border.Background = System.Windows.Media.Brushes.Transparent;
+                        border.BorderBrush = System.Windows.Media.Brushes.Orange;
+                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0));
                     }
                 };
                 border.MouseDown += (s, e) =>
