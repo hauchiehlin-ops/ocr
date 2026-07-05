@@ -17,6 +17,10 @@ namespace OCREditor
         private string? _currentImagePath;
         private string? _initErrorMessage;
 
+        // Image dimensions (in WPF units)
+        private double _imgWidth = 0;
+        private double _imgHeight = 0;
+
         // Interactive Region management
         private class OCRRegion
         {
@@ -91,6 +95,13 @@ namespace OCREditor
                     
                     StatusLabel.Text = $"Loaded: {Path.GetFileName(_currentImagePath)}";
                     
+                    // Initialize dimensions immediately from the image metadata
+                    _imgWidth = bitmapImage.Width;
+                    _imgHeight = bitmapImage.Height;
+                    
+                    OverlayCanvas.Width = _imgWidth;
+                    OverlayCanvas.Height = _imgHeight;
+                    
                     // Clear previous overlays
                     _regions.Clear();
                     _selectedRegion = null;
@@ -126,8 +137,6 @@ namespace OCREditor
                         
                         // Parse real boxes
                         _regions.Clear();
-                        double imgWidth = bitmap.Width;
-                        double imgHeight = bitmap.Height;
                         
                         foreach (var block in result.Blocks)
                         {
@@ -138,10 +147,10 @@ namespace OCREditor
                                 {
                                     OriginalText = line.Text,
                                     CurrentText = line.Text,
-                                    RelX = box.X / imgWidth,
-                                    RelY = box.Y / imgHeight,
-                                    RelWidth = box.Width / imgWidth,
-                                    RelHeight = box.Height / imgHeight
+                                    RelX = box.X / bitmap.Width,
+                                    RelY = box.Y / bitmap.Height,
+                                    RelWidth = box.Width / bitmap.Width,
+                                    RelHeight = box.Height / bitmap.Height
                                 });
                             }
                         }
@@ -198,26 +207,30 @@ namespace OCREditor
 
         private void SourceImage_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            OverlayCanvas.Width = SourceImage.ActualWidth;
-            OverlayCanvas.Height = SourceImage.ActualHeight;
-            RenderRegions();
+            if (SourceImage.ActualWidth > 0 && SourceImage.ActualHeight > 0)
+            {
+                _imgWidth = SourceImage.ActualWidth;
+                _imgHeight = SourceImage.ActualHeight;
+                
+                OverlayCanvas.Width = _imgWidth;
+                OverlayCanvas.Height = _imgHeight;
+                
+                RenderRegions();
+            }
         }
 
         private void RenderRegions()
         {
             OverlayCanvas.Children.Clear();
             
-            double imgWidth = SourceImage.ActualWidth;
-            double imgHeight = SourceImage.ActualHeight;
-            
-            if (imgWidth <= 0 || imgHeight <= 0) return;
+            if (_imgWidth <= 0 || _imgHeight <= 0) return;
             
             foreach (var region in _regions)
             {
-                double left = region.RelX * imgWidth;
-                double top = region.RelY * imgHeight;
-                double width = region.RelWidth * imgWidth;
-                double height = region.RelHeight * imgHeight;
+                double left = region.RelX * _imgWidth;
+                double top = region.RelY * _imgHeight;
+                double width = region.RelWidth * _imgWidth;
+                double height = region.RelHeight * _imgHeight;
                 
                 var border = new System.Windows.Controls.Border
                 {
