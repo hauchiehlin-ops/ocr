@@ -526,23 +526,51 @@ namespace OCREditor
                     w = Math.Max(1, Math.Min(w, bmp.Width - x));
                     h = Math.Max(1, Math.Min(h, bmp.Height - y));
                     
-                    // Sample corners to get background pixel value
-                    var c1 = bmp.GetPixel(x, y);
-                    var c2 = bmp.GetPixel(x + w - 1, y);
-                    var c3 = bmp.GetPixel(x, y + h - 1);
-                    var c4 = bmp.GetPixel(x + w - 1, y + h - 1);
+                    // Sample 8 outer points surrounding the box (5 pixels outside)
+                    // to accurately capture the surrounding background color.
+                    int offset = 5;
+                    var samplePoints = new List<System.Drawing.Point>
+                    {
+                        new System.Drawing.Point(x - offset, y - offset),
+                        new System.Drawing.Point(x + w / 2, y - offset),
+                        new System.Drawing.Point(x + w + offset, y - offset),
+                        new System.Drawing.Point(x - offset, y + h / 2),
+                        new System.Drawing.Point(x + w + offset, y + h / 2),
+                        new System.Drawing.Point(x - offset, y + h + offset),
+                        new System.Drawing.Point(x + w / 2, y + h + offset),
+                        new System.Drawing.Point(x + w + offset, y + h + offset)
+                    };
                     
-                    int r = (c1.R + c2.R + c3.R + c4.R) / 4;
-                    int g = (c1.G + c2.G + c3.G + c4.G) / 4;
-                    int b = (c1.B + c2.B + c3.B + c4.B) / 4;
+                    long sumR = 0, sumG = 0, sumB = 0;
+                    int count = 0;
                     
-                    return System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b);
+                    foreach (var pt in samplePoints)
+                    {
+                        int px = Math.Max(0, Math.Min(pt.X, bmp.Width - 1));
+                        int py = Math.Max(0, Math.Min(pt.Y, bmp.Height - 1));
+                        
+                        var pixel = bmp.GetPixel(px, py);
+                        sumR += pixel.R;
+                        sumG += pixel.G;
+                        sumB += pixel.B;
+                        count++;
+                    }
+                    
+                    if (count > 0)
+                    {
+                        int r = (int)(sumR / count);
+                        int g = (int)(sumG / count);
+                        int b = (int)(sumB / count);
+                        return System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b);
+                    }
                 }
             }
             catch
             {
-                return System.Windows.Media.Color.FromRgb(243, 244, 246);
+                // Fallback to default off-white if anything fails
             }
+            
+            return System.Windows.Media.Color.FromRgb(243, 244, 246);
         }
 
         private void SourceImage_SizeChanged(object sender, SizeChangedEventArgs e)
