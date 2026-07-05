@@ -9,6 +9,7 @@
     <AssemblyName>OCREditor</AssemblyName>
     <RootNamespace>OCREditor</RootNamespace>
     <Platforms>AnyCPU;x64</Platforms>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
