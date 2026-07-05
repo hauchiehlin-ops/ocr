@@ -19,6 +19,7 @@ namespace OCREditor
         private OCREngineInterop? _ocrEngine; // Kept for architecture compatibility
         private string? _currentImagePath;
         private Bitmap? _originalBitmap;
+        private MemoryStream? _originalBitmapStream;
         private readonly object _bitmapLock = new object();
 
         // Image dimensions (in WPF units)
@@ -268,7 +269,9 @@ namespace OCREditor
                 {
                     _currentImagePath = openFileDialog.FileName;
                     
-                    // Safely cache the image into our in-memory Bitmap for thread-safe pixel sampling
+                    // Safely cache the image into our in-memory Bitmap for thread-safe pixel sampling.
+                    // CRITICAL: GDI+ requires the source stream to remain OPEN for the Bitmap's entire lifetime.
+                    // We copy the file bytes into a persistent MemoryStream to guarantee this.
                     lock (_bitmapLock)
                     {
                         if (_originalBitmap != null)
@@ -276,10 +279,14 @@ namespace OCREditor
                             _originalBitmap.Dispose();
                             _originalBitmap = null;
                         }
-                        using (var stream = new FileStream(_currentImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        if (_originalBitmapStream != null)
                         {
-                            _originalBitmap = new Bitmap(stream);
+                            _originalBitmapStream.Dispose();
+                            _originalBitmapStream = null;
                         }
+                        byte[] fileBytes = File.ReadAllBytes(_currentImagePath);
+                        _originalBitmapStream = new MemoryStream(fileBytes);
+                        _originalBitmap = new Bitmap(_originalBitmapStream);
                     }
                     
                     // Load image synchronously to guarantee metadata is immediately available
