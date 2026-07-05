@@ -10,13 +10,12 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using System.Drawing;
 using System.Drawing.Imaging;
-using OCREditor.Interop;
 
 namespace OCREditor
 {
     public partial class MainWindow : Window
     {
-        private OCREngineInterop? _ocrEngine;
+        private OCREngineInterop? _ocrEngine; // Kept for architecture compatibility
         private string? _currentImagePath;
 
         // Image dimensions (in WPF units)
@@ -53,6 +52,11 @@ namespace OCREditor
         private OCRRegion? _selectedRegion;
         private bool _isUpdatingUiFromSelection = false;
 
+        // Drawing state for manual bounding boxes
+        private System.Windows.Point _drawStartPoint;
+        private System.Windows.Shapes.Rectangle? _dragRect;
+        private bool _isDrawing = false;
+
         // Undo/Redo stacks
         private class RegionState
         {
@@ -76,18 +80,166 @@ namespace OCREditor
         public MainWindow()
         {
             InitializeComponent();
-            DpiIndicator.Text = $"Scale: {GetDpiScale() * 100:0}%";
+            InitializeEngine();
+            SetupCanvasMouseEvents();
         }
 
-        private double GetDpiScale()
+        private void InitializeEngine()
         {
-            var source = PresentationSource.FromVisual(this);
-            if (source?.CompositionTarget != null)
+            // Kept for logging and architecture compatibility,
+            // but we fall back to Windows Native OCR first.
+            try
             {
-                return source.CompositionTarget.TransformToDevice.M11;
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string modelsPath = Path.Combine(baseDir, "models");
+
+                if (Directory.Exists(modelsPath))
+                {
+                    _ocrEngine = new OCREngineInterop(modelsPath);
+                    StatusLabel.Text = "OCR C++ Core Engine initialized.";
+                }
+                else
+                {
+                    StatusLabel.Text = "Using Windows Native OCR Engine.";
+                }
             }
-            return 1.0;
+            catch (Exception ex)
+            {
+                StatusLabel.Text = $"Using Windows Native OCR Engine. (C++ init bypassed: {ex.Message})";
+            }
         }
+
+        private void SetupCanvasMouseEvents()
+        {
+            OverlayCanvas.MouseDown += Canvas_MouseDown;
+            OverlayCanvas.MouseMove += Canvas_MouseMove;
+            OverlayCanvas.MouseUp += Canvas_MouseUp;
+        }
+
+        #region Zoom Event Handlers
+
+        private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (CanvasScale != null)
+            {
+                CanvasScale.ScaleX = e.NewValue;
+                CanvasScale.ScaleY = e.NewValue;
+                DpiIndicator.Text = $"Zoom: {e.NewValue * 100:0}%";
+            }
+        }
+
+        private void ZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            ZoomSlider.Value = Math.Min(3.0, ZoomSlider.Value + 0.1);
+        }
+
+        private void ZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            ZoomSlider.Value = Math.Max(0.2, ZoomSlider.Value - 0.1);
+        }
+
+        private void ZoomReset_Click(object sender, RoutedEventArgs e)
+        {
+            ZoomSlider.Value = 1.0;
+        }
+
+        #endregion
+
+        #region Canvas Mouse Events for Custom Box Drawing
+
+        private void Canvas_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (_currentImagePath == null) return;
+
+            // Start drawing ONLY if user clicks the transparent canvas directly,
+            // not when they click on an existing Border overlay.
+            if (e.OriginalSource == OverlayCanvas && e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
+            {
+                _isDrawing = true;
+                _drawStartPoint = e.GetPosition(OverlayCanvas);
+                OverlayCanvas.CaptureMouse();
+
+                _dragRect = new System.Windows.Shapes.Rectangle
+                {
+                    Stroke = System.Windows.Media.Brushes.DodgerBlue,
+                    StrokeThickness = 2,
+                    StrokeDashArray = new DoubleCollection() { 3, 3 },
+                    Fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(30, 30, 144, 255))
+                };
+                Canvas.SetLeft(_dragRect, _drawStartPoint.X);
+                Canvas.SetTop(_dragRect, _drawStartPoint.Y);
+                OverlayCanvas.Children.Add(_dragRect);
+
+                e.Handled = true;
+            }
+        }
+
+        private void Canvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (_isDrawing && _dragRect != null)
+            {
+                var curPoint = e.GetPosition(OverlayCanvas);
+
+                double x = Math.Min(_drawStartPoint.X, curPoint.X);
+                double y = Math.Min(_drawStartPoint.Y, curPoint.Y);
+                double w = Math.Abs(_drawStartPoint.X - curPoint.X);
+                double h = Math.Abs(_drawStartPoint.Y - curPoint.Y);
+
+                Canvas.SetLeft(_dragRect, x);
+                Canvas.SetTop(_dragRect, y);
+                _dragRect.Width = w;
+                _dragRect.Height = h;
+            }
+        }
+
+        private void Canvas_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (_isDrawing && _dragRect != null)
+            {
+                _isDrawing = false;
+                OverlayCanvas.ReleaseMouseCapture();
+
+                double x = Canvas.GetLeft(_dragRect);
+                double y = Canvas.GetTop(_dragRect);
+                double w = _dragRect.Width;
+                double h = _dragRect.Height;
+
+                OverlayCanvas.Children.Remove(_dragRect);
+                _dragRect = null;
+
+                // Only create layer if the drawn box is reasonably sized
+                if (w > 15 && h > 10)
+                {
+                    SaveHistoryState();
+
+                    var newRegion = new OCRRegion
+                    {
+                        OriginalText = "[Manually Drawn Text]",
+                        CurrentText = "Edit text here",
+                        RelX = x / _imgWidth,
+                        RelY = y / _imgHeight,
+                        RelWidth = w / _imgWidth,
+                        RelHeight = h / _imgHeight,
+                        FontSize = Math.Max(12, h * 0.75),
+                        IsEdited = true
+                    };
+                    
+                    // Sample background color under custom drawn area
+                    newRegion.BackgroundColor = GetAverageColorOfRegion(newRegion);
+
+                    _regions.Add(newRegion);
+
+                    // Refresh listbox source
+                    LayerListBox.ItemsSource = null;
+                    LayerListBox.ItemsSource = _regions;
+
+                    SelectRegion(newRegion);
+                    StatusLabel.Text = "Custom text layer drawn successfully.";
+                }
+            }
+        }
+
+        #endregion
 
         private async void OpenImage_Click(object sender, RoutedEventArgs e)
         {
@@ -117,6 +269,9 @@ namespace OCREditor
                     
                     OverlayCanvas.Width = _imgWidth;
                     OverlayCanvas.Height = _imgHeight;
+                    
+                    // Reset Zoom to 100% on new image load
+                    ZoomSlider.Value = 1.0;
                     
                     // Clear previous overlays and history
                     _regions.Clear();
@@ -203,10 +358,26 @@ namespace OCREditor
                     var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
                     var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
                     
-                    var ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
-                    if (ocrEngine == null)
+                    // Initialize Windows Native OCR Engine based on ComboBox selection
+                    Windows.Media.Ocr.OcrEngine? ocrEngine = null;
+
+                    if (LanguageComboBox.SelectedIndex == 0) // Auto
+                    {
+                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+                        if (ocrEngine == null)
+                            ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hant"));
+                    }
+                    else if (LanguageComboBox.SelectedIndex == 1) // zh-Hant
                     {
                         ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hant"));
+                    }
+                    else if (LanguageComboBox.SelectedIndex == 2) // en
+                    {
+                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("en"));
+                    }
+                    else if (LanguageComboBox.SelectedIndex == 3) // zh-Hans
+                    {
+                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hans"));
                     }
                     
                     if (ocrEngine != null)
@@ -404,7 +575,7 @@ namespace OCREditor
                 {
                     Width = width,
                     Height = height,
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0)), // Light orange border highlight
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0)), // Light orange default highlight
                     BorderThickness = new Thickness(1.5),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = region
@@ -413,7 +584,7 @@ namespace OCREditor
                 if (region == _selectedRegion)
                 {
                     border.BorderBrush = System.Windows.Media.Brushes.DodgerBlue;
-                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(50, 30, 144, 255));
+                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 30, 144, 255)); // Deeper blue for selected
                 }
                 else
                 {
@@ -425,7 +596,7 @@ namespace OCREditor
                     if (region != _selectedRegion)
                     {
                         border.BorderBrush = System.Windows.Media.Brushes.Red;
-                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 255, 0, 0));
+                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 255, 0, 0)); // Red tint on hover
                     }
                 };
                 border.MouseLeave += (s, e) =>
@@ -433,7 +604,7 @@ namespace OCREditor
                     if (region != _selectedRegion)
                     {
                         border.BorderBrush = System.Windows.Media.Brushes.Orange;
-                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0));
+                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0));
                     }
                 };
                 border.MouseDown += (s, e) =>

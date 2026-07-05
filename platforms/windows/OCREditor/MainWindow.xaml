@@ -1,7 +1,7 @@
 <Window x:Class="OCREditor.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="OCR Visual Editor Pro" Height="750" Width="1200"
+        Title="OCR Visual Editor Pro" Height="750" Width="1250"
         Background="#181818" WindowStartupLocation="CenterScreen"
         Foreground="#E0E0E0">
     
@@ -186,7 +186,27 @@
                     <Button Content="📂 Open Image" Click="OpenImage_Click" Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0"/>
                     <Button x:Name="UndoButton" Content="↩️ Undo" Click="Undo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,8,0" IsEnabled="False"/>
                     <Button x:Name="RedoButton" Content="↪️ Redo" Click="Redo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,8,0" IsEnabled="False"/>
-                    <Button Content="💾 Save Result" Click="SaveImage_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,8,0"/>
+                    <Button Content="💾 Save Result" Click="SaveImage_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,12,0"/>
+                    
+                    <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
+
+                    <!-- OCR Language Selection -->
+                    <TextBlock Text="Language: " VerticalAlignment="Center" Foreground="#AAA" Margin="0,0,5,0"/>
+                    <ComboBox x:Name="LanguageComboBox" Width="110" Height="26" VerticalAlignment="Center" SelectedIndex="0" Margin="0,0,15,0" Background="#2D2D30" Foreground="White" BorderBrush="#3F3F46">
+                        <ComboBoxItem Content="Auto (System)"/>
+                        <ComboBoxItem Content="繁體中文 (zh-Hant)"/>
+                        <ComboBoxItem Content="English (en)"/>
+                        <ComboBoxItem Content="简体中文 (zh-Hans)"/>
+                    </ComboBox>
+
+                    <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
+
+                    <!-- Zoom Control -->
+                    <TextBlock Text="Zoom: " VerticalAlignment="Center" Foreground="#AAA" Margin="0,0,5,0"/>
+                    <Button Content=" ➖ " Click="ZoomOut_Click" Style="{StaticResource ModernButtonStyle}" Width="30" Height="26" Margin="0,0,5,0"/>
+                    <Slider x:Name="ZoomSlider" Minimum="0.2" Maximum="3" Value="1" Width="100" ValueChanged="ZoomSlider_ValueChanged" VerticalAlignment="Center"/>
+                    <Button Content=" ➕ " Click="ZoomIn_Click" Style="{StaticResource ModernButtonStyle}" Width="30" Height="26" Margin="5,0,8,0"/>
+                    <Button Content="100%" Click="ZoomReset_Click" Style="{StaticResource ModernButtonStyle}" Height="26"/>
                 </StackPanel>
 
                 <TextBlock x:Name="EngineIndicator" Text="Engine: System OCR" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#888" FontSize="12"/>
@@ -237,6 +257,9 @@
             <!-- CENTER CANVAS AREA -->
             <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#0F0F0F">
                 <Grid x:Name="CanvasGrid" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
+                    <Grid.LayoutTransform>
+                        <ScaleTransform x:Name="CanvasScale" ScaleX="1" ScaleY="1"/>
+                    </Grid.LayoutTransform>
                     <Image x:Name="SourceImage" Stretch="None" SizeChanged="SourceImage_SizeChanged"/>
                     <Canvas x:Name="OverlayCanvas" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top"/>
                 </Grid>
@@ -298,6 +321,10 @@
                             <Button Content="🗑️ Remove Text Region" Click="RemoveText_Click" 
                                     Style="{StaticResource DestructiveButtonStyle}"/>
                         </StackPanel>
+
+                        <!-- Help Notice -->
+                        <TextBlock Text="Tip: If AI missed a word, click-and-drag directly on the image to draw a manual text box!" 
+                                   Foreground="#888" TextWrapping="Wrap" FontSize="11" Margin="0,20,0,0" LineHeight="15"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -307,7 +334,7 @@
         <Border Grid.Row="2" Background="#007ACC" Padding="10,4" BorderBrush="#005B9A" BorderThickness="0,1,0,0">
             <Grid>
                 <TextBlock Text="OCR Visual Editor Professional — Powered by Windows AI Platform" Foreground="White" FontSize="11" HorizontalAlignment="Left"/>
-                <TextBlock x:Name="DpiIndicator" Text="Scale: 100%" Foreground="#D0D0D0" FontSize="11" HorizontalAlignment="Right"/>
+                <TextBlock x:Name="DpiIndicator" Text="Zoom: 100%" Foreground="#D0D0D0" FontSize="11" HorizontalAlignment="Right"/>
             </Grid>
         </Border>
     </Grid>
