@@ -745,17 +745,27 @@ namespace OCREditor
                     double sWidth = region.RelWidth * _imgWidth;
                     double sHeight = region.RelHeight * _imgHeight;
 
+                    // DEBUG: Use bright red to confirm the static cover IS being drawn
+                    var debugColor = System.Windows.Media.Color.FromRgb(255, 0, 0);
+                    
                     var staticCover = new System.Windows.Controls.Border
                     {
                         Width = sWidth,
                         Height = sHeight,
-                        Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor),
+                        Background = new System.Windows.Media.SolidColorBrush(debugColor),
                         BorderThickness = new Thickness(0)
                     };
                     Canvas.SetLeft(staticCover, sLeft);
                     Canvas.SetTop(staticCover, sTop);
                     OverlayCanvas.Children.Add(staticCover);
                 }
+            }
+            
+            // DEBUG: Show first region's BackgroundColor in title bar
+            if (_regions.Count > 0)
+            {
+                var c = _regions[0].BackgroundColor;
+                this.Title = $"OCR Editor [DEBUG] First region BG: R={c.R} G={c.G} B={c.B}";
             }
 
             // 2. Next, draw interactive, draggable text layers on top of the static covers
