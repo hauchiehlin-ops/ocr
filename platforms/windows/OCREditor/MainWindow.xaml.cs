@@ -642,76 +642,8 @@ namespace OCREditor
 
         private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
         {
-            lock (_bitmapLock)
-            {
-                if (_originalBitmap != null)
-                {
-                    try
-                    {
-                        int w = _originalBitmap.Width;
-                        int h = _originalBitmap.Height;
-
-                        // Center coordinate of the text region
-                        int cx = (int)((region.RelX + region.RelWidth / 2) * w);
-                        int cy = (int)((region.RelY + region.RelHeight / 2) * h);
-                        cx = Math.Max(0, Math.Min(cx, w - 1));
-                        cy = Math.Max(0, Math.Min(cy, h - 1));
-
-                        var centerPixel = _originalBitmap.GetPixel(cx, cy);
-
-                        // If the center pixel is dark or saturated (e.g. rounded rectangle node backgrounds),
-                        // we sample inside the region to match the node color perfectly.
-                        if (centerPixel.R < 180 || centerPixel.G < 180 || centerPixel.B < 180)
-                        {
-                            int rx = (int)(region.RelX * w);
-                            int ry = (int)(region.RelY * h);
-                            int rw = (int)(region.RelWidth * w);
-                            int rh = (int)(region.RelHeight * h);
-
-                            var samplePoints = new List<System.Drawing.Point>
-                            {
-                                new System.Drawing.Point(rx + rw / 4, ry + rh / 4),
-                                new System.Drawing.Point(rx + 3 * rw / 4, ry + rh / 4),
-                                new System.Drawing.Point(rx + rw / 2, ry + rh / 2),
-                                new System.Drawing.Point(rx + rw / 4, ry + 3 * rh / 4),
-                                new System.Drawing.Point(rx + 3 * rw / 4, ry + 3 * rh / 4)
-                            };
-
-                            long sumR = 0, sumG = 0, sumB = 0;
-                            int count = 0;
-
-                            foreach (var pt in samplePoints)
-                            {
-                                int px = Math.Max(0, Math.Min(pt.X, w - 1));
-                                int py = Math.Max(0, Math.Min(pt.Y, h - 1));
-                                var pixel = _originalBitmap.GetPixel(px, py);
-
-                                // Skip dark text strokes
-                                if (pixel.R < 80 && pixel.G < 80 && pixel.B < 80)
-                                    continue;
-
-                                sumR += pixel.R;
-                                sumG += pixel.G;
-                                sumB += pixel.B;
-                                count++;
-                            }
-
-                            if (count > 0)
-                            {
-                                return System.Windows.Media.Color.FromRgb((byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
-                            }
-                            return System.Windows.Media.Color.FromRgb(centerPixel.R, centerPixel.G, centerPixel.B);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"GDI in-memory sampling failed: {ex.Message}");
-                    }
-                }
-            }
-
-            // Otherwise, the region is on the quadrant background.
-            // Return the exact clean background color of the respective quadrant.
+            // ALWAYS sample OUTSIDE the text box to get the surrounding background color.
+            // Never sample inside - that mixes dark text with light background into muddy gray.
             return GetQuadrantBackgroundColor(region.RelX, region.RelY);
         }
 
@@ -745,14 +677,11 @@ namespace OCREditor
                     double sWidth = region.RelWidth * _imgWidth;
                     double sHeight = region.RelHeight * _imgHeight;
 
-                    // DEBUG: Use bright red to confirm the static cover IS being drawn
-                    var debugColor = System.Windows.Media.Color.FromRgb(255, 0, 0);
-                    
                     var staticCover = new System.Windows.Controls.Border
                     {
                         Width = sWidth,
                         Height = sHeight,
-                        Background = new System.Windows.Media.SolidColorBrush(debugColor),
+                        Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor),
                         BorderThickness = new Thickness(0)
                     };
                     Canvas.SetLeft(staticCover, sLeft);
