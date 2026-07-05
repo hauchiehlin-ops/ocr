@@ -58,6 +58,13 @@ namespace OCREditor
         private System.Windows.Shapes.Rectangle? _dragRect;
         private bool _isDrawing = false;
 
+        // Dragging state for moving region layers
+        private bool _isDraggingRegion = false;
+        private OCRRegion? _draggingRegion;
+        private System.Windows.Point _dragStartMousePos;
+        private double _dragStartRelX;
+        private double _dragStartRelY;
+
         // Undo/Redo stacks
         private class RegionState
         {
@@ -633,8 +640,56 @@ namespace OCREditor
                 };
                 border.MouseDown += (s, e) =>
                 {
-                    SelectRegion(region);
-                    e.Handled = true;
+                    if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
+                    {
+                        SaveHistoryState();
+                        
+                        _isDraggingRegion = true;
+                        _draggingRegion = region;
+                        _dragStartMousePos = e.GetPosition(OverlayCanvas);
+                        _dragStartRelX = region.RelX;
+                        _dragStartRelY = region.RelY;
+                        
+                        border.CaptureMouse();
+                        SelectRegion(region);
+                        e.Handled = true;
+                    }
+                };
+
+                border.MouseMove += (s, e) =>
+                {
+                    if (_isDraggingRegion && _draggingRegion == region)
+                    {
+                        var curMousePos = e.GetPosition(OverlayCanvas);
+                        double deltaX = curMousePos.X - _dragStartMousePos.X;
+                        double deltaY = curMousePos.Y - _dragStartMousePos.Y;
+                        
+                        double deltaRelX = deltaX / _imgWidth;
+                        double deltaRelY = deltaY / _imgHeight;
+                        
+                        region.RelX = Math.Max(0.0, Math.Min(_dragStartRelX + deltaRelX, 1.0 - region.RelWidth));
+                        region.RelY = Math.Max(0.0, Math.Min(_dragStartRelY + deltaRelY, 1.0 - region.RelHeight));
+                        
+                        // Update UI coordinates in real-time smoothly
+                        Canvas.SetLeft(border, region.RelX * _imgWidth);
+                        Canvas.SetTop(border, region.RelY * _imgHeight);
+                        
+                        e.Handled = true;
+                    }
+                };
+
+                border.MouseUp += (s, e) =>
+                {
+                    if (_isDraggingRegion && _draggingRegion == region)
+                    {
+                        _isDraggingRegion = false;
+                        _draggingRegion = null;
+                        border.ReleaseMouseCapture();
+                        
+                        RenderRegions(); // Re-render to refresh final styles and layout
+                        StatusLabel.Text = "Repositioned text layer.";
+                        e.Handled = true;
+                    }
                 };
                 
                 if (region.IsRemoved)
