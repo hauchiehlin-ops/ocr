@@ -15,6 +15,7 @@ namespace OCREditor
 {
     public partial class MainWindow : Window
     {
+        private OCREngineInterop? _ocrEngine;
         private string? _currentImagePath;
 
         // Image dimensions (in WPF units)
