@@ -235,7 +235,7 @@ namespace OCREditor
                         OriginalRelY = y / _imgHeight,
                         RelWidth = w / _imgWidth,
                         RelHeight = h / _imgHeight,
-                        FontSize = Math.Max(12, h * 1.15),
+                        FontSize = Math.Max(12, h * 0.85),
                         IsEdited = true
                     };
                     
@@ -452,8 +452,8 @@ namespace OCREditor
 
                                 // Estimate initial font size based on bounding box height
                                 // WPF FontSize is the em-square, which is larger than the actual glyph height.
-                                // We use 1.15x the bounding box height to make the WPF text match the original image text size.
-                                double estFontSize = Math.Max(10, boxH * 1.15);
+                                // We use 0.85x the bounding box height to make the WPF text match the original image text size.
+                                double estFontSize = Math.Max(10, boxH * 0.85);
 
                                 var region = new OCRRegion
                                 {
@@ -766,15 +766,15 @@ namespace OCREditor
                         for (int y = 0; y < patchH; y++)
                         {
                             int srcY = boxY + y;
-                            leftEdge[y] = SampleBackgroundPixel(boxX - sampleGap, srcY, -1, 0);
-                            rightEdge[y] = SampleBackgroundPixel(boxX + patchW + sampleGap, srcY, 1, 0);
+                            leftEdge[y] = SampleBackgroundPixel(boxX - sampleGap, srcY, -1, 0, region.BackgroundColor);
+                            rightEdge[y] = SampleBackgroundPixel(boxX + patchW + sampleGap, srcY, 1, 0, region.BackgroundColor);
                         }
 
                         for (int x = 0; x < patchW; x++)
                         {
                             int srcX = boxX + x;
-                            topEdge[x] = SampleBackgroundPixel(srcX, boxY - sampleGap, 0, -1);
-                            bottomEdge[x] = SampleBackgroundPixel(srcX, boxY + patchH + sampleGap, 0, 1);
+                            topEdge[x] = SampleBackgroundPixel(srcX, boxY - sampleGap, 0, -1, region.BackgroundColor);
+                            bottomEdge[x] = SampleBackgroundPixel(srcX, boxY + patchH + sampleGap, 0, 1, region.BackgroundColor);
                         }
 
                         for (int y = 0; y < patchH; y++)
@@ -842,10 +842,10 @@ namespace OCREditor
             return (byte)Math.Round(255 * t);
         }
 
-        private System.Windows.Media.Color SampleBackgroundPixel(int x, int y, int stepX, int stepY)
+        private System.Windows.Media.Color SampleBackgroundPixel(int x, int y, int stepX, int stepY, System.Windows.Media.Color expectedBg)
         {
             if (_originalBitmap == null)
-                return System.Windows.Media.Colors.Transparent;
+                return expectedBg;
 
             int imgW = _originalBitmap.Width;
             int imgH = _originalBitmap.Height;
@@ -856,17 +856,17 @@ namespace OCREditor
                 int py = Math.Max(0, Math.Min(y + stepY * distance, imgH - 1));
                 var pixel = _originalBitmap.GetPixel(px, py);
 
-                if (!IsLikelyForeground(pixel))
+                // If pixel color is close to the calculated background, accept it as background
+                int dr = pixel.R - expectedBg.R;
+                int dg = pixel.G - expectedBg.G;
+                int db = pixel.B - expectedBg.B;
+                if (Math.Sqrt(dr * dr + dg * dg + db * db) < 50)
+                {
                     return System.Windows.Media.Color.FromRgb(pixel.R, pixel.G, pixel.B);
+                }
             }
 
-            return GetQuadrantBackgroundColor((double)Math.Max(0, Math.Min(x, imgW - 1)) / imgW,
-                                              (double)Math.Max(0, Math.Min(y, imgH - 1)) / imgH);
-        }
-
-        private bool IsLikelyForeground(System.Drawing.Color color)
-        {
-            return color.R < 70 && color.G < 70 && color.B < 70;
+            return expectedBg;
         }
 
         private System.Windows.Media.Color BlendColors(System.Windows.Media.Color a, System.Windows.Media.Color b, double amount)
