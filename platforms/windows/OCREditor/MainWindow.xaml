@@ -162,6 +162,7 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
         <!-- Modern ComboBox Style -->
         <Style x:Key="ModernComboBoxStyle" TargetType="ComboBox">
             <Setter Property="Background" Value="#2D2D30"/>
