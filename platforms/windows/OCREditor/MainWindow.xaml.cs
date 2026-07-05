@@ -15,7 +15,6 @@ namespace OCREditor
     {
         private OCREngineInterop? _ocrEngine; // Kept for architecture compatibility
         private string? _currentImagePath;
-        private string? _initErrorMessage;
 
         // Image dimensions (in WPF units)
         private double _imgWidth = 0;
@@ -157,18 +156,37 @@ namespace OCREditor
                         
                         foreach (var line in result.Lines)
                         {
-                            var box = line.Rect; // Axis-aligned bounding box from Windows OCR
-                            
+                            if (line.Words.Count == 0) continue;
+
+                            double minX = double.MaxValue;
+                            double minY = double.MaxValue;
+                            double maxX = double.MinValue;
+                            double maxY = double.MinValue;
+
+                            foreach (var word in line.Words)
+                            {
+                                var r = word.BoundingRect;
+                                if (r.Left < minX) minX = r.Left;
+                                if (r.Top < minY) minY = r.Top;
+                                if (r.Right > maxX) maxX = r.Right;
+                                if (r.Bottom > maxY) maxY = r.Bottom;
+                            }
+
+                            double boxX = minX;
+                            double boxY = minY;
+                            double boxW = maxX - minX;
+                            double boxH = maxY - minY;
+
                             _regions.Add(new OCRRegion
                             {
                                 OriginalText = line.Text,
                                 CurrentText = line.Text,
-                                RelX = box.X / imgWidth,
-                                RelY = box.Y / imgHeight,
-                                RelWidth = box.Width / imgWidth,
-                                RelHeight = box.Height / imgHeight
+                                RelX = boxX / imgWidth,
+                                RelY = boxY / imgHeight,
+                                RelWidth = boxW / imgWidth,
+                                RelHeight = boxH / imgHeight
                             });
-                            
+
                             fullText.AppendLine(line.Text);
                         }
                         
