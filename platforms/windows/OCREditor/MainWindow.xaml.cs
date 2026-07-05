@@ -537,22 +537,92 @@ namespace OCREditor
             {
                 if (_originalBitmap != null)
                 {
-                    int w = _originalBitmap.Width;
-                    int h = _originalBitmap.Height;
+                    try
+                    {
+                        int w = _originalBitmap.Width;
+                        int h = _originalBitmap.Height;
 
-                    // Dynamically sample the extreme corner of the quadrant to get a 100% clean background color
-                    double sampleX = 0.05;
-                    double sampleY = 0.05;
-                    if (relX >= 0.50) sampleX = 0.95;
-                    if (relY >= 0.50) sampleY = 0.95;
+                        // Define bounds of the quadrant to avoid borders and central nodes
+                        double minX = 0.05, maxX = 0.45;
+                        double minY = 0.05, maxY = 0.45;
 
-                    int px = (int)(sampleX * w);
-                    int py = (int)(sampleY * h);
-                    px = Math.Max(0, Math.Min(px, w - 1));
-                    py = Math.Max(0, Math.Min(py, h - 1));
+                        if (relX >= 0.50)
+                        {
+                            minX = 0.55;
+                            maxX = 0.95;
+                        }
+                        if (relY >= 0.50)
+                        {
+                            minY = 0.55;
+                            maxY = 0.95;
+                        }
 
-                    var pixel = _originalBitmap.GetPixel(px, py);
-                    return System.Windows.Media.Color.FromRgb(pixel.R, pixel.G, pixel.B);
+                        // Sample a 6x6 grid of colors inside the quadrant
+                        var colors = new List<System.Windows.Media.Color>();
+                        for (int i = 1; i <= 6; i++)
+                        {
+                            for (int j = 1; j <= 6; j++)
+                            {
+                                double rx = minX + (maxX - minX) * i / 7.0;
+                                double ry = minY + (maxY - minY) * j / 7.0;
+
+                                int px = (int)(rx * w);
+                                int py = (int)(ry * h);
+                                px = Math.Max(0, Math.Min(px, w - 1));
+                                py = Math.Max(0, Math.Min(py, h - 1));
+
+                                var pixel = _originalBitmap.GetPixel(px, py);
+                                colors.Add(System.Windows.Media.Color.FromRgb(pixel.R, pixel.G, pixel.B));
+                            }
+                        }
+
+                        // Cluster the colors to find the most dominant background shade,
+                        // skipping dark border/title bar pixels.
+                        System.Windows.Media.Color dominantColor = colors[0];
+                        int maxClusterSize = 0;
+                        long sumR = 0, sumG = 0, sumB = 0;
+
+                        foreach (var c in colors)
+                        {
+                            // Skip dark window frames, borders, or lines
+                            if (c.R < 60 && c.G < 60 && c.B < 60)
+                                continue;
+
+                            int clusterSize = 0;
+                            long tempR = 0, tempG = 0, tempB = 0;
+
+                            foreach (var other in colors)
+                            {
+                                if (Math.Abs(c.R - other.R) < 15 &&
+                                    Math.Abs(c.G - other.G) < 15 &&
+                                    Math.Abs(c.B - other.B) < 15)
+                                {
+                                    tempR += other.R;
+                                    tempG += other.G;
+                                    tempB += other.B;
+                                    clusterSize++;
+                                }
+                            }
+
+                            if (clusterSize > maxClusterSize)
+                            {
+                                maxClusterSize = clusterSize;
+                                sumR = tempR;
+                                sumG = tempG;
+                                sumB = tempB;
+                                dominantColor = c;
+                            }
+                        }
+
+                        if (maxClusterSize > 0)
+                        {
+                            return System.Windows.Media.Color.FromRgb((byte)(sumR / maxClusterSize), (byte)(sumG / maxClusterSize), (byte)(sumB / maxClusterSize));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Quadrant background grid sampling failed: {ex.Message}");
+                    }
                 }
             }
 
