@@ -381,8 +381,8 @@
                                 <!-- Font Size -->
                                 <DockPanel Margin="0,0,0,12">
                                     <TextBlock Text="Size: " VerticalAlignment="Center" Foreground="#AAA"/>
-                                    <TextBlock x:Name="FontSizeValueText" Text="16px" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" Width="40" TextAlignment="Right"/>
-                                    <Slider x:Name="FontSizeSlider" Minimum="8" Maximum="72" Value="16" 
+                                    <TextBlock x:Name="FontSizeValueText" Text="16px" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" Width="45" TextAlignment="Right"/>
+                                    <Slider x:Name="FontSizeSlider" Minimum="8" Maximum="400" Value="16" 
                                             ValueChanged="FontSizeSlider_ValueChanged" VerticalAlignment="Center"/>
                                 </DockPanel>
 

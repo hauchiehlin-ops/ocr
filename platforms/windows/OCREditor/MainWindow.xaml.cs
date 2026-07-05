@@ -235,7 +235,7 @@ namespace OCREditor
                         OriginalRelY = y / _imgHeight,
                         RelWidth = w / _imgWidth,
                         RelHeight = h / _imgHeight,
-                        FontSize = Math.Max(12, h * 0.75),
+                        FontSize = Math.Max(12, h * 1.15),
                         IsEdited = true
                     };
                     
@@ -451,7 +451,9 @@ namespace OCREditor
                                 double boxH = ((maxY - minY) / procH) * origH;
 
                                 // Estimate initial font size based on bounding box height
-                                double estFontSize = Math.Max(10, boxH * 0.7);
+                                // WPF FontSize is the em-square, which is larger than the actual glyph height.
+                                // We use 1.15x the bounding box height to make the WPF text match the original image text size.
+                                double estFontSize = Math.Max(10, boxH * 1.15);
 
                                 var region = new OCRRegion
                                 {
