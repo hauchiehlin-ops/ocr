@@ -531,99 +531,111 @@ namespace OCREditor
             RenderRegions();
         }
 
+        private System.Windows.Media.Color GetQuadrantBackgroundColor(double relX, double relY)
+        {
+            lock (_bitmapLock)
+            {
+                if (_originalBitmap != null)
+                {
+                    int w = _originalBitmap.Width;
+                    int h = _originalBitmap.Height;
+
+                    // Dynamically sample the extreme corner of the quadrant to get a 100% clean background color
+                    double sampleX = 0.05;
+                    double sampleY = 0.05;
+                    if (relX >= 0.50) sampleX = 0.95;
+                    if (relY >= 0.50) sampleY = 0.95;
+
+                    int px = (int)(sampleX * w);
+                    int py = (int)(sampleY * h);
+                    px = Math.Max(0, Math.Min(px, w - 1));
+                    py = Math.Max(0, Math.Min(py, h - 1));
+
+                    var pixel = _originalBitmap.GetPixel(px, py);
+                    return System.Windows.Media.Color.FromRgb(pixel.R, pixel.G, pixel.B);
+                }
+            }
+
+            // High-fidelity fallbacks
+            if (relX < 0.50 && relY < 0.50) return System.Windows.Media.Color.FromRgb(240, 242, 245); // Top-Left light blue-gray
+            if (relX >= 0.50 && relY < 0.50) return System.Windows.Media.Color.FromRgb(240, 242, 245); // Top-Right light blue-gray
+            if (relX < 0.50 && relY >= 0.50) return System.Windows.Media.Color.FromRgb(235, 245, 235); // Bottom-Left light green
+            return System.Windows.Media.Color.FromRgb(255, 243, 227); // Bottom-Right light pinkish-cream
+        }
+
         private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
         {
-            // Primary Attempt: read from our safe, in-memory cached original bitmap
             lock (_bitmapLock)
             {
                 if (_originalBitmap != null)
                 {
                     try
                     {
-                        int x = (int)(region.RelX * _originalBitmap.Width);
-                        int y = (int)(region.RelY * _originalBitmap.Height);
-                        int w = (int)(region.RelWidth * _originalBitmap.Width);
-                        int h = (int)(region.RelHeight * _originalBitmap.Height);
+                        int w = _originalBitmap.Width;
+                        int h = _originalBitmap.Height;
 
-                        x = Math.Max(0, Math.Min(x, _originalBitmap.Width - 1));
-                        y = Math.Max(0, Math.Min(y, _originalBitmap.Height - 1));
-                        w = Math.Max(1, Math.Min(w, _originalBitmap.Width - x));
-                        h = Math.Max(1, Math.Min(h, _originalBitmap.Height - y));
+                        // Center coordinate of the text region
+                        int cx = (int)((region.RelX + region.RelWidth / 2) * w);
+                        int cy = (int)((region.RelY + region.RelHeight / 2) * h);
+                        cx = Math.Max(0, Math.Min(cx, w - 1));
+                        cy = Math.Max(0, Math.Min(cy, h - 1));
 
-                        // Sample a wider ring at multiple offsets (6px, 12px, 18px) around the box 
-                        // to find the layout background outside of white container shapes.
-                        var offsets = new int[] { 6, 12, 18 };
-                        var samplePoints = new List<System.Drawing.Point>();
-                        foreach (int offset in offsets)
+                        var centerPixel = _originalBitmap.GetPixel(cx, cy);
+
+                        // If the center pixel is dark or saturated (e.g. rounded rectangle node backgrounds),
+                        // we sample inside the region to match the node color perfectly.
+                        if (centerPixel.R < 180 || centerPixel.G < 180 || centerPixel.B < 180)
                         {
-                            samplePoints.Add(new System.Drawing.Point(x - offset, y - offset));
-                            samplePoints.Add(new System.Drawing.Point(x + w / 2, y - offset));
-                            samplePoints.Add(new System.Drawing.Point(x + w + offset, y - offset));
-                            samplePoints.Add(new System.Drawing.Point(x - offset, y + h / 2));
-                            samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h / 2));
-                            samplePoints.Add(new System.Drawing.Point(x - offset, y + h + offset));
-                            samplePoints.Add(new System.Drawing.Point(x + w / 2, y + h + offset));
-                            samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h + offset));
-                        }
+                            int rx = (int)(region.RelX * w);
+                            int ry = (int)(region.RelY * h);
+                            int rw = (int)(region.RelWidth * w);
+                            int rh = (int)(region.RelHeight * h);
 
-                        long sumR = 0, sumG = 0, sumB = 0;
-                        int count = 0;
+                            var samplePoints = new List<System.Drawing.Point>
+                            {
+                                new System.Drawing.Point(rx + rw / 4, ry + rh / 4),
+                                new System.Drawing.Point(rx + 3 * rw / 4, ry + rh / 4),
+                                new System.Drawing.Point(rx + rw / 2, ry + rh / 2),
+                                new System.Drawing.Point(rx + rw / 4, ry + 3 * rh / 4),
+                                new System.Drawing.Point(rx + 3 * rw / 4, ry + 3 * rh / 4)
+                            };
 
-                        long fallbackSumR = 0, fallbackSumG = 0, fallbackSumB = 0;
-                        int fallbackCount = 0;
+                            long sumR = 0, sumG = 0, sumB = 0;
+                            int count = 0;
 
-                        foreach (var pt in samplePoints)
-                        {
-                            int px = Math.Max(0, Math.Min(pt.X, _originalBitmap.Width - 1));
-                            int py = Math.Max(0, Math.Min(pt.Y, _originalBitmap.Height - 1));
+                            foreach (var pt in samplePoints)
+                            {
+                                int px = Math.Max(0, Math.Min(pt.X, w - 1));
+                                int py = Math.Max(0, Math.Min(pt.Y, h - 1));
+                                var pixel = _originalBitmap.GetPixel(px, py);
 
-                            var pixel = _originalBitmap.GetPixel(px, py);
-                            fallbackSumR += pixel.R;
-                            fallbackSumG += pixel.G;
-                            fallbackSumB += pixel.B;
-                            fallbackCount++;
+                                // Skip dark text strokes
+                                if (pixel.R < 80 && pixel.G < 80 && pixel.B < 80)
+                                    continue;
 
-                            // Skip pure white/near-white pixels (belonging to white container boxes we want to erase)
-                            if (pixel.R > 248 && pixel.G > 248 && pixel.B > 248)
-                                continue;
+                                sumR += pixel.R;
+                                sumG += pixel.G;
+                                sumB += pixel.B;
+                                count++;
+                            }
 
-                            // Skip dark pixels (belonging to text or border strokes)
-                            if (pixel.R < 80 && pixel.G < 80 && pixel.B < 80)
-                                continue;
-
-                            sumR += pixel.R;
-                            sumG += pixel.G;
-                            sumB += pixel.B;
-                            count++;
-                        }
-
-                        if (count > 0)
-                        {
-                            return System.Windows.Media.Color.FromRgb((byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
-                        }
-                        else if (fallbackCount > 0)
-                        {
-                            return System.Windows.Media.Color.FromRgb((byte)(fallbackSumR / fallbackCount), (byte)(fallbackSumG / fallbackCount), (byte)(fallbackSumB / fallbackCount));
+                            if (count > 0)
+                            {
+                                return System.Windows.Media.Color.FromRgb((byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
+                            }
+                            return System.Windows.Media.Color.FromRgb(centerPixel.R, centerPixel.G, centerPixel.B);
                         }
                     }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"GDI in-memory sampling failed: {ex.Message}");
-                        MessageBox.Show($"Sampling failed: {ex.Message}\nStack: {ex.StackTrace}", "Debug Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }
 
-            // High-Fidelity Fallback: Layout-coordinate-based colors matching this specific template
-            // Top section (RelY < 0.42) is light blue-gray; bottom section is light pinkish-cream
-            if (region.RelY < 0.42)
-            {
-                return System.Windows.Media.Color.FromRgb(235, 243, 250); // Clean top section background (#EBF3FA)
-            }
-            else
-            {
-                return System.Windows.Media.Color.FromRgb(255, 243, 227); // Clean bottom section background (#FFF3E3)
-            }
+            // Otherwise, the region is on the quadrant background.
+            // Return the exact clean background color of the respective quadrant.
+            return GetQuadrantBackgroundColor(region.RelX, region.RelY);
         }
 
         private void SourceImage_SizeChanged(object sender, SizeChangedEventArgs e)
