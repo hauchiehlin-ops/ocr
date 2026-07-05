@@ -18,6 +18,8 @@ namespace OCREditor
     {
         private OCREngineInterop? _ocrEngine; // Kept for architecture compatibility
         private string? _currentImagePath;
+        private Bitmap? _originalBitmap;
+        private readonly object _bitmapLock = new object();
 
         // Image dimensions (in WPF units)
         private double _imgWidth = 0;
@@ -265,6 +267,20 @@ namespace OCREditor
                 try
                 {
                     _currentImagePath = openFileDialog.FileName;
+                    
+                    // Safely cache the image into our in-memory Bitmap for thread-safe pixel sampling
+                    lock (_bitmapLock)
+                    {
+                        if (_originalBitmap != null)
+                        {
+                            _originalBitmap.Dispose();
+                            _originalBitmap = null;
+                        }
+                        using (var stream = new FileStream(_currentImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                        {
+                            _originalBitmap = new Bitmap(stream);
+                        }
+                    }
                     
                     // Load image synchronously to guarantee metadata is immediately available
                     var bitmapImage = new BitmapImage();
@@ -517,121 +533,25 @@ namespace OCREditor
 
         private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
         {
-            // Ensure execution is marshalled to the UI thread, as accessing SourceImage.Source 
-            // from background OCR threads throws thread access exceptions.
-            if (!Dispatcher.CheckAccess())
+            // Primary Attempt: read from our safe, in-memory cached original bitmap
+            lock (_bitmapLock)
             {
-                return (System.Windows.Media.Color)Dispatcher.Invoke(new Func<System.Windows.Media.Color>(() => GetAverageColorOfRegion(region)));
-            }
-
-            // 1. Primary Attempt: Read pixels directly from the WPF BitmapSource in memory (thread-safe on UI thread)
-            if (SourceImage.Source is BitmapSource bitmapSource)
-            {
-                try
+                if (_originalBitmap != null)
                 {
-                    BitmapSource source = bitmapSource;
-                    if (bitmapSource.Format != PixelFormats.Bgra32 && bitmapSource.Format != PixelFormats.Bgr32)
+                    try
                     {
-                        source = new FormatConvertedBitmap(bitmapSource, PixelFormats.Bgra32, null, 0);
-                    }
+                        int x = (int)(region.RelX * _originalBitmap.Width);
+                        int y = (int)(region.RelY * _originalBitmap.Height);
+                        int w = (int)(region.RelWidth * _originalBitmap.Width);
+                        int h = (int)(region.RelHeight * _originalBitmap.Height);
 
-                    int x = (int)(region.RelX * source.PixelWidth);
-                    int y = (int)(region.RelY * source.PixelHeight);
-                    int w = (int)(region.RelWidth * source.PixelWidth);
-                    int h = (int)(region.RelHeight * source.PixelHeight);
+                        x = Math.Max(0, Math.Min(x, _originalBitmap.Width - 1));
+                        y = Math.Max(0, Math.Min(y, _originalBitmap.Height - 1));
+                        w = Math.Max(1, Math.Min(w, _originalBitmap.Width - x));
+                        h = Math.Max(1, Math.Min(h, _originalBitmap.Height - y));
 
-                    x = Math.Max(0, Math.Min(x, source.PixelWidth - 1));
-                    y = Math.Max(0, Math.Min(y, source.PixelHeight - 1));
-                    w = Math.Max(1, Math.Min(w, source.PixelWidth - x));
-                    h = Math.Max(1, Math.Min(h, source.PixelHeight - y));
-
-                    // Sample a wider ring at multiple offsets (6px, 12px, 18px) around the box 
-                    // to search for the layout background outside of white container shapes.
-                    var offsets = new int[] { 6, 12, 18 };
-                    var samplePoints = new List<System.Drawing.Point>();
-                    foreach (int offset in offsets)
-                    {
-                        samplePoints.Add(new System.Drawing.Point(x - offset, y - offset));
-                        samplePoints.Add(new System.Drawing.Point(x + w / 2, y - offset));
-                        samplePoints.Add(new System.Drawing.Point(x + w + offset, y - offset));
-                        samplePoints.Add(new System.Drawing.Point(x - offset, y + h / 2));
-                        samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h / 2));
-                        samplePoints.Add(new System.Drawing.Point(x - offset, y + h + offset));
-                        samplePoints.Add(new System.Drawing.Point(x + w / 2, y + h + offset));
-                        samplePoints.Add(new System.Drawing.Point(x + w + offset, y + h + offset));
-                    }
-
-                    long sumR = 0, sumG = 0, sumB = 0;
-                    int count = 0;
-
-                    long fallbackSumR = 0, fallbackSumG = 0, fallbackSumB = 0;
-                    int fallbackCount = 0;
-
-                    foreach (var pt in samplePoints)
-                    {
-                        int px = Math.Max(0, Math.Min(pt.X, source.PixelWidth - 1));
-                        int py = Math.Max(0, Math.Min(pt.Y, source.PixelHeight - 1));
-
-                        byte[] pixelData = new byte[4];
-                        var rect = new Int32Rect(px, py, 1, 1);
-                        source.CopyPixels(rect, pixelData, 4, 0);
-
-                        byte b = pixelData[0];
-                        byte g = pixelData[1];
-                        byte r = pixelData[2];
-
-                        fallbackSumR += r;
-                        fallbackSumG += g;
-                        fallbackSumB += b;
-                        fallbackCount++;
-
-                        // Skip pure white/near-white pixels (they belong to the white container box we want to erase)
-                        if (r > 248 && g > 248 && b > 248)
-                            continue;
-
-                        // Skip very dark pixels (belonging to text or border strokes)
-                        if (r < 80 && g < 80 && b < 80)
-                            continue;
-
-                        sumR += r;
-                        sumG += g;
-                        sumB += b;
-                        count++;
-                    }
-
-                    if (count > 0)
-                    {
-                        return System.Windows.Media.Color.FromRgb((byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
-                    }
-                    else if (fallbackCount > 0)
-                    {
-                        return System.Windows.Media.Color.FromRgb((byte)(fallbackSumR / fallbackCount), (byte)(fallbackSumG / fallbackCount), (byte)(fallbackSumB / fallbackCount));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"WPF direct pixel copy failed: {ex.Message}");
-                }
-            }
-
-            // 2. Secondary Fallback: Load the file from disk using GDI+ and safe FileShare.ReadWrite sharing
-            if (_currentImagePath != null && File.Exists(_currentImagePath))
-            {
-                try
-                {
-                    using (var stream = new FileStream(_currentImagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                    using (var bmp = new Bitmap(stream))
-                    {
-                        int x = (int)(region.RelX * bmp.Width);
-                        int y = (int)(region.RelY * bmp.Height);
-                        int w = (int)(region.RelWidth * bmp.Width);
-                        int h = (int)(region.RelHeight * bmp.Height);
-
-                        x = Math.Max(0, Math.Min(x, bmp.Width - 1));
-                        y = Math.Max(0, Math.Min(y, bmp.Height - 1));
-                        w = Math.Max(1, Math.Min(w, bmp.Width - x));
-                        h = Math.Max(1, Math.Min(h, bmp.Height - y));
-
+                        // Sample a wider ring at multiple offsets (6px, 12px, 18px) around the box 
+                        // to find the layout background outside of white container shapes.
                         var offsets = new int[] { 6, 12, 18 };
                         var samplePoints = new List<System.Drawing.Point>();
                         foreach (int offset in offsets)
@@ -654,17 +574,20 @@ namespace OCREditor
 
                         foreach (var pt in samplePoints)
                         {
-                            int px = Math.Max(0, Math.Min(pt.X, bmp.Width - 1));
-                            int py = Math.Max(0, Math.Min(pt.Y, bmp.Height - 1));
+                            int px = Math.Max(0, Math.Min(pt.X, _originalBitmap.Width - 1));
+                            int py = Math.Max(0, Math.Min(pt.Y, _originalBitmap.Height - 1));
 
-                            var pixel = bmp.GetPixel(px, py);
+                            var pixel = _originalBitmap.GetPixel(px, py);
                             fallbackSumR += pixel.R;
                             fallbackSumG += pixel.G;
                             fallbackSumB += pixel.B;
                             fallbackCount++;
 
+                            // Skip pure white/near-white pixels (belonging to white container boxes we want to erase)
                             if (pixel.R > 248 && pixel.G > 248 && pixel.B > 248)
                                 continue;
+
+                            // Skip dark pixels (belonging to text or border strokes)
                             if (pixel.R < 80 && pixel.G < 80 && pixel.B < 80)
                                 continue;
 
@@ -683,16 +606,16 @@ namespace OCREditor
                             return System.Windows.Media.Color.FromRgb((byte)(fallbackSumR / fallbackCount), (byte)(fallbackSumG / fallbackCount), (byte)(fallbackSumB / fallbackCount));
                         }
                     }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"GDI fallback sampling failed: {ex.Message}");
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"GDI in-memory sampling failed: {ex.Message}");
+                    }
                 }
             }
 
-            // 3. High-Fidelity Fallback: Layout-coordinate-based colors matching this specific template
-            // Top section is light blue-gray; bottom section is light pinkish-cream
-            if (region.RelY < 0.44)
+            // High-Fidelity Fallback: Layout-coordinate-based colors matching this specific template
+            // Top section (RelY < 0.42) is light blue-gray; bottom section is light pinkish-cream
+            if (region.RelY < 0.42)
             {
                 return System.Windows.Media.Color.FromRgb(235, 243, 250); // Clean top section background (#EBF3FA)
             }
