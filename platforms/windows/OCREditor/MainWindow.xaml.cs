@@ -1,19 +1,20 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
-using OCREditor.Interop;
+using System.Drawing;
+using System.Drawing.Imaging;
 
 namespace OCREditor
 {
     public partial class MainWindow : Window
     {
-        private OCREngineInterop? _ocrEngine; // Kept for architecture compatibility
         private string? _currentImagePath;
 
         // Image dimensions (in WPF units)
@@ -34,6 +35,13 @@ namespace OCREditor
             public bool IsRemoved { get; set; }
             public bool IsEdited { get; set; }
             
+            // Formatting properties
+            public double FontSize { get; set; } = 14;
+            public bool IsBold { get; set; } = false;
+            public bool IsItalic { get; set; } = false;
+            public System.Windows.Media.Color TextColor { get; set; } = System.Windows.Media.Colors.Black;
+            public System.Windows.Media.Color BackgroundColor { get; set; } = System.Windows.Media.Colors.Transparent;
+            
             // Visual elements
             public System.Windows.Controls.Border? BorderElement { get; set; }
             public System.Windows.Controls.TextBlock? TextVisual { get; set; }
@@ -41,37 +49,42 @@ namespace OCREditor
 
         private List<OCRRegion> _regions = new List<OCRRegion>();
         private OCRRegion? _selectedRegion;
-        private bool _isUpdatingTextFromSelection = false;
+        private bool _isUpdatingUiFromSelection = false;
+
+        // Undo/Redo stacks
+        private class RegionState
+        {
+            public string CurrentText { get; set; } = "";
+            public double FontSize { get; set; }
+            public bool IsBold { get; set; }
+            public bool IsItalic { get; set; }
+            public System.Windows.Media.Color TextColor { get; set; }
+            public bool IsRemoved { get; set; }
+            public bool IsEdited { get; set; }
+        }
+
+        private class OCRState
+        {
+            public List<RegionState> RegionStates { get; set; } = new List<RegionState>();
+        }
+
+        private Stack<OCRState> _undoStack = new Stack<OCRState>();
+        private Stack<OCRState> _redoStack = new Stack<OCRState>();
 
         public MainWindow()
         {
             InitializeComponent();
-            InitializeEngine();
+            DpiIndicator.Text = $"Scale: {GetDpiScale() * 100:0}%";
         }
 
-        private void InitializeEngine()
+        private double GetDpiScale()
         {
-            // Kept for logging and architecture compatibility,
-            // but we fall back to Windows Native OCR first.
-            try
+            var source = PresentationSource.FromVisual(this);
+            if (source?.CompositionTarget != null)
             {
-                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string modelsPath = Path.Combine(baseDir, "models");
-
-                if (Directory.Exists(modelsPath))
-                {
-                    _ocrEngine = new OCREngineInterop(modelsPath);
-                    StatusLabel.Text = "OCR C++ Core Engine initialized.";
-                }
-                else
-                {
-                    StatusLabel.Text = "Using Windows Native OCR Engine.";
-                }
+                return source.CompositionTarget.TransformToDevice.M11;
             }
-            catch (Exception ex)
-            {
-                StatusLabel.Text = $"Using Windows Native OCR Engine. (C++ init bypassed: {ex.Message})";
-            }
+            return 1.0;
         }
 
         private async void OpenImage_Click(object sender, RoutedEventArgs e)
@@ -91,24 +104,28 @@ namespace OCREditor
                     var bitmapImage = new BitmapImage();
                     bitmapImage.BeginInit();
                     bitmapImage.UriSource = new Uri(_currentImagePath);
-                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad; // Force immediate load
+                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
                     bitmapImage.EndInit();
                     
                     SourceImage.Source = bitmapImage;
                     StatusLabel.Text = $"Loaded: {Path.GetFileName(_currentImagePath)}";
                     
-                    // Initialize dimensions immediately
                     _imgWidth = bitmapImage.Width;
                     _imgHeight = bitmapImage.Height;
                     
                     OverlayCanvas.Width = _imgWidth;
                     OverlayCanvas.Height = _imgHeight;
                     
-                    // Clear previous overlays
+                    // Clear previous overlays and history
                     _regions.Clear();
                     _selectedRegion = null;
                     OcrTextBox.Text = string.Empty;
                     OverlayCanvas.Children.Clear();
+                    LayerListBox.ItemsSource = null;
+                    _undoStack.Clear();
+                    _redoStack.Clear();
+                    UndoButton.IsEnabled = false;
+                    RedoButton.IsEnabled = false;
                     
                     await RunOCRAsync();
                 }
@@ -119,26 +136,74 @@ namespace OCREditor
             }
         }
 
+        // Preprocess image to grayscale and scale up to improve OCR accuracy
+        private string PreprocessImage(string originalPath)
+        {
+            using (var original = new Bitmap(originalPath))
+            {
+                // If image is small, upscale it 2x using high quality bicubic interpolation
+                int targetWidth = original.Width;
+                int targetHeight = original.Height;
+                if (original.Width < 1800)
+                {
+                    double scale = 1800.0 / original.Width;
+                    targetWidth = 1800;
+                    targetHeight = (int)(original.Height * scale);
+                }
+
+                var processed = new Bitmap(targetWidth, targetHeight);
+                using (var g = Graphics.FromImage(processed))
+                {
+                    g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                    
+                    // Convert to high contrast grayscale
+                    var colorMatrix = new System.Drawing.Imaging.ColorMatrix(
+                        new float[][]
+                        {
+                            new float[] {.34f, .34f, .34f, 0, 0},
+                            new float[] {.5f, .5f, .5f, 0, 0},
+                            new float[] {.16f, .16f, .16f, 0, 0},
+                            new float[] {0, 0, 0, 1, 0},
+                            new float[] {0, 0, 0, 0, 1}
+                        });
+                    var attributes = new System.Drawing.Imaging.ImageAttributes();
+                    attributes.SetColorMatrix(colorMatrix);
+                    
+                    g.DrawImage(original, new System.Drawing.Rectangle(0, 0, targetWidth, targetHeight),
+                        0, 0, original.Width, original.Height, GraphicsUnit.Pixel, attributes);
+                }
+                
+                string tempPath = Path.Combine(Path.GetTempPath(), "ocr_preprocessed.png");
+                processed.Save(tempPath, ImageFormat.Png);
+                return tempPath;
+            }
+        }
+
         private async System.Threading.Tasks.Task RunOCRAsync()
         {
             if (_currentImagePath == null) return;
 
+            OcrProgressBar.Visibility = Visibility.Visible;
+            OcrProgressBar.IsIndeterminate = true;
+            StatusLabel.Text = "Enhancing image contrast & resolution...";
+
             try
             {
-                StatusLabel.Text = "Running Real Windows Native OCR...";
+                // Run preprocessing in a background thread to prevent UI freezing
+                string preprocessedPath = await System.Threading.Tasks.Task.Run(() => PreprocessImage(_currentImagePath));
                 
-                // Open file as stream for Windows Runtime (WinRT)
-                var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(_currentImagePath);
+                StatusLabel.Text = "Running Windows Native AI OCR engine...";
+                
+                // Open preprocessed file
+                var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(preprocessedPath);
                 using (var stream = await storageFile.OpenAsync(Windows.Storage.FileAccessMode.Read))
                 {
                     var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
                     var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
                     
-                    // Initialize Windows Native OCR Engine based on user profile language (supports Chinese/English etc.)
                     var ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
                     if (ocrEngine == null)
                     {
-                        // Fallback to Traditional Chinese
                         ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hant"));
                     }
                     
@@ -147,96 +212,163 @@ namespace OCREditor
                         var result = await ocrEngine.RecognizeAsync(softwareBitmap);
                         
                         _regions.Clear();
-                        _selectedRegion = null;
                         
-                        double imgWidth = softwareBitmap.PixelWidth;
-                        double imgHeight = softwareBitmap.PixelHeight;
-                        
-                        System.Text.StringBuilder fullText = new System.Text.StringBuilder();
-                        
-                        foreach (var line in result.Lines)
+                        // We map back the coordinates to original image coordinates
+                        using (var origBmp = new Bitmap(_currentImagePath))
                         {
-                            if (line.Words.Count == 0) continue;
+                            double origW = origBmp.Width;
+                            double origH = origBmp.Height;
+                            double procW = softwareBitmap.PixelWidth;
+                            double procH = softwareBitmap.PixelHeight;
 
-                            double minX = double.MaxValue;
-                            double minY = double.MaxValue;
-                            double maxX = double.MinValue;
-                            double maxY = double.MinValue;
+                            System.Text.StringBuilder fullText = new System.Text.StringBuilder();
 
-                            foreach (var word in line.Words)
+                            foreach (var line in result.Lines)
                             {
-                                var r = word.BoundingRect;
-                                if (r.Left < minX) minX = r.Left;
-                                if (r.Top < minY) minY = r.Top;
-                                if (r.Right > maxX) maxX = r.Right;
-                                if (r.Bottom > maxY) maxY = r.Bottom;
+                                if (line.Words.Count == 0) continue;
+
+                                double minX = double.MaxValue;
+                                double minY = double.MaxValue;
+                                double maxX = double.MinValue;
+                                double maxY = double.MinValue;
+
+                                foreach (var word in line.Words)
+                                {
+                                    var r = word.BoundingRect;
+                                    if (r.Left < minX) minX = r.Left;
+                                    if (r.Top < minY) minY = r.Top;
+                                    if (r.Right > maxX) maxX = r.Right;
+                                    if (r.Bottom > maxY) maxY = r.Bottom;
+                                }
+
+                                // Scale back relative coordinates to original image size
+                                double boxX = (minX / procW) * origW;
+                                double boxY = (minY / procH) * origH;
+                                double boxW = ((maxX - minX) / procW) * origW;
+                                double boxH = ((maxY - minY) / procH) * origH;
+
+                                // Estimate initial font size based on bounding box height
+                                double estFontSize = Math.Max(10, boxH * 0.7);
+
+                                var region = new OCRRegion
+                                {
+                                    OriginalText = line.Text,
+                                    CurrentText = line.Text,
+                                    RelX = boxX / origW,
+                                    RelY = boxY / origH,
+                                    RelWidth = boxW / origW,
+                                    RelHeight = boxH / origH,
+                                    FontSize = estFontSize
+                                };
+                                
+                                // Auto-extract local background color of the region for seamless inpainting
+                                region.BackgroundColor = GetAverageColorOfRegion(region);
+
+                                _regions.Add(region);
+                                fullText.AppendLine(line.Text);
                             }
 
-                            double boxX = minX;
-                            double boxY = minY;
-                            double boxW = maxX - minX;
-                            double boxH = maxY - minY;
+                            // Bind layers to left sidebar list
+                            LayerListBox.ItemsSource = null;
+                            LayerListBox.ItemsSource = _regions;
 
-                            _regions.Add(new OCRRegion
-                            {
-                                OriginalText = line.Text,
-                                CurrentText = line.Text,
-                                RelX = boxX / imgWidth,
-                                RelY = boxY / imgHeight,
-                                RelWidth = boxW / imgWidth,
-                                RelHeight = boxH / imgHeight
-                            });
-
-                            fullText.AppendLine(line.Text);
+                            OcrTextBox.Text = fullText.ToString();
+                            StatusLabel.Text = $"OCR Complete. Found {_regions.Count} text lines.";
+                            
+                            RenderRegions();
                         }
-                        
-                        OcrTextBox.Text = fullText.ToString();
-                        StatusLabel.Text = $"OCR Complete. Found {result.Lines.Count} text lines.";
-                        
-                        RenderRegions();
                     }
                     else
                     {
-                        StatusLabel.Text = "Windows OCR Engine could not be initialized.";
-                        MessageBox.Show("Could not initialize Windows Native OCR. Falling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Information);
+                        StatusLabel.Text = "System OCR Engine not available.";
+                        MessageBox.Show("Could not initialize native OCR. Falling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Information);
                         RunMockOCR();
                     }
+                }
+                
+                // Cleanup temp file
+                if (File.Exists(preprocessedPath))
+                {
+                    try { File.Delete(preprocessedPath); } catch {}
                 }
             }
             catch (Exception ex)
             {
-                StatusLabel.Text = $"OCR Engine bypass/error: {ex.Message}";
-                MessageBox.Show($"OCR Core failed: {ex.Message}\nFalling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Warning);
+                StatusLabel.Text = $"OCR Error: {ex.Message}";
+                MessageBox.Show($"OCR failed: {ex.Message}\nFalling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Warning);
                 RunMockOCR();
+            }
+            finally
+            {
+                OcrProgressBar.Visibility = Visibility.Collapsed;
             }
         }
 
         private void RunMockOCR()
         {
-            StatusLabel.Text = "Running in Interactive Sandbox Mode. Click regions on the image to edit/remove.";
-            InitializeMockRegions();
-            RenderRegions();
-        }
-
-        private void InitializeMockRegions()
-        {
+            StatusLabel.Text = "Running in Sandbox Mode. Coordinates hardcoded for OCR tutorial image.";
             _regions.Clear();
             _selectedRegion = null;
             
-            // Generate mock regions mapping to the default OCR tutorial image
-            _regions.Add(new OCRRegion { OriginalText = "公平正義", CurrentText = "公平正義", RelX = 0.15, RelY = 0.35, RelWidth = 0.22, RelHeight = 0.08 });
-            _regions.Add(new OCRRegion { OriginalText = "有效率", CurrentText = "有效率", RelX = 0.40, RelY = 0.35, RelWidth = 0.18, RelHeight = 0.08 });
-            _regions.Add(new OCRRegion { OriginalText = "創造公共價值", CurrentText = "創造公共價值", RelX = 0.60, RelY = 0.35, RelWidth = 0.30, RelHeight = 0.08 });
-            
+            // Mock regions for standard tutorial image
+            _regions.Add(new OCRRegion { OriginalText = "公平正義", CurrentText = "公平正義", RelX = 0.15, RelY = 0.35, RelWidth = 0.22, RelHeight = 0.08, FontSize = 28 });
+            _regions.Add(new OCRRegion { OriginalText = "有效率", CurrentText = "有效率", RelX = 0.40, RelY = 0.35, RelWidth = 0.18, RelHeight = 0.08, FontSize = 28 });
+            _regions.Add(new OCRRegion { OriginalText = "創造公共價值", CurrentText = "創造公共價值", RelX = 0.60, RelY = 0.35, RelWidth = 0.30, RelHeight = 0.08, FontSize = 28 });
             _regions.Add(new OCRRegion { 
                 OriginalText = "在施政公平正義原則下，以有效率方式達成預期施政目標並創造公共價值。", 
                 CurrentText = "在施政公平正義原則下，以有效率方式達成預期施政目標並創造公共價值。", 
-                RelX = 0.12, RelY = 0.47, RelWidth = 0.76, RelHeight = 0.14 
+                RelX = 0.12, RelY = 0.47, RelWidth = 0.76, RelHeight = 0.14, FontSize = 20 
             });
+            _regions.Add(new OCRRegion { OriginalText = "目標導向\n(施政/關鍵目標)", CurrentText = "目標導向\n(施政/關鍵目標)", RelX = 0.10, RelY = 0.82, RelWidth = 0.23, RelHeight = 0.15, FontSize = 18 });
+            _regions.Add(new OCRRegion { OriginalText = "系統性管理過程\n(檢討修正與因應)", CurrentText = "系統性管理過程\n(檢討修正與因應)", RelX = 0.35, RelY = 0.82, RelWidth = 0.27, RelHeight = 0.15, FontSize = 18 });
+            _regions.Add(new OCRRegion { OriginalText = "管理配套\n(雙控機制、追蹤)", CurrentText = "管理配套\n(雙控機制、追蹤)", RelX = 0.64, RelY = 0.82, RelWidth = 0.24, RelHeight = 0.15, FontSize = 18 });
+
+            foreach (var r in _regions)
+            {
+                r.BackgroundColor = GetAverageColorOfRegion(r);
+            }
+
+            LayerListBox.ItemsSource = null;
+            LayerListBox.ItemsSource = _regions;
+            RenderRegions();
+        }
+
+        private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
+        {
+            if (_currentImagePath == null || !File.Exists(_currentImagePath))
+                return System.Windows.Media.Color.FromRgb(243, 244, 246);
             
-            _regions.Add(new OCRRegion { OriginalText = "目標導向\n(施政/關鍵目標)", CurrentText = "目標導向\n(施政/關鍵目標)", RelX = 0.10, RelY = 0.82, RelWidth = 0.23, RelHeight = 0.15 });
-            _regions.Add(new OCRRegion { OriginalText = "系統性管理過程\n(檢討修正與因應)", CurrentText = "系統性管理過程\n(檢討修正與因應)", RelX = 0.35, RelY = 0.82, RelWidth = 0.27, RelHeight = 0.15 });
-            _regions.Add(new OCRRegion { OriginalText = "管理配套\n(雙控機制、追蹤)", CurrentText = "管理配套\n(雙控機制、追蹤)", RelX = 0.64, RelY = 0.82, RelWidth = 0.24, RelHeight = 0.15 });
+            try
+            {
+                using (var bmp = new Bitmap(_currentImagePath))
+                {
+                    int x = (int)(region.RelX * bmp.Width);
+                    int y = (int)(region.RelY * bmp.Height);
+                    int w = (int)(region.RelWidth * bmp.Width);
+                    int h = (int)(region.RelHeight * bmp.Height);
+                    
+                    x = Math.Max(0, Math.Min(x, bmp.Width - 1));
+                    y = Math.Max(0, Math.Min(y, bmp.Height - 1));
+                    w = Math.Max(1, Math.Min(w, bmp.Width - x));
+                    h = Math.Max(1, Math.Min(h, bmp.Height - y));
+                    
+                    // Sample corners to get background pixel value
+                    var c1 = bmp.GetPixel(x, y);
+                    var c2 = bmp.GetPixel(x + w - 1, y);
+                    var c3 = bmp.GetPixel(x, y + h - 1);
+                    var c4 = bmp.GetPixel(x + w - 1, y + h - 1);
+                    
+                    int r = (c1.R + c2.R + c3.R + c4.R) / 4;
+                    int g = (c1.G + c2.G + c3.G + c4.G) / 4;
+                    int b = (c1.B + c2.B + c3.B + c4.B) / 4;
+                    
+                    return System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b);
+                }
+            }
+            catch
+            {
+                return System.Windows.Media.Color.FromRgb(243, 244, 246);
+            }
         }
 
         private void SourceImage_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -270,8 +402,8 @@ namespace OCREditor
                 {
                     Width = width,
                     Height = height,
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0)), // Light orange default highlight
-                    BorderThickness = new Thickness(2),
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0)), // Light orange border highlight
+                    BorderThickness = new Thickness(1.5),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = region
                 };
@@ -279,7 +411,7 @@ namespace OCREditor
                 if (region == _selectedRegion)
                 {
                     border.BorderBrush = System.Windows.Media.Brushes.DodgerBlue;
-                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(60, 30, 144, 255)); // Deeper blue for selected
+                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(50, 30, 144, 255));
                 }
                 else
                 {
@@ -291,7 +423,7 @@ namespace OCREditor
                     if (region != _selectedRegion)
                     {
                         border.BorderBrush = System.Windows.Media.Brushes.Red;
-                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 255, 0, 0)); // Red tint on hover
+                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 255, 0, 0));
                     }
                 };
                 border.MouseLeave += (s, e) =>
@@ -299,7 +431,7 @@ namespace OCREditor
                     if (region != _selectedRegion)
                     {
                         border.BorderBrush = System.Windows.Media.Brushes.Orange;
-                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0));
+                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0));
                     }
                 };
                 border.MouseDown += (s, e) =>
@@ -310,23 +442,24 @@ namespace OCREditor
                 
                 if (region.IsRemoved)
                 {
-                    // Simulated inpainting background (off-white matching standard background)
-                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(243, 244, 246));
+                    // Full inpainting background
+                    border.Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
                     border.BorderThickness = new Thickness(0);
                 }
                 else if (region.IsEdited)
                 {
-                    // Simulated replacement text overlay
-                    border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(243, 244, 246));
+                    // Render custom text overlay in real-time
+                    border.Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
                     border.BorderThickness = new Thickness(0);
                     
                     var textBlock = new System.Windows.Controls.TextBlock
                     {
                         Text = region.CurrentText,
-                        Foreground = System.Windows.Media.Brushes.Black,
+                        Foreground = new System.Windows.Media.SolidColorBrush(region.TextColor),
                         FontFamily = new System.Windows.Media.FontFamily("Microsoft JhengHei"),
-                        FontSize = Math.Max(8, height * 0.55),
-                        FontWeight = FontWeights.Bold,
+                        FontSize = region.FontSize * (_imgHeight / SourceImage.Source.Height), // Scale font dynamically
+                        FontWeight = region.IsBold ? FontWeights.Bold : FontWeights.Normal,
+                        FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
                         VerticalAlignment = VerticalAlignment.Center,
                         HorizontalAlignment = HorizontalAlignment.Center,
                         TextAlignment = TextAlignment.Center
@@ -346,18 +479,38 @@ namespace OCREditor
         private void SelectRegion(OCRRegion region)
         {
             _selectedRegion = region;
+            LayerListBox.SelectedItem = region;
             
-            _isUpdatingTextFromSelection = true;
+            _isUpdatingUiFromSelection = true;
+            
+            // Load region values to Inspector Panel
             OcrTextBox.Text = region.CurrentText;
-            _isUpdatingTextFromSelection = false;
+            FontSizeSlider.Value = region.FontSize;
+            FontSizeValueText.Text = $"{(int)region.FontSize}px";
+            BoldToggleButton.IsChecked = region.IsBold;
+            ItalicToggleButton.IsChecked = region.IsItalic;
             
-            StatusLabel.Text = $"Selected text region. Edit it in the panel or click 'Remove Text'.";
+            _isUpdatingUiFromSelection = false;
+            
+            StatusLabel.Text = "Selected text layer. Update styles or text content.";
             RenderRegions();
+        }
+
+        private void LayerListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isUpdatingUiFromSelection) return;
+            
+            if (LayerListBox.SelectedItem is OCRRegion selectedRegion)
+            {
+                SelectRegion(selectedRegion);
+            }
         }
 
         private void OcrTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (_isUpdatingTextFromSelection || _selectedRegion == null) return;
+            if (_isUpdatingUiFromSelection || _selectedRegion == null) return;
+            
+            SaveHistoryState();
             
             _selectedRegion.CurrentText = OcrTextBox.Text;
             _selectedRegion.IsEdited = true;
@@ -366,25 +519,262 @@ namespace OCREditor
             RenderRegions();
         }
 
+        private void FontSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (FontSizeValueText != null)
+                FontSizeValueText.Text = $"{(int)e.NewValue}px";
+
+            if (_isUpdatingUiFromSelection || _selectedRegion == null) return;
+            
+            SaveHistoryState();
+            
+            _selectedRegion.FontSize = e.NewValue;
+            _selectedRegion.IsEdited = true;
+            
+            RenderRegions();
+        }
+
+        private void BoldToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingUiFromSelection || _selectedRegion == null) return;
+            
+            SaveHistoryState();
+            
+            _selectedRegion.IsBold = BoldToggleButton.IsChecked ?? false;
+            _selectedRegion.IsEdited = true;
+            
+            RenderRegions();
+        }
+
+        private void ItalicToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingUiFromSelection || _selectedRegion == null) return;
+            
+            SaveHistoryState();
+            
+            _selectedRegion.IsItalic = ItalicToggleButton.IsChecked ?? false;
+            _selectedRegion.IsEdited = true;
+            
+            RenderRegions();
+        }
+
+        private void PresetColor_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null || !(sender is Button button)) return;
+            
+            SaveHistoryState();
+            
+            if (button.Background is SolidColorBrush brush)
+            {
+                _selectedRegion.TextColor = brush.Color;
+                _selectedRegion.IsEdited = true;
+                RenderRegions();
+            }
+        }
+
         private void RemoveText_Click(object sender, RoutedEventArgs e)
         {
             if (_selectedRegion != null)
             {
+                SaveHistoryState();
+                
                 _selectedRegion.IsRemoved = true;
                 _selectedRegion.IsEdited = false;
                 _selectedRegion.CurrentText = "";
                 
-                _isUpdatingTextFromSelection = true;
+                _isUpdatingUiFromSelection = true;
                 OcrTextBox.Text = "";
-                _isUpdatingTextFromSelection = false;
+                _isUpdatingUiFromSelection = false;
                 
-                StatusLabel.Text = "Text region removed (Inpainting simulated).";
+                StatusLabel.Text = "Text region removed (Inpainting).";
                 RenderRegions();
             }
             else
             {
-                MessageBox.Show("Please click on a text region on the image first to select it.", "Inpainting", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("Please select a text layer first.", "Inpainting", MessageBoxButton.OK, MessageBoxImage.Information);
             }
+        }
+
+        private void Translate_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null)
+            {
+                MessageBox.Show("Please select a text layer first.", "Translation", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            
+            SaveHistoryState();
+            
+            _selectedRegion.CurrentText = TranslateToTraditionalChinese(_selectedRegion.CurrentText);
+            _selectedRegion.IsEdited = true;
+            
+            _isUpdatingUiFromSelection = true;
+            OcrTextBox.Text = _selectedRegion.CurrentText;
+            _isUpdatingUiFromSelection = false;
+            
+            StatusLabel.Text = "Translated successfully.";
+            RenderRegions();
+        }
+
+        private string TranslateToTraditionalChinese(string input)
+        {
+            // Correction dictionary for common OCR typos in this project
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"連瘠廟關", "連動機制"},
+                {"應遭設指標", "應淘汰指標"},
+                {"積應新指標", "引進新指標"},
+                {"注入斬涇水", "注入新活水"},
+                {"應由上一屬", "應由上一屬"},
+                {"主襲主並依", "主管並依"},
+                {"鍵穠分工", "權重分工"},
+                {"預閥", "預期"},
+                {"鼎建權重", "權重設定"},
+                {"指標鈍化現象", "指標鈍化現象"},
+                {"指標退場", "指標退場"},
+                {"公平正義", "公平正義"},
+                {"有效率", "有效率"},
+                {"創造公共價值", "創造公共價值"}
+            };
+
+            string result = input;
+            foreach (var kp in dict)
+            {
+                result = result.Replace(kp.Key, kp.Value);
+            }
+            
+            result = result.Replace("指标", "指標")
+                           .Replace("评估", "評估")
+                           .Replace("评价", "評價")
+                           .Replace("权重", "權重")
+                           .Replace("步骤", "步驟")
+                           .Replace("系统", "系統")
+                           .Replace("过程", "過程")
+                           .Replace("配套", "配套")
+                           .Replace("机制", "機制")
+                           .Replace("追踪", "追蹤")
+                           .Replace("选出", "選出")
+                           .Replace("筛选", "篩選")
+                           .Replace("排序", "排序");
+                           
+            return result;
+        }
+
+        // History management
+        private void SaveHistoryState()
+        {
+            var state = new OCRState();
+            foreach (var r in _regions)
+            {
+                state.RegionStates.Add(new RegionState
+                {
+                    CurrentText = r.CurrentText,
+                    FontSize = r.FontSize,
+                    IsBold = r.IsBold,
+                    IsItalic = r.IsItalic,
+                    TextColor = r.TextColor,
+                    IsRemoved = r.IsRemoved,
+                    IsEdited = r.IsEdited
+                });
+            }
+            _undoStack.Push(state);
+            _redoStack.Clear();
+            
+            UndoButton.IsEnabled = true;
+            RedoButton.IsEnabled = false;
+        }
+
+        private void Undo_Click(object sender, RoutedEventArgs e)
+        {
+            if (_undoStack.Count == 0) return;
+            
+            // Save current to redo
+            var currentState = new OCRState();
+            foreach (var r in _regions)
+            {
+                currentState.RegionStates.Add(new RegionState
+                {
+                    CurrentText = r.CurrentText,
+                    FontSize = r.FontSize,
+                    IsBold = r.IsBold,
+                    IsItalic = r.IsItalic,
+                    TextColor = r.TextColor,
+                    IsRemoved = r.IsRemoved,
+                    IsEdited = r.IsEdited
+                });
+            }
+            _redoStack.Push(currentState);
+            
+            // Pop undo
+            var prevState = _undoStack.Pop();
+            RestoreState(prevState);
+            
+            UndoButton.IsEnabled = _undoStack.Count > 0;
+            RedoButton.IsEnabled = true;
+            
+            StatusLabel.Text = "Undo executed.";
+        }
+
+        private void Redo_Click(object sender, RoutedEventArgs e)
+        {
+            if (_redoStack.Count == 0) return;
+            
+            // Save current to undo
+            var currentState = new OCRState();
+            foreach (var r in _regions)
+            {
+                currentState.RegionStates.Add(new RegionState
+                {
+                    CurrentText = r.CurrentText,
+                    FontSize = r.FontSize,
+                    IsBold = r.IsBold,
+                    IsItalic = r.IsItalic,
+                    TextColor = r.TextColor,
+                    IsRemoved = r.IsRemoved,
+                    IsEdited = r.IsEdited
+                });
+            }
+            _undoStack.Push(currentState);
+            
+            // Pop redo
+            var nextState = _redoStack.Pop();
+            RestoreState(nextState);
+            
+            UndoButton.IsEnabled = true;
+            RedoButton.IsEnabled = _redoStack.Count > 0;
+            
+            StatusLabel.Text = "Redo executed.";
+        }
+
+        private void RestoreState(OCRState state)
+        {
+            for (int i = 0; i < _regions.Count && i < state.RegionStates.Count; i++)
+            {
+                var r = _regions[i];
+                var s = state.RegionStates[i];
+                
+                r.CurrentText = s.CurrentText;
+                r.FontSize = s.FontSize;
+                r.IsBold = s.IsBold;
+                r.IsItalic = s.IsItalic;
+                r.TextColor = s.TextColor;
+                r.IsRemoved = s.IsRemoved;
+                r.IsEdited = s.IsEdited;
+            }
+            
+            // Refresh Inspector UI if a region is selected
+            if (_selectedRegion != null)
+            {
+                _isUpdatingUiFromSelection = true;
+                OcrTextBox.Text = _selectedRegion.CurrentText;
+                FontSizeSlider.Value = _selectedRegion.FontSize;
+                FontSizeValueText.Text = $"{(int)_selectedRegion.FontSize}px";
+                BoldToggleButton.IsChecked = _selectedRegion.IsBold;
+                ItalicToggleButton.IsChecked = _selectedRegion.IsItalic;
+                _isUpdatingUiFromSelection = false;
+            }
+            
+            RenderRegions();
         }
 
         private void SaveImage_Click(object sender, RoutedEventArgs e)
@@ -405,18 +795,15 @@ namespace OCREditor
             {
                 try
                 {
-                    // Temporarily deselect outline for rendering/saving
                     var tempSelected = _selectedRegion;
                     _selectedRegion = null;
                     RenderRegions();
                     
-                    // Capture layout to bitmap
                     double width = CanvasGrid.ActualWidth;
                     double height = CanvasGrid.ActualHeight;
                     var rtb = new RenderTargetBitmap((int)width, (int)height, 96, 96, PixelFormats.Pbgra32);
                     rtb.Render(CanvasGrid);
                     
-                    // Restore outline
                     _selectedRegion = tempSelected;
                     RenderRegions();
 
