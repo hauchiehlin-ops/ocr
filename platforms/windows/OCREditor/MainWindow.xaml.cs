@@ -679,7 +679,7 @@ namespace OCREditor
                         
                         _isDraggingRegion = true;
                         _draggingRegion = region;
-                        _dragStartMousePos = e.GetPosition(OverlayCanvas);
+                        _dragStartMousePos = e.GetPosition(this); // Relative to Window
                         _dragStartRelX = region.RelX;
                         _dragStartRelY = region.RelY;
                         
@@ -693,12 +693,19 @@ namespace OCREditor
                 {
                     if (_isDraggingRegion && _draggingRegion == region)
                     {
-                        var curMousePos = e.GetPosition(OverlayCanvas);
+                        var curMousePos = e.GetPosition(this); // Relative to Window
                         double deltaX = curMousePos.X - _dragStartMousePos.X;
                         double deltaY = curMousePos.Y - _dragStartMousePos.Y;
                         
-                        double deltaRelX = deltaX / _imgWidth;
-                        double deltaRelY = deltaY / _imgHeight;
+                        // Compensate for Canvas zoom scale
+                        double zoomX = CanvasScale?.ScaleX ?? 1.0;
+                        double zoomY = CanvasScale?.ScaleY ?? 1.0;
+                        
+                        double canvasDeltaX = deltaX / zoomX;
+                        double canvasDeltaY = deltaY / zoomY;
+                        
+                        double deltaRelX = canvasDeltaX / _imgWidth;
+                        double deltaRelY = canvasDeltaY / _imgHeight;
                         
                         region.RelX = Math.Max(0.0, Math.Min(_dragStartRelX + deltaRelX, 1.0 - region.RelWidth));
                         region.RelY = Math.Max(0.0, Math.Min(_dragStartRelY + deltaRelY, 1.0 - region.RelHeight));
