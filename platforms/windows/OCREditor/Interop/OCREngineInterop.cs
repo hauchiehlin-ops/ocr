@@ -610,7 +610,7 @@ namespace OCREditor.Interop
             if (newImage == null)
                 throw new ArgumentNullException(nameof(newImage));
 
-            var (pixels, width, height) = GetBitmapPixels(newImage);
+            var (pixels, width, height) = BitmapToRgba(newImage);
             int result = NativeMethods.ocr_canvas_replace_layer_image(_engineHandle, layerId, pixels, width, height);
             return result == 1;
         }
