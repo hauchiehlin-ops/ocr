@@ -642,8 +642,78 @@ namespace OCREditor
 
         private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
         {
-            // ALWAYS sample OUTSIDE the text box to get the surrounding background color.
-            // Never sample inside - that mixes dark text with light background into muddy gray.
+            lock (_bitmapLock)
+            {
+                if (_originalBitmap != null)
+                {
+                    try
+                    {
+                        int imgW = _originalBitmap.Width;
+                        int imgH = _originalBitmap.Height;
+
+                        int boxX = (int)(region.RelX * imgW);
+                        int boxY = (int)(region.RelY * imgH);
+                        int boxW = (int)(region.RelWidth * imgW);
+                        int boxH = (int)(region.RelHeight * imgH);
+
+                        // Sample at multiple distances OUTSIDE the text box in 8 directions.
+                        // Use large distances (30-150px) to escape white text-field areas
+                        // and reach the actual container/background color.
+                        var offsets = new int[] { 30, 60, 100, 150 };
+                        long sumR = 0, sumG = 0, sumB = 0;
+                        int count = 0;
+
+                        foreach (int off in offsets)
+                        {
+                            // 8 sample points around the box: top-left, top-center, top-right,
+                            // mid-left, mid-right, bottom-left, bottom-center, bottom-right
+                            var points = new (int x, int y)[]
+                            {
+                                (boxX - off, boxY - off),
+                                (boxX + boxW / 2, boxY - off),
+                                (boxX + boxW + off, boxY - off),
+                                (boxX - off, boxY + boxH / 2),
+                                (boxX + boxW + off, boxY + boxH / 2),
+                                (boxX - off, boxY + boxH + off),
+                                (boxX + boxW / 2, boxY + boxH + off),
+                                (boxX + boxW + off, boxY + boxH + off),
+                            };
+
+                            foreach (var (sx, sy) in points)
+                            {
+                                int px = Math.Max(0, Math.Min(sx, imgW - 1));
+                                int py = Math.Max(0, Math.Min(sy, imgH - 1));
+                                var pixel = _originalBitmap.GetPixel(px, py);
+
+                                // Skip white/near-white (text-field backgrounds inside containers)
+                                if (pixel.R > 230 && pixel.G > 230 && pixel.B > 230)
+                                    continue;
+
+                                // Skip dark pixels (text, lines, borders)
+                                if (pixel.R < 60 && pixel.G < 60 && pixel.B < 60)
+                                    continue;
+
+                                sumR += pixel.R;
+                                sumG += pixel.G;
+                                sumB += pixel.B;
+                                count++;
+                            }
+                        }
+
+                        if (count > 0)
+                        {
+                            return System.Windows.Media.Color.FromRgb(
+                                (byte)(sumR / count), (byte)(sumG / count), (byte)(sumB / count));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Local sampling failed: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback: use quadrant-level background color
             return GetQuadrantBackgroundColor(region.RelX, region.RelY);
         }
 
