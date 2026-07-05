@@ -717,6 +717,130 @@ namespace OCREditor
             return GetQuadrantBackgroundColor(region.RelX, region.RelY);
         }
 
+        private System.Windows.Media.Brush CreateBackgroundCoverBrush(OCRRegion region)
+        {
+            lock (_bitmapLock)
+            {
+                if (_originalBitmap != null)
+                {
+                    try
+                    {
+                        int imgW = _originalBitmap.Width;
+                        int imgH = _originalBitmap.Height;
+
+                        int boxX = (int)Math.Round(region.OriginalRelX * imgW);
+                        int boxY = (int)Math.Round(region.OriginalRelY * imgH);
+                        int patchW = Math.Max(1, (int)Math.Round(region.RelWidth * imgW));
+                        int patchH = Math.Max(1, (int)Math.Round(region.RelHeight * imgH));
+                        int sampleGap = Math.Max(2, Math.Min(18, Math.Min(patchW, patchH) / 3));
+
+                        var pixels = new byte[patchW * patchH * 4];
+                        var leftEdge = new System.Windows.Media.Color[patchH];
+                        var rightEdge = new System.Windows.Media.Color[patchH];
+                        var topEdge = new System.Windows.Media.Color[patchW];
+                        var bottomEdge = new System.Windows.Media.Color[patchW];
+
+                        for (int y = 0; y < patchH; y++)
+                        {
+                            int srcY = boxY + y;
+                            leftEdge[y] = SampleBackgroundPixel(boxX - sampleGap, srcY, -1, 0);
+                            rightEdge[y] = SampleBackgroundPixel(boxX + patchW + sampleGap, srcY, 1, 0);
+                        }
+
+                        for (int x = 0; x < patchW; x++)
+                        {
+                            int srcX = boxX + x;
+                            topEdge[x] = SampleBackgroundPixel(srcX, boxY - sampleGap, 0, -1);
+                            bottomEdge[x] = SampleBackgroundPixel(srcX, boxY + patchH + sampleGap, 0, 1);
+                        }
+
+                        for (int y = 0; y < patchH; y++)
+                        {
+                            double ty = patchH <= 1 ? 0.0 : (double)y / (patchH - 1);
+                            var left = leftEdge[y];
+                            var right = rightEdge[y];
+
+                            for (int x = 0; x < patchW; x++)
+                            {
+                                double tx = patchW <= 1 ? 0.0 : (double)x / (patchW - 1);
+                                var top = topEdge[x];
+                                var bottom = bottomEdge[x];
+
+                                var horizontal = BlendColors(left, right, tx);
+                                var vertical = BlendColors(top, bottom, ty);
+                                var color = BlendColors(horizontal, vertical, 0.5);
+
+                                int index = (y * patchW + x) * 4;
+                                pixels[index] = color.B;
+                                pixels[index + 1] = color.G;
+                                pixels[index + 2] = color.R;
+                                pixels[index + 3] = 255;
+                            }
+                        }
+
+                        var bitmap = new WriteableBitmap(
+                            patchW,
+                            patchH,
+                            96,
+                            96,
+                            PixelFormats.Bgra32,
+                            null);
+                        bitmap.WritePixels(new Int32Rect(0, 0, patchW, patchH), pixels, patchW * 4, 0);
+
+                        var brush = new ImageBrush(bitmap)
+                        {
+                            Stretch = Stretch.Fill,
+                            TileMode = TileMode.None
+                        };
+                        brush.Freeze();
+                        return brush;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Background cover generation failed: {ex.Message}");
+                    }
+                }
+            }
+
+            return new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
+        }
+
+        private System.Windows.Media.Color SampleBackgroundPixel(int x, int y, int stepX, int stepY)
+        {
+            if (_originalBitmap == null)
+                return System.Windows.Media.Colors.Transparent;
+
+            int imgW = _originalBitmap.Width;
+            int imgH = _originalBitmap.Height;
+
+            for (int distance = 0; distance <= 28; distance += 2)
+            {
+                int px = Math.Max(0, Math.Min(x + stepX * distance, imgW - 1));
+                int py = Math.Max(0, Math.Min(y + stepY * distance, imgH - 1));
+                var pixel = _originalBitmap.GetPixel(px, py);
+
+                if (!IsLikelyForeground(pixel))
+                    return System.Windows.Media.Color.FromRgb(pixel.R, pixel.G, pixel.B);
+            }
+
+            return GetQuadrantBackgroundColor((double)Math.Max(0, Math.Min(x, imgW - 1)) / imgW,
+                                              (double)Math.Max(0, Math.Min(y, imgH - 1)) / imgH);
+        }
+
+        private bool IsLikelyForeground(System.Drawing.Color color)
+        {
+            return color.R < 70 && color.G < 70 && color.B < 70;
+        }
+
+        private System.Windows.Media.Color BlendColors(System.Windows.Media.Color a, System.Windows.Media.Color b, double amount)
+        {
+            amount = Math.Max(0.0, Math.Min(1.0, amount));
+            return System.Windows.Media.Color.FromRgb(
+                (byte)Math.Round(a.R + (b.R - a.R) * amount),
+                (byte)Math.Round(a.G + (b.G - a.G) * amount),
+                (byte)Math.Round(a.B + (b.B - a.B) * amount));
+        }
+
         private void SourceImage_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (SourceImage.ActualWidth > 0 && SourceImage.ActualHeight > 0)
@@ -751,20 +875,13 @@ namespace OCREditor
                     {
                         Width = sWidth,
                         Height = sHeight,
-                        Background = new System.Windows.Media.SolidColorBrush(region.BackgroundColor),
+                        Background = CreateBackgroundCoverBrush(region),
                         BorderThickness = new Thickness(0)
                     };
                     Canvas.SetLeft(staticCover, sLeft);
                     Canvas.SetTop(staticCover, sTop);
                     OverlayCanvas.Children.Add(staticCover);
                 }
-            }
-            
-            // DEBUG: Show first region's BackgroundColor in title bar
-            if (_regions.Count > 0)
-            {
-                var c = _regions[0].BackgroundColor;
-                this.Title = $"OCR Editor [DEBUG] First region BG: R={c.R} G={c.G} B={c.B}";
             }
 
             // 2. Next, draw interactive, draggable text layers on top of the static covers
