@@ -10,6 +10,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using System.Drawing;
 using System.Drawing.Imaging;
+using OCREditor.Interop;
 
 namespace OCREditor
 {
