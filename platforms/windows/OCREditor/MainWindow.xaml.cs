@@ -359,26 +359,21 @@ namespace OCREditor
                     var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
                     var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
                     
-                    // Initialize Windows Native OCR Engine based on ComboBox selection
+                    // Initialize Windows Native OCR Engine based on ComboBox selection Tag
                     Windows.Media.Ocr.OcrEngine? ocrEngine = null;
-
-                    if (LanguageComboBox.SelectedIndex == 0) // Auto
+                    
+                    if (LanguageComboBox.SelectedItem is ComboBoxItem selectedItem && selectedItem.Tag is string langTag)
                     {
-                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
-                        if (ocrEngine == null)
-                            ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hant"));
-                    }
-                    else if (LanguageComboBox.SelectedIndex == 1) // zh-Hant
-                    {
-                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hant"));
-                    }
-                    else if (LanguageComboBox.SelectedIndex == 2) // en
-                    {
-                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("en"));
-                    }
-                    else if (LanguageComboBox.SelectedIndex == 3) // zh-Hans
-                    {
-                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hans"));
+                        if (langTag == "auto")
+                        {
+                            ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+                            if (ocrEngine == null)
+                                ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hant"));
+                        }
+                        else
+                        {
+                            ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language(langTag));
+                        }
                     }
                     
                     if (ocrEngine != null)

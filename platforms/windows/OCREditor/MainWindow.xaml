@@ -191,12 +191,20 @@
                     <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
 
                     <!-- OCR Language Selection -->
-                    <TextBlock Text="Language: " VerticalAlignment="Center" Foreground="#AAA" Margin="0,0,5,0"/>
-                    <ComboBox x:Name="LanguageComboBox" Width="110" Height="26" VerticalAlignment="Center" SelectedIndex="0" Margin="0,0,15,0" Background="#2D2D30" Foreground="White" BorderBrush="#3F3F46">
-                        <ComboBoxItem Content="Auto (System)"/>
-                        <ComboBoxItem Content="繁體中文 (zh-Hant)"/>
-                        <ComboBoxItem Content="English (en)"/>
-                        <ComboBoxItem Content="简体中文 (zh-Hans)"/>
+                    <ComboBox x:Name="LanguageComboBox" Width="160" Height="26" VerticalAlignment="Center" SelectedIndex="0" Margin="0,0,15,0" Background="#2D2D30" Foreground="White" BorderBrush="#3F3F46">
+                        <ComboBoxItem Content="Auto (System)" Tag="auto"/>
+                        <ComboBoxItem Content="繁體中文 (zh-Hant)" Tag="zh-Hant"/>
+                        <ComboBoxItem Content="English (en)" Tag="en"/>
+                        <ComboBoxItem Content="简体中文 (zh-Hans)" Tag="zh-Hans"/>
+                        <ComboBoxItem Content="日本語 (ja)" Tag="ja"/>
+                        <ComboBoxItem Content="한국어 (ko)" Tag="ko"/>
+                        <ComboBoxItem Content="ไทย (th)" Tag="th"/>
+                        <ComboBoxItem Content="Русский (ru)" Tag="ru"/>
+                        <ComboBoxItem Content="Deutsch (de)" Tag="de"/>
+                        <ComboBoxItem Content="Bahasa Indonesia (id)" Tag="id"/>
+                        <ComboBoxItem Content="Bahasa Melayu (ms)" Tag="ms"/>
+                        <ComboBoxItem Content="Español (es)" Tag="es"/>
+                        <ComboBoxItem Content="Português (pt)" Tag="pt"/>
                     </ComboBox>
 
                     <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
