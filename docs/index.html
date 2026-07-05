@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 離線文件圖層編輯器 — OCREditor</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151b2c;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --primary: #8b5cf6;
+            --secondary: #06b6d4;
+            --accent: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 80px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 20px 24px;
+            }
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+        }
+
+        .nav-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-color);
+        }
+
+        .btn-download {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 12px 24px;
+            border-radius: 9999px;
+            text-decoration: none;
+            font-weight: 600;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(139, 92, 246, 0.6);
+        }
+
+        .hero {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 80px;
+            display: flex;
+            align-items: center;
+            gap: 60px;
+        }
+
+        @media (max-width: 1024px) {
+            .hero {
+                flex-direction: column;
+                padding: 40px 24px;
+                text-align: center;
+            }
+        }
+
+        .hero-text {
+            flex: 1;
+        }
+
+        .hero-title {
+            font-size: 56px;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 24px;
+            background: linear-gradient(to right, #ffffff, #e2e8f0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 38px;
+            }
+        }
+
+        .hero-subtitle {
+            font-size: 20px;
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            max-width: 600px;
+        }
+
+        @media (max-width: 1024px) {
+            .hero-subtitle {
+                margin: 0 auto 40px auto;
+            }
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .hero-buttons {
+                justify-content: center;
+            }
+        }
+
+        .btn-secondary {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            padding: 12px 24px;
+            border-radius: 9999px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(255, 255, 255, 0.10);
+        }
+
+        /* 互動畫布模擬器 */
+        .hero-canvas-mockup {
+            flex: 1;
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            display: flex;
+            height: 480px;
+            width: 100%;
+            max-width: 640px;
+        }
+
+        .mockup-sidebar {
+            width: 160px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .mockup-sidebar h4 {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .sidebar-item {
+            font-size: 13px;
+            padding: 8px;
+            border-radius: 6px;
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .sidebar-item.active {
+            background-color: rgba(139, 92, 246, 0.15);
+            border-color: var(--primary);
+        }
+
+        .mockup-main {
+            flex: 1;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        .mockup-canvas-frame {
+            flex: 1;
+            background-color: white;
+            border-radius: 8px;
+            position: relative;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .mockup-element {
+            position: absolute;
+            border: 1.5px solid transparent;
+            cursor: pointer;
+            user-select: none;
+            transition: border-color 0.2s;
+        }
+
+        .mockup-element.selected {
+            border-color: var(--primary);
+        }
+
+        .mockup-text-1 {
+            top: 60px;
+            left: 40px;
+            font-size: 26px;
+            font-weight: 800;
+            color: #1e293b;
+        }
+
+        .mockup-text-2 {
+            top: 110px;
+            left: 40px;
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .mockup-image {
+            bottom: 30px;
+            right: 30px;
+            width: 100px;
+            height: 100px;
+            background-color: #cbd5e1;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #475569;
+            font-size: 12px;
+        }
+
+        .mockup-inspector {
+            width: 180px;
+            background-color: rgba(0, 0, 0, 0.15);
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .mockup-inspector label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .mockup-input {
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .mockup-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: opacity 0.2s;
+        }
+
+        .mockup-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* 特色功能卡片 */
+        .features {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 80px;
+        }
+
+        @media (max-width: 768px) {
+            .features {
+                padding: 40px 24px;
+            }
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+            margin-top: 48px;
+        }
+
+        .feature-card {
+            background-color: var(--card-bg);
+            border-radius: 16px;
+            padding: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s, border-color 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+
+        .feature-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .feature-desc {
+            color: var(--text-muted);
+            font-size: 15px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 48px;
+            color: var(--text-muted);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            margin-top: 80px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
+            OCREditor
+        </div>
+        <ul class="nav-links">
+            <li><a href="#features">產品特色</a></li>
+            <li><a href="#demo">線上互動</a></li>
+            <li><a href="https://github.com/barretlin/ocr" target="_blank">GitHub</a></li>
+        </ul>
+        <a href="https://github.com/barretlin/ocr/releases" class="btn-download">免費下載</a>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="hero-text">
+                <h1 class="hero-title">100% 離線運行<br>多圖層 AI 編輯器</h1>
+                <p class="hero-subtitle">智慧文字識別 (OCR) 與背景抹除 (Inpainting) 三位一體，一鍵分離文件、簡報與圖片中的所有圖層。保護隱私安全，維持零伺服器開銷！</p>
+                <div class="hero-buttons">
+                    <a href="https://github.com/barretlin/ocr/releases" class="btn-download">下載 macOS 版</a>
+                    <a href="#demo" class="btn-secondary">線上互動示範</a>
+                </div>
+            </div>
+            
+            <!-- 互動畫布模擬器 -->
+            <div class="hero-canvas-mockup" id="demo">
+                <div class="mockup-sidebar">
+                    <h4>圖層清單</h4>
+                    <div class="sidebar-item active" onclick="selectElement('title')">
+                        📝 標題文字
+                    </div>
+                    <div class="sidebar-item" onclick="selectElement('sub')">
+                        📝 副標題文字
+                    </div>
+                    <div class="sidebar-item" onclick="selectElement('img')">
+                        🖼️ 簡報插圖
+                    </div>
+                </div>
+                <div class="mockup-main">
+                    <div class="mockup-canvas-frame">
+                        <div class="mockup-element mockup-text-1 selected" id="el-title" onclick="selectElement('title')">
+                            離線圖層編輯器
+                        </div>
+                        <div class="mockup-element mockup-text-2" id="el-sub" onclick="selectElement('sub')">
+                            全端側 AI 運算，保護商業隱私
+                        </div>
+                        <div class="mockup-element mockup-image" id="el-img" onclick="selectElement('img')">
+                            內嵌圖標
+                        </div>
+                    </div>
+                </div>
+                <div class="mockup-inspector">
+                    <h4>屬性面版</h4>
+                    <div>
+                        <label>編輯文字內容</label>
+                        <input type="text" class="mockup-input" id="inspector-input" value="離線圖層編輯器" oninput="updateText(this.value)">
+                    </div>
+                    <button class="mockup-btn" onclick="eraseSelected()">抹除此圖層 (AI)</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="features" id="features">
+            <h2 style="font-size: 32px; font-weight: 800; text-align: center;">為什麼選擇 OCREditor？</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">端側 100% 離線運行</h3>
+                    <p class="feature-desc">不需上傳任何圖片到雲端伺服器，所有 OCR 識別與 LaMa 抹除運算皆在您的本地設備進行，隱私安全無懈可擊。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🥞</div>
+                    <h3 class="feature-title">多格式圖層自動分離</h3>
+                    <p class="feature-desc">支援點陣圖、PDF 內置圖片與 PPTX 簡報，導入後自動將底圖、文字與插圖抽離為獨立編輯元件，所見即所改。</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3 class="feature-title">極速硬體端側加速</h3>
+                    <p class="feature-desc">適配 macOS CoreML 與 Windows DirectML，利用端側神經網絡加速，數毫秒內即可完成高精度的 AI 背景修復。</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p>
+    </footer>
+
+    <script>
+        let currentSelection = 'title';
+        const elements = {
+            title: { el: document.getElementById('el-title'), inputVal: "離線圖層編輯器" },
+            sub: { el: document.getElementById('el-sub'), inputVal: "全端側 AI 運算，保護商業隱私" },
+            img: { el: document.getElementById('el-img'), inputVal: "內嵌圖標" }
+        };
+
+        function selectElement(id) {
+            currentSelection = id;
+            
+            // Update selected class
+            document.querySelectorAll('.mockup-element').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            
+            if (id === 'title') {
+                elements.title.el.classList.add('selected');
+                document.querySelectorAll('.sidebar-item')[0].classList.add('active');
+                document.getElementById('inspector-input').disabled = false;
+                document.getElementById('inspector-input').value = elements.title.inputVal;
+            } else if (id === 'sub') {
+                elements.sub.el.classList.add('selected');
+                document.querySelectorAll('.sidebar-item')[1].classList.add('active');
+                document.getElementById('inspector-input').disabled = false;
+                document.getElementById('inspector-input').value = elements.sub.inputVal;
+            } else if (id === 'img') {
+                elements.img.el.classList.add('selected');
+                document.querySelectorAll('.sidebar-item')[2].classList.add('active');
+                document.getElementById('inspector-input').disabled = true;
+                document.getElementById('inspector-input').value = "[圖片元件無法直接打字]";
+            }
+        }
+
+        function updateText(val) {
+            if (currentSelection === 'title') {
+                elements.title.el.innerText = val;
+                elements.title.inputVal = val;
+            } else if (currentSelection === 'sub') {
+                elements.sub.el.innerText = val;
+                elements.sub.inputVal = val;
+            }
+        }
+
+        function eraseSelected() {
+            if (currentSelection === 'title') {
+                elements.title.el.style.opacity = 0;
+            } else if (currentSelection === 'sub') {
+                elements.sub.el.style.opacity = 0;
+            } else if (currentSelection === 'img') {
+                elements.img.el.style.opacity = 0;
+            }
+        }
+    </script>
+</body>
+</html>

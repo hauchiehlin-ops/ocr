@@ -1,0 +1,62 @@
+# Build directories
+build/
+bin/
+lib/
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+compile_commands.json
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*.user
+*.suo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Android
+platforms/android/.gradle/
+platforms/android/local.properties
+platforms/android/*/build/
+platforms/android/build/
+platforms/android/*.iml
+platforms/android/.idea/
+
+# iOS / macOS
+platforms/macos/**/*.xcworkspace/xcuserdata/
+platforms/macos/**/*.xcodeproj/xcuserdata/
+platforms/macos/**/*.xcodeproj/project.xcworkspace/xcuserdata/
+platforms/ios/**/*.xcworkspace/xcuserdata/
+platforms/ios/**/*.xcodeproj/xcuserdata/
+platforms/ios/**/*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Models (Keep the directory, ignore the large files if they shouldn't be tracked)
+# core/models/*.onnx
+# We might want to track models if they are small, but they are often large.
+# I'll leave them tracked for now unless they hit GitHub's 100MB limit.
+
+# Build artifacts & package cache
+.build/
+.swiftpm/
+.build*
+**/workspace-state.json
+
+# Compiled binaries and local test binaries
+core/test_bridge
+platforms/macos/OCREditor/Bridge/OCREngineBridge.o
+*.o
+*.obj
+*.dll
+*.dylib
+*.so
