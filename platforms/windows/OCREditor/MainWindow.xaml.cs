@@ -609,6 +609,7 @@ namespace OCREditor
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"GDI in-memory sampling failed: {ex.Message}");
+                        MessageBox.Show($"Sampling failed: {ex.Message}\nStack: {ex.StackTrace}", "Debug Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }
