@@ -13,7 +13,7 @@ namespace OCREditor
 {
     public partial class MainWindow : Window
     {
-        private OCREngineInterop? _ocrEngine;
+        private OCREngineInterop? _ocrEngine; // Kept for architecture compatibility
         private string? _currentImagePath;
         private string? _initErrorMessage;
 
@@ -52,30 +52,30 @@ namespace OCREditor
 
         private void InitializeEngine()
         {
+            // Kept for logging and architecture compatibility,
+            // but we fall back to Windows Native OCR first.
             try
             {
-                // Look for models directory in common locations
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 string modelsPath = Path.Combine(baseDir, "models");
 
-                if (!Directory.Exists(modelsPath))
+                if (Directory.Exists(modelsPath))
                 {
-                    _initErrorMessage = "Models folder not found. Running in Sandbox Mode.";
-                    StatusLabel.Text = _initErrorMessage;
-                    return;
+                    _ocrEngine = new OCREngineInterop(modelsPath);
+                    StatusLabel.Text = "OCR C++ Core Engine initialized.";
                 }
-
-                _ocrEngine = new OCREngineInterop(modelsPath);
-                StatusLabel.Text = "OCR Core Engine initialized successfully.";
+                else
+                {
+                    StatusLabel.Text = "Using Windows Native OCR Engine.";
+                }
             }
             catch (Exception ex)
             {
-                _initErrorMessage = $"Engine load error: {ex.Message}. Running in Sandbox Mode.";
-                StatusLabel.Text = _initErrorMessage;
+                StatusLabel.Text = $"Using Windows Native OCR Engine. (C++ init bypassed: {ex.Message})";
             }
         }
 
-        private void OpenImage_Click(object sender, RoutedEventArgs e)
+        private async void OpenImage_Click(object sender, RoutedEventArgs e)
         {
             var openFileDialog = new OpenFileDialog
             {
@@ -111,7 +111,7 @@ namespace OCREditor
                     OcrTextBox.Text = string.Empty;
                     OverlayCanvas.Children.Clear();
                     
-                    RunOCR();
+                    await RunOCRAsync();
                 }
                 catch (Exception ex)
                 {
@@ -120,62 +120,75 @@ namespace OCREditor
             }
         }
 
-        private void RunOCR()
+        private async System.Threading.Tasks.Task RunOCRAsync()
         {
             if (_currentImagePath == null) return;
 
-            if (_ocrEngine != null)
+            try
             {
-                // Real OCR Engine mode
-                try
+                StatusLabel.Text = "Running Real Windows Native OCR...";
+                
+                // Open file as stream for Windows Runtime (WinRT)
+                var storageFile = await Windows.Storage.StorageFile.GetFileFromPathAsync(_currentImagePath);
+                using (var stream = await storageFile.OpenAsync(Windows.Storage.FileAccessMode.Read))
                 {
-                    StatusLabel.Text = "Running OCR...";
-                    using var bitmap = new Bitmap(_currentImagePath);
-                    var result = _ocrEngine.Recognize(bitmap);
-
-                    if (result != null)
+                    var decoder = await Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream);
+                    var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+                    
+                    // Initialize Windows Native OCR Engine based on user profile language (supports Chinese/English etc.)
+                    var ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+                    if (ocrEngine == null)
                     {
-                        OcrTextBox.Text = result.FullText;
-                        StatusLabel.Text = $"OCR Complete. Found {result.WordCount} words.";
+                        // Fallback to Traditional Chinese
+                        ocrEngine = Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new Windows.Globalization.Language("zh-Hant"));
+                    }
+                    
+                    if (ocrEngine != null)
+                    {
+                        var result = await ocrEngine.RecognizeAsync(softwareBitmap);
                         
-                        // Parse real boxes
                         _regions.Clear();
+                        _selectedRegion = null;
                         
-                        foreach (var block in result.Blocks)
+                        double imgWidth = softwareBitmap.PixelWidth;
+                        double imgHeight = softwareBitmap.PixelHeight;
+                        
+                        System.Text.StringBuilder fullText = new System.Text.StringBuilder();
+                        
+                        foreach (var line in result.Lines)
                         {
-                            foreach (var line in block.Lines)
+                            var box = line.Rect; // Axis-aligned bounding box from Windows OCR
+                            
+                            _regions.Add(new OCRRegion
                             {
-                                var box = line.BoundingBox;
-                                _regions.Add(new OCRRegion
-                                {
-                                    OriginalText = line.Text,
-                                    CurrentText = line.Text,
-                                    RelX = box.X / bitmap.Width,
-                                    RelY = box.Y / bitmap.Height,
-                                    RelWidth = box.Width / bitmap.Width,
-                                    RelHeight = box.Height / bitmap.Height
-                                });
-                            }
+                                OriginalText = line.Text,
+                                CurrentText = line.Text,
+                                RelX = box.X / imgWidth,
+                                RelY = box.Y / imgHeight,
+                                RelWidth = box.Width / imgWidth,
+                                RelHeight = box.Height / imgHeight
+                            });
+                            
+                            fullText.AppendLine(line.Text);
                         }
+                        
+                        OcrTextBox.Text = fullText.ToString();
+                        StatusLabel.Text = $"OCR Complete. Found {result.Lines.Count} text lines.";
                         
                         RenderRegions();
                     }
                     else
                     {
-                        OcrTextBox.Text = string.Empty;
-                        StatusLabel.Text = "OCR failed to return results.";
+                        StatusLabel.Text = "Windows OCR Engine could not be initialized.";
+                        MessageBox.Show("Could not initialize Windows Native OCR. Falling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Information);
+                        RunMockOCR();
                     }
                 }
-                catch (Exception ex)
-                {
-                    StatusLabel.Text = $"OCR error: {ex.Message}";
-                    MessageBox.Show($"OCR Core failed: {ex.Message}\nFalling back to Sandbox Mode.", "OCR Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    RunMockOCR();
-                }
             }
-            else
+            catch (Exception ex)
             {
-                // Fallback to Interactive Sandbox Mode
+                StatusLabel.Text = $"OCR Engine bypass/error: {ex.Message}";
+                MessageBox.Show($"OCR Core failed: {ex.Message}\nFalling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Warning);
                 RunMockOCR();
             }
         }
@@ -239,7 +252,7 @@ namespace OCREditor
                 {
                     Width = width,
                     Height = height,
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0)), // Light orange default highlight
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0)), // Light orange default highlight
                     BorderThickness = new Thickness(2),
                     Cursor = System.Windows.Input.Cursors.Hand,
                     Tag = region
@@ -268,7 +281,7 @@ namespace OCREditor
                     if (region != _selectedRegion)
                     {
                         border.BorderBrush = System.Windows.Media.Brushes.Orange;
-                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(20, 255, 165, 0));
+                        border.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(25, 255, 165, 0));
                     }
                 };
                 border.MouseDown += (s, e) =>
