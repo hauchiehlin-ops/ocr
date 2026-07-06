@@ -324,7 +324,7 @@ namespace OCREditor
 
         private async void OpenImage_Click(object sender, RoutedEventArgs e)
         {
-            var openFileDialog = new OpenFileDialog
+            var openFileDialog = new Microsoft.Win32.OpenFileDialog
             {
                 Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tiff"
             };
