@@ -357,7 +357,7 @@
             </Border>
 
             <!-- CENTER CANVAS AREA -->
-            <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#0F0F0F">
+            <ScrollViewer x:Name="MainScrollViewer" Grid.Column="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Background="#0F0F0F">
                 <Grid x:Name="CanvasGrid" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
                     <Grid.LayoutTransform>
                         <ScaleTransform x:Name="CanvasScale" ScaleX="1" ScaleY="1"/>

@@ -102,15 +102,34 @@ namespace OCREditor
 
         private void PopulateFontFamilies()
         {
-            var fontFamilies = System.Windows.Media.Fonts.SystemFontFamilies.OrderBy(f => f.Source).ToList();
-            FontFamilyComboBox.ItemsSource = fontFamilies;
-            FontFamilyComboBox.DisplayMemberPath = "Source";
+            var fontNames = new List<string>();
+            try
+            {
+                using (var installedFonts = new System.Drawing.Text.InstalledFontCollection())
+                {
+                    foreach (var family in installedFonts.Families)
+                    {
+                        fontNames.Add(family.Name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to load installed fonts: {ex.Message}");
+                foreach (var f in System.Windows.Media.Fonts.SystemFontFamilies)
+                {
+                    fontNames.Add(f.Source);
+                }
+            }
+
+            fontNames = fontNames.Distinct().OrderBy(name => name).ToList();
+            FontFamilyComboBox.ItemsSource = fontNames;
             
             // Set default font
-            var defaultFont = fontFamilies.FirstOrDefault(f => f.Source.Contains("Microsoft JhengHei"));
+            var defaultFont = fontNames.FirstOrDefault(f => f.Contains("Microsoft JhengHei"));
             if (defaultFont != null)
                 FontFamilyComboBox.SelectedItem = defaultFont;
-            else if (fontFamilies.Count > 0)
+            else if (fontNames.Count > 0)
                 FontFamilyComboBox.SelectedIndex = 0;
         }
 
@@ -118,11 +137,11 @@ namespace OCREditor
         {
             if (_isUpdatingUiFromSelection || _selectedRegion == null) return;
             
-            var selectedFont = FontFamilyComboBox.SelectedItem as System.Windows.Media.FontFamily;
-            if (selectedFont != null)
+            var selectedFontName = FontFamilyComboBox.SelectedItem as string;
+            if (selectedFontName != null)
             {
                 SaveHistoryState();
-                _selectedRegion.FontFamily = selectedFont.Source;
+                _selectedRegion.FontFamily = selectedFontName;
                 _selectedRegion.IsEdited = true;
                 RenderRegions();
             }
@@ -1229,7 +1248,7 @@ namespace OCREditor
             
             foreach (var item in FontFamilyComboBox.Items)
             {
-                if (item is System.Windows.Media.FontFamily ff && ff.Source == region.FontFamily)
+                if (item is string fontName && fontName == region.FontFamily)
                 {
                     FontFamilyComboBox.SelectedItem = item;
                     break;
@@ -1240,6 +1259,24 @@ namespace OCREditor
             
             StatusLabel.Text = "Selected text layer. Update styles or text content.";
             RenderRegions();
+
+            if (MainScrollViewer != null && _imgWidth > 0 && _imgHeight > 0 && CanvasScale != null)
+            {
+                double centerX = (region.RelX + region.RelWidth / 2.0) * _imgWidth;
+                double centerY = (region.RelY + region.RelHeight / 2.0) * _imgHeight;
+                
+                double scaledCenterX = centerX * CanvasScale.ScaleX;
+                double scaledCenterY = centerY * CanvasScale.ScaleY;
+                
+                double offsetX = scaledCenterX - (MainScrollViewer.ViewportWidth / 2.0);
+                double offsetY = scaledCenterY - (MainScrollViewer.ViewportHeight / 2.0);
+                
+                if (offsetX < 0) offsetX = 0;
+                if (offsetY < 0) offsetY = 0;
+                
+                MainScrollViewer.ScrollToHorizontalOffset(offsetX);
+                MainScrollViewer.ScrollToVerticalOffset(offsetY);
+            }
         }
 
         private void LayerListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
