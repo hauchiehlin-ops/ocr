@@ -181,29 +181,34 @@ namespace OCREditor
 
         #region Zoom Event Handlers
 
-        private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-        {
-            if (CanvasScale != null)
-            {
-                CanvasScale.ScaleX = e.NewValue;
-                CanvasScale.ScaleY = e.NewValue;
-                DpiIndicator.Text = $"Zoom: {e.NewValue * 100:0}%";
-            }
-        }
-
         private void ZoomIn_Click(object sender, RoutedEventArgs e)
         {
-            ZoomSlider.Value = Math.Min(3.0, ZoomSlider.Value + 0.1);
+            if (CanvasScale != null && CanvasScale.ScaleX < 3.0)
+            {
+                CanvasScale.ScaleX += 0.2;
+                CanvasScale.ScaleY += 0.2;
+                if (DpiIndicator != null) DpiIndicator.Text = $"Zoom: {CanvasScale.ScaleX * 100:0}%";
+            }
         }
 
         private void ZoomOut_Click(object sender, RoutedEventArgs e)
         {
-            ZoomSlider.Value = Math.Max(0.2, ZoomSlider.Value - 0.1);
+            if (CanvasScale != null && CanvasScale.ScaleX > 0.2)
+            {
+                CanvasScale.ScaleX -= 0.2;
+                CanvasScale.ScaleY -= 0.2;
+                if (DpiIndicator != null) DpiIndicator.Text = $"Zoom: {CanvasScale.ScaleX * 100:0}%";
+            }
         }
 
         private void ZoomReset_Click(object sender, RoutedEventArgs e)
         {
-            ZoomSlider.Value = 1.0;
+            if (CanvasScale != null)
+            {
+                CanvasScale.ScaleX = 1.0;
+                CanvasScale.ScaleY = 1.0;
+                if (DpiIndicator != null) DpiIndicator.Text = $"Zoom: 100%";
+            }
         }
 
         private void ToggleLeftPanel_Click(object sender, RoutedEventArgs e)
@@ -372,7 +377,12 @@ namespace OCREditor
                     OverlayCanvas.Height = _imgHeight;
                     
                     // Reset Zoom to 100% on new image load
-                    ZoomSlider.Value = 1.0;
+                    if (CanvasScale != null)
+                    {
+                        CanvasScale.ScaleX = 1.0;
+                        CanvasScale.ScaleY = 1.0;
+                        if (DpiIndicator != null) DpiIndicator.Text = $"Zoom: 100%";
+                    }
                     
                     // Clear previous overlays and history
                     _regions.Clear();
@@ -1073,7 +1083,7 @@ namespace OCREditor
             if (_imgWidth <= 0 || _imgHeight <= 0) return;
 
             // Only allow insert if the Insert Text button is active
-            if (InsertTextButton.IsChecked != true) return;
+            if (MenuInsertText.IsChecked != true) return;
 
             // Make sure we didn't click on an existing region
             if (e.OriginalSource is System.Windows.Controls.Border border && border.Tag is OCRRegion) return;
@@ -1109,7 +1119,7 @@ namespace OCREditor
             SelectRegion(newRegion);
             
             // Turn off insert mode after adding one to prevent accidental clicks
-            InsertTextButton.IsChecked = false;
+            MenuInsertText.IsChecked = false;
 
             // Focus the TextBox to start typing immediately
             OcrTextBox.Focus();
@@ -1262,6 +1272,8 @@ namespace OCREditor
                     scale = _imgHeight / SourceImage.Source.Height;
                 }
                 
+                var grid = new System.Windows.Controls.Grid();
+
                 if (region.IsEdited || HasMoved(region))
                 {
                     var textBlock = new System.Windows.Controls.TextBlock
@@ -1277,13 +1289,74 @@ namespace OCREditor
                         TextAlignment = TextAlignment.Center
                     };
 
-                    border.Child = textBlock;
+                    grid.Children.Add(textBlock);
                     region.TextVisual = textBlock;
                 }
                 else
                 {
                     region.TextVisual = null;
                 }
+                
+                if (!_isSaving && region == _selectedRegion)
+                {
+                    var resizeHandle = new System.Windows.Controls.Border
+                    {
+                        Width = 10,
+                        Height = 10,
+                        Background = System.Windows.Media.Brushes.DodgerBlue,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                        VerticalAlignment = System.Windows.VerticalAlignment.Bottom,
+                        Cursor = System.Windows.Input.Cursors.SizeNWSE,
+                        Margin = new Thickness(0, 0, -5, -5)
+                    };
+                    
+                    bool isResizing = false;
+                    Point resizeStartPos = new Point();
+                    double startWidth = 0;
+                    double startHeight = 0;
+
+                    resizeHandle.MouseLeftButtonDown += (rs, re) =>
+                    {
+                        isResizing = true;
+                        resizeStartPos = re.GetPosition(OverlayCanvas);
+                        startWidth = border.Width;
+                        startHeight = border.Height;
+                        resizeHandle.CaptureMouse();
+                        re.Handled = true;
+                    };
+
+                    resizeHandle.MouseMove += (rs, re) =>
+                    {
+                        if (isResizing)
+                        {
+                            var curPos = re.GetPosition(OverlayCanvas);
+                            double newWidth = Math.Max(20, startWidth + (curPos.X - resizeStartPos.X));
+                            double newHeight = Math.Max(20, startHeight + (curPos.Y - resizeStartPos.Y));
+                            
+                            border.Width = newWidth;
+                            border.Height = newHeight;
+                            
+                            region.RelWidth = newWidth / _imgWidth;
+                            region.RelHeight = newHeight / _imgHeight;
+                            re.Handled = true;
+                        }
+                    };
+
+                    resizeHandle.MouseLeftButtonUp += (rs, re) =>
+                    {
+                        if (isResizing)
+                        {
+                            isResizing = false;
+                            resizeHandle.ReleaseMouseCapture();
+                            RenderRegions();
+                            re.Handled = true;
+                        }
+                    };
+                    
+                    grid.Children.Add(resizeHandle);
+                }
+
+                border.Child = grid;
                 region.BorderElement = border;
                 
                 Canvas.SetLeft(border, left);
@@ -1674,7 +1747,7 @@ namespace OCREditor
                 try
                 {
                     var tempSelected = _selectedRegion;
-                    double originalZoom = ZoomSlider.Value;
+                    double originalZoom = CanvasScale != null ? CanvasScale.ScaleX : 1.0;
                     
                     _isSaving = true;
                     _selectedRegion = null;
