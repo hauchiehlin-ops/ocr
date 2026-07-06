@@ -1556,8 +1556,8 @@ namespace OCREditor
                     
                     RenderRegions();
                     
-                    CanvasGrid.Measure(new Size(_imgWidth, _imgHeight));
-                    CanvasGrid.Arrange(new Rect(0, 0, _imgWidth, _imgHeight));
+                    CanvasGrid.Measure(new System.Windows.Size(_imgWidth, _imgHeight));
+                    CanvasGrid.Arrange(new System.Windows.Rect(0, 0, _imgWidth, _imgHeight));
                     CanvasGrid.UpdateLayout();
                     
                     var rtb = new RenderTargetBitmap((int)_imgWidth, (int)_imgHeight, 96, 96, PixelFormats.Pbgra32);
