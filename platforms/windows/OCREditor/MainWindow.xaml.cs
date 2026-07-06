@@ -781,17 +781,6 @@ namespace OCREditor
                         int boxW = (int)(region.RelWidth * imgW);
                         int boxH = (int)(region.RelHeight * imgH);
 
-                        // Sample at multiple distances OUTSIDE the text box in 8 directions.
-                        // Use small distances (5-20px) to tightly sample the immediate surrounding background.
-                        var offsets = new int[] { 5, 10, 15, 20 };
-                        long sumR = 0, sumG = 0, sumB = 0;
-                        int count = 0;
-
-                        foreach (int off in offsets)
-                        {
-                            // 8 sample points around the box: top-left, top-center, top-right,
-                            // mid-left, mid-right, bottom-left, bottom-center, bottom-right
-                            var points = new (int x, int y)[]
                         // Expand slightly to get true background outside the text
                         int padding = 6;
                         int originalX = (int)Math.Round(region.OriginalRelX * imgW) - padding;
