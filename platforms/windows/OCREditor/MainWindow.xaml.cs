@@ -526,10 +526,10 @@ namespace OCREditor
                                 double boxW = ((maxX - minX) / procW) * origW;
                                 double boxH = ((maxY - minY) / procH) * origH;
 
-                                // Estimate initial font size based on bounding box height
-                                // WPF FontSize is the em-square, which is larger than the actual glyph height.
-                                // We use 1.3x the bounding box height to make the WPF text match the original image text size.
-                                double estFontSize = Math.Max(12, boxH * 1.0);
+                                // Estimate initial font size based on bounding box height relative to image source DIPs
+                                double imgSourceHeight = SourceImage.Source?.Height ?? origH;
+                                double relH = boxH / origH;
+                                double estFontSize = Math.Max(12, imgSourceHeight * relH);
 
                                 var region = new OCRRegion
                                 {
@@ -1211,10 +1211,18 @@ namespace OCREditor
                         FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
                         VerticalAlignment = VerticalAlignment.Center,
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                        TextAlignment = TextAlignment.Center
+                        TextAlignment = TextAlignment.Center,
+                        TextWrapping = TextWrapping.Wrap
                     };
 
-                    grid.Children.Add(textBlock);
+                    var viewbox = new System.Windows.Controls.Viewbox
+                    {
+                        Stretch = System.Windows.Media.Stretch.Uniform,
+                        StretchDirection = System.Windows.Controls.StretchDirection.DownOnly,
+                        Child = textBlock
+                    };
+
+                    grid.Children.Add(viewbox);
                     region.TextVisual = textBlock;
                 }
                 else if (HasMoved(region))
