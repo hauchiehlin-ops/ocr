@@ -1072,6 +1072,9 @@ namespace OCREditor
         {
             if (_imgWidth <= 0 || _imgHeight <= 0) return;
 
+            // Only allow insert if the Insert Text button is active
+            if (InsertTextButton.IsChecked != true) return;
+
             // Make sure we didn't click on an existing region
             if (e.OriginalSource is System.Windows.Controls.Border border && border.Tag is OCRRegion) return;
             if (e.OriginalSource is System.Windows.Controls.TextBlock) return;
@@ -1105,6 +1108,9 @@ namespace OCREditor
             
             SelectRegion(newRegion);
             
+            // Turn off insert mode after adding one to prevent accidental clicks
+            InsertTextButton.IsChecked = false;
+
             // Focus the TextBox to start typing immediately
             OcrTextBox.Focus();
             OcrTextBox.SelectAll();

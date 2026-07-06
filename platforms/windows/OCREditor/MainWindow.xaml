@@ -279,6 +279,7 @@
                         <!-- Edit Group -->
                         <GroupBox Header="Edit" Foreground="#AAA" BorderBrush="#333" Margin="0,0,10,0">
                             <StackPanel Orientation="Horizontal" Margin="4">
+                                <ToggleButton x:Name="InsertTextButton" Content="📝 Insert Text" Style="{StaticResource ModernToggleButtonStyle}" Margin="0,0,8,0" Width="100" Height="26"/>
                                 <Button x:Name="UndoButton" Content="↩️ Undo" Click="Undo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,8,0" IsEnabled="False"/>
                                 <Button x:Name="RedoButton" Content="↪️ Redo" Click="Redo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,4,0" IsEnabled="False"/>
                             </StackPanel>
