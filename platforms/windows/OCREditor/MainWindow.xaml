@@ -383,7 +383,7 @@
                         <ScaleTransform x:Name="CanvasScale" ScaleX="1" ScaleY="1"/>
                     </Grid.LayoutTransform>
                     <Image x:Name="SourceImage" Stretch="None" SizeChanged="SourceImage_SizeChanged"/>
-                    <Canvas x:Name="OverlayCanvas" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                    <Canvas x:Name="OverlayCanvas" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top" MouseLeftButtonDown="OverlayCanvas_MouseLeftButtonDown"/>
                 </Grid>
             </ScrollViewer>
 

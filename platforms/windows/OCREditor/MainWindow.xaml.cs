@@ -1068,6 +1068,48 @@ namespace OCREditor
             }
         }
 
+        private void OverlayCanvas_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (_imgWidth <= 0 || _imgHeight <= 0) return;
+
+            // Make sure we didn't click on an existing region
+            if (e.OriginalSource is System.Windows.Controls.Border border && border.Tag is OCRRegion) return;
+            if (e.OriginalSource is System.Windows.Controls.TextBlock) return;
+
+            SaveHistoryState();
+
+            var pos = e.GetPosition(OverlayCanvas);
+            double defaultRelWidth = 100.0 / _imgWidth;
+            double defaultRelHeight = 30.0 / _imgHeight;
+
+            var newRegion = new OCRRegion
+            {
+                OriginalText = "",
+                CurrentText = "New Text",
+                RelX = pos.X / _imgWidth,
+                RelY = pos.Y / _imgHeight,
+                OriginalRelX = pos.X / _imgWidth,
+                OriginalRelY = pos.Y / _imgHeight,
+                RelWidth = defaultRelWidth,
+                RelHeight = defaultRelHeight,
+                FontSize = Math.Max(12, 30.0 * 1.0),
+                BackgroundColor = System.Windows.Media.Colors.Transparent,
+                TextColor = System.Windows.Media.Colors.Black,
+                IsEdited = true
+            };
+
+            _regions.Add(newRegion);
+            
+            LayerListBox.ItemsSource = null;
+            LayerListBox.ItemsSource = _regions;
+            
+            SelectRegion(newRegion);
+            
+            // Focus the TextBox to start typing immediately
+            OcrTextBox.Focus();
+            OcrTextBox.SelectAll();
+        }
+
         private void RenderRegions()
         {
             OverlayCanvas.Children.Clear();
@@ -1214,7 +1256,7 @@ namespace OCREditor
                     scale = _imgHeight / SourceImage.Source.Height;
                 }
                 
-                if (region.IsEdited)
+                if (region.IsEdited || HasMoved(region))
                 {
                     var textBlock = new System.Windows.Controls.TextBlock
                     {
@@ -1231,15 +1273,6 @@ namespace OCREditor
 
                     border.Child = textBlock;
                     region.TextVisual = textBlock;
-                }
-                else if (HasMoved(region))
-                {
-                    var sprite = new System.Windows.Controls.Border
-                    {
-                        Background = CreateTransparentTextSprite(region)
-                    };
-                    border.Child = sprite;
-                    region.TextVisual = sprite;
                 }
                 else
                 {
