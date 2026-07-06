@@ -1355,6 +1355,32 @@ namespace OCREditor
             }
         }
 
+        private void CustomColor_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null) return;
+            
+            using (var colorDialog = new System.Windows.Forms.ColorDialog())
+            {
+                colorDialog.Color = System.Drawing.Color.FromArgb(
+                    _selectedRegion.TextColor.A, 
+                    _selectedRegion.TextColor.R, 
+                    _selectedRegion.TextColor.G, 
+                    _selectedRegion.TextColor.B);
+                    
+                if (colorDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    SaveHistoryState();
+                    _selectedRegion.TextColor = System.Windows.Media.Color.FromArgb(
+                        colorDialog.Color.A, 
+                        colorDialog.Color.R, 
+                        colorDialog.Color.G, 
+                        colorDialog.Color.B);
+                    _selectedRegion.IsEdited = true;
+                    RenderRegions();
+                }
+            }
+        }
+
         private void RemoveText_Click(object sender, RoutedEventArgs e)
         {
             if (_selectedRegion != null)

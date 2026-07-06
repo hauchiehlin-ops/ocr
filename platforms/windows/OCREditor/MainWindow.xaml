@@ -256,62 +256,82 @@
 
         <!-- Top Menu/Toolbar -->
         <Border Grid.Row="0" Background="#1E1E1E" Padding="12,8" BorderBrush="#2D2D2D" BorderThickness="0,0,0,1">
-            <DockPanel LastChildFill="False">
+            <DockPanel LastChildFill="True">
                 <!-- App Title -->
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,20,0">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Top" Margin="0,4,20,0">
                     <TextBlock Text="🔍" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
                     <TextBlock Text="OCR Visual Editor Pro" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                 </StackPanel>
 
+                <TextBlock x:Name="EngineIndicator" Text="Engine: System OCR" DockPanel.Dock="Right" VerticalAlignment="Top" Margin="0,6,0,0" Foreground="#888" FontSize="12"/>
+
                 <!-- Tool Buttons -->
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
-                    <Button Content="📂 Open Image" Click="OpenImage_Click" Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0"/>
-                    <Button x:Name="UndoButton" Content="↩️ Undo" Click="Undo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,8,0" IsEnabled="False"/>
-                    <Button x:Name="RedoButton" Content="↪️ Redo" Click="Redo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,8,0" IsEnabled="False"/>
-                    <Button Content="💾 Save Result" Click="SaveImage_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,12,0"/>
-                    
-                    <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
+                <Expander Header="Tools Panel" IsExpanded="True" Foreground="White" BorderBrush="Transparent">
+                    <WrapPanel Margin="0,5,0,0">
+                        <!-- File Group -->
+                        <GroupBox Header="File" Foreground="#AAA" BorderBrush="#333" Margin="5,0,10,0">
+                            <StackPanel Orientation="Horizontal" Margin="4">
+                                <Button Content="📂 Open Image" Click="OpenImage_Click" Style="{StaticResource AccentButtonStyle}" Margin="0,0,8,0"/>
+                                <Button Content="💾 Save Result" Click="SaveImage_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,4,0"/>
+                            </StackPanel>
+                        </GroupBox>
 
-                    <!-- Collapsible Panel Toggles -->
-                    <ToggleButton x:Name="ToggleLeftPanelButton" Content="📋 Layers" IsChecked="True" Click="ToggleLeftPanel_Click" Style="{StaticResource ModernToggleButtonStyle}" Margin="0,0,8,0" Width="85" Height="26"/>
-                    <ToggleButton x:Name="ToggleRightPanelButton" Content="⚙️ Properties" IsChecked="True" Click="ToggleRightPanel_Click" Style="{StaticResource ModernToggleButtonStyle}" Margin="0,0,12,0" Width="100" Height="26"/>
+                        <!-- Edit Group -->
+                        <GroupBox Header="Edit" Foreground="#AAA" BorderBrush="#333" Margin="0,0,10,0">
+                            <StackPanel Orientation="Horizontal" Margin="4">
+                                <Button x:Name="UndoButton" Content="↩️ Undo" Click="Undo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,8,0" IsEnabled="False"/>
+                                <Button x:Name="RedoButton" Content="↪️ Redo" Click="Redo_Click" Style="{StaticResource ModernButtonStyle}" Margin="0,0,4,0" IsEnabled="False"/>
+                            </StackPanel>
+                        </GroupBox>
 
-                    <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
+                        <!-- View Group -->
+                        <GroupBox Header="View" Foreground="#AAA" BorderBrush="#333" Margin="0,0,10,0">
+                            <StackPanel Orientation="Horizontal" Margin="4">
+                                <ToggleButton x:Name="ToggleLeftPanelButton" Content="📋 Layers" IsChecked="True" Click="ToggleLeftPanel_Click" Style="{StaticResource ModernToggleButtonStyle}" Margin="0,0,8,0" Width="85" Height="26"/>
+                                <ToggleButton x:Name="ToggleRightPanelButton" Content="⚙️ Properties" IsChecked="True" Click="ToggleRightPanel_Click" Style="{StaticResource ModernToggleButtonStyle}" Margin="0,0,4,0" Width="100" Height="26"/>
+                            </StackPanel>
+                        </GroupBox>
 
-                    <ComboBox x:Name="LanguageComboBox" Width="160" Height="26" VerticalAlignment="Center" SelectedIndex="0" Margin="0,0,15,0" Style="{StaticResource ModernComboBoxStyle}">
-                        <ComboBox.Resources>
-                            <Style TargetType="ComboBoxItem">
-                                <Setter Property="Background" Value="#2D2D30"/>
-                                <Setter Property="Foreground" Value="White"/>
-                                <Setter Property="Padding" Value="6,4"/>
-                            </Style>
-                        </ComboBox.Resources>
-                        <ComboBoxItem Content="Auto (System)" Tag="auto"/>
-                        <ComboBoxItem Content="繁體中文 (zh-Hant)" Tag="zh-Hant"/>
-                        <ComboBoxItem Content="English (en)" Tag="en"/>
-                        <ComboBoxItem Content="简体中文 (zh-Hans)" Tag="zh-Hans"/>
-                        <ComboBoxItem Content="日本語 (ja)" Tag="ja"/>
-                        <ComboBoxItem Content="한국어 (ko)" Tag="ko"/>
-                        <ComboBoxItem Content="ไทย (th)" Tag="th"/>
-                        <ComboBoxItem Content="Русский (ru)" Tag="ru"/>
-                        <ComboBoxItem Content="Deutsch (de)" Tag="de"/>
-                        <ComboBoxItem Content="Bahasa Indonesia (id)" Tag="id"/>
-                        <ComboBoxItem Content="Bahasa Melayu (ms)" Tag="ms"/>
-                        <ComboBoxItem Content="Español (es)" Tag="es"/>
-                        <ComboBoxItem Content="Português (pt)" Tag="pt"/>
-                    </ComboBox>
+                        <!-- Settings Group -->
+                        <GroupBox Header="Settings" Foreground="#AAA" BorderBrush="#333" Margin="0,0,10,0">
+                            <StackPanel Orientation="Horizontal" Margin="4">
+                                <TextBlock Text="Language:" VerticalAlignment="Center" Foreground="#AAA" Margin="0,0,5,0"/>
+                                <ComboBox x:Name="LanguageComboBox" Width="160" Height="26" VerticalAlignment="Center" SelectedIndex="0" Margin="0,0,4,0" Style="{StaticResource ModernComboBoxStyle}">
+                                    <ComboBox.Resources>
+                                        <Style TargetType="ComboBoxItem">
+                                            <Setter Property="Background" Value="#2D2D30"/>
+                                            <Setter Property="Foreground" Value="White"/>
+                                            <Setter Property="Padding" Value="6,4"/>
+                                        </Style>
+                                    </ComboBox.Resources>
+                                    <ComboBoxItem Content="Auto (System)" Tag="auto"/>
+                                    <ComboBoxItem Content="繁體中文 (zh-Hant)" Tag="zh-Hant"/>
+                                    <ComboBoxItem Content="English (en)" Tag="en"/>
+                                    <ComboBoxItem Content="简体中文 (zh-Hans)" Tag="zh-Hans"/>
+                                    <ComboBoxItem Content="日本語 (ja)" Tag="ja"/>
+                                    <ComboBoxItem Content="한국어 (ko)" Tag="ko"/>
+                                    <ComboBoxItem Content="ไทย (th)" Tag="th"/>
+                                    <ComboBoxItem Content="Русский (ru)" Tag="ru"/>
+                                    <ComboBoxItem Content="Deutsch (de)" Tag="de"/>
+                                    <ComboBoxItem Content="Bahasa Indonesia (id)" Tag="id"/>
+                                    <ComboBoxItem Content="Bahasa Melayu (ms)" Tag="ms"/>
+                                    <ComboBoxItem Content="Español (es)" Tag="es"/>
+                                    <ComboBoxItem Content="Português (pt)" Tag="pt"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </GroupBox>
 
-                    <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
-
-                    <!-- Zoom Control -->
-                    <TextBlock Text="Zoom: " VerticalAlignment="Center" Foreground="#AAA" Margin="0,0,5,0"/>
-                    <Button Content=" ➖ " Click="ZoomOut_Click" Style="{StaticResource ModernButtonStyle}" Width="30" Height="26" Margin="0,0,5,0"/>
-                    <Slider x:Name="ZoomSlider" Minimum="0.2" Maximum="3" Value="1" Width="100" ValueChanged="ZoomSlider_ValueChanged" VerticalAlignment="Center"/>
-                    <Button Content=" ➕ " Click="ZoomIn_Click" Style="{StaticResource ModernButtonStyle}" Width="30" Height="26" Margin="5,0,8,0"/>
-                    <Button Content="100%" Click="ZoomReset_Click" Style="{StaticResource ModernButtonStyle}" Height="26"/>
-                </StackPanel>
-
-                <TextBlock x:Name="EngineIndicator" Text="Engine: System OCR" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="#888" FontSize="12"/>
+                        <!-- Zoom Group -->
+                        <GroupBox Header="Zoom" Foreground="#AAA" BorderBrush="#333" Margin="0,0,10,0">
+                            <StackPanel Orientation="Horizontal" Margin="4">
+                                <Button Content=" ➖ " Click="ZoomOut_Click" Style="{StaticResource ModernButtonStyle}" Width="30" Height="26" Margin="0,0,5,0"/>
+                                <Slider x:Name="ZoomSlider" Minimum="0.2" Maximum="3" Value="1" Width="100" ValueChanged="ZoomSlider_ValueChanged" VerticalAlignment="Center"/>
+                                <Button Content=" ➕ " Click="ZoomIn_Click" Style="{StaticResource ModernButtonStyle}" Width="30" Height="26" Margin="5,0,8,0"/>
+                                <Button Content="100%" Click="ZoomReset_Click" Style="{StaticResource ModernButtonStyle}" Height="26" Margin="0,0,4,0"/>
+                            </StackPanel>
+                        </GroupBox>
+                    </WrapPanel>
+                </Expander>
             </DockPanel>
         </Border>
 
@@ -424,6 +444,7 @@
                                     <Button Background="Yellow" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
                                     <Button Background="Orange" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
                                     <Button Background="Purple" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
+                                    <Button Content="🎨" ToolTip="Custom Color" Style="{StaticResource ColorBoxStyle}" Background="Transparent" BorderBrush="#555" Click="CustomColor_Click"/>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
