@@ -855,6 +855,83 @@ namespace OCREditor
             return brush;
         }
 
+        private System.Windows.Media.Brush CreateInpaintedBackgroundSprite(OCRRegion region, int paddingPixels)
+        {
+            lock (_bitmapLock)
+            {
+                if (_originalBitmap != null)
+                {
+                    try
+                    {
+                        int imgW = _originalBitmap.Width;
+                        int imgH = _originalBitmap.Height;
+
+                        // Calculate padding relative to original bitmap size
+                        int paddingX = (int)Math.Ceiling(paddingPixels * ((double)imgW / _imgWidth));
+                        int paddingY = (int)Math.Ceiling(paddingPixels * ((double)imgH / _imgHeight));
+
+                        int originalX = (int)Math.Round(region.OriginalRelX * imgW) - paddingX;
+                        int originalY = (int)Math.Round(region.OriginalRelY * imgH) - paddingY;
+                        int originalW = Math.Max(1, (int)Math.Round(region.RelWidth * imgW)) + paddingX * 2;
+                        int originalH = Math.Max(1, (int)Math.Round(region.RelHeight * imgH)) + paddingY * 2;
+                        
+                        // Ensure bounds
+                        originalX = Math.Max(0, Math.Min(originalX, imgW - 1));
+                        originalY = Math.Max(0, Math.Min(originalY, imgH - 1));
+                        originalW = Math.Min(originalW, imgW - originalX);
+                        originalH = Math.Min(originalH, imgH - originalY);
+
+                        var pixels = new byte[originalW * originalH * 4];
+                        var bg = region.BackgroundColor;
+
+                        for (int y = 0; y < originalH; y++)
+                        {
+                            for (int x = 0; x < originalW; x++)
+                            {
+                                var pixel = _originalBitmap.GetPixel(originalX + x, originalY + y);
+                                int index = (y * originalW + x) * 4;
+                                
+                                int dr = pixel.R - bg.R;
+                                int dg = pixel.G - bg.G;
+                                int db = pixel.B - bg.B;
+                                
+                                double dist = Math.Sqrt(dr * dr + dg * dg + db * db);
+                                double maxDist = 60.0; // Distance threshold to classify as text vs background
+                                
+                                byte alpha = 0; // Transparent by default (do not touch background)
+                                if (dist > maxDist)
+                                {
+                                    // It's a text pixel! We "erase" it by painting over it with the background color.
+                                    // Soft edge blending
+                                    alpha = (byte)(255 * Math.Min(1.0, (dist - maxDist) / 30.0));
+                                }
+
+                                pixels[index] = bg.B;
+                                pixels[index + 1] = bg.G;
+                                pixels[index + 2] = bg.R;
+                                pixels[index + 3] = alpha;
+                            }
+                        }
+
+                        var bitmap = new WriteableBitmap(
+                            originalW, originalH, 96, 96, PixelFormats.Bgra32, null);
+                        bitmap.WritePixels(new Int32Rect(0, 0, originalW, originalH), pixels, originalW * 4, 0);
+
+                        var brush = new ImageBrush(bitmap)
+                        {
+                            Stretch = Stretch.Fill,
+                            TileMode = TileMode.None
+                        };
+                        brush.Freeze();
+                        return brush;
+                    }
+                    catch {}
+                }
+            }
+
+            return System.Windows.Media.Brushes.Transparent;
+        }
+
         private System.Windows.Media.Brush CreateTransparentTextSprite(OCRRegion region)
         {
             lock (_bitmapLock)
@@ -1056,8 +1133,37 @@ namespace OCREditor
             
             if (_imgWidth <= 0 || _imgHeight <= 0) return;
             
-            // 1. Static background covers (removed as per user request to not modify background)
-            
+            // 1. First, draw static background covers that precisely paint over the original text strokes
+            // This leaves the surrounding background texture completely untouched to avoid 'holes' or 'pits'.
+            foreach (var region in _regions)
+            {
+                // We always want to cover the original text strokes, since we are rendering TextBlocks!
+                if (!region.IsRemoved)
+                {
+                    // For the inpaint sprite, we use a padding to ensure we catch all text strokes
+                    int padding = 6;
+                    double baseWidth = region.RelWidth * _imgWidth;
+                    double baseHeight = region.RelHeight * _imgHeight;
+                    
+                    // We calculate the source bounding box relative to screen space
+                    double sLeft = Math.Max(0.0, region.OriginalRelX * _imgWidth - padding);
+                    double sTop = Math.Max(0.0, region.OriginalRelY * _imgHeight - padding);
+                    double sWidth = Math.Min(_imgWidth - sLeft, baseWidth + padding * 2);
+                    double sHeight = Math.Min(_imgHeight - sTop, baseHeight + padding * 2);
+
+                    var staticCover = new System.Windows.Controls.Border
+                    {
+                        Width = sWidth,
+                        Height = sHeight,
+                        Background = CreateInpaintedBackgroundSprite(region, padding),
+                        BorderThickness = new Thickness(0)
+                    };
+                    Canvas.SetLeft(staticCover, sLeft);
+                    Canvas.SetTop(staticCover, sTop);
+                    OverlayCanvas.Children.Add(staticCover);
+                }
+            }
+
             // 2. Next, draw interactive, draggable text layers
             foreach (var region in _regions)
             {
