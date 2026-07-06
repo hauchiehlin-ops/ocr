@@ -519,7 +519,7 @@ namespace OCREditor
                                 // Estimate initial font size based on bounding box height
                                 // WPF FontSize is the em-square, which is larger than the actual glyph height.
                                 // We use 1.3x the bounding box height to make the WPF text match the original image text size.
-                                double estFontSize = Math.Max(12, boxH * 1.3);
+                                double estFontSize = Math.Max(12, boxH * 1.0);
 
                                 var region = new OCRRegion
                                 {
@@ -600,7 +600,7 @@ namespace OCREditor
             {
                 if (_imgHeight > 0)
                 {
-                    r.FontSize = Math.Max(12, (_imgHeight * r.RelHeight) * 1.3);
+                    r.FontSize = Math.Max(12, (SourceImage.Source?.Height ?? _imgHeight) * r.RelHeight * 1.0);
                 }
                 r.BackgroundColor = GetAverageColorOfRegion(r);
             }
@@ -1161,7 +1161,7 @@ namespace OCREditor
                         
                         _isDraggingRegion = true;
                         _draggingRegion = region;
-                        _dragStartMousePos = e.GetPosition(this); // Relative to Window
+                        _dragStartMousePos = e.GetPosition(OverlayCanvas); // Relative to Canvas
                         _dragStartRelX = region.RelX;
                         _dragStartRelY = region.RelY;
                         
@@ -1175,19 +1175,12 @@ namespace OCREditor
                 {
                     if (_isDraggingRegion && _draggingRegion == region)
                     {
-                        var curMousePos = e.GetPosition(this); // Relative to Window
+                        var curMousePos = e.GetPosition(OverlayCanvas); // Relative to Canvas
                         double deltaX = curMousePos.X - _dragStartMousePos.X;
                         double deltaY = curMousePos.Y - _dragStartMousePos.Y;
                         
-                        // Compensate for Canvas zoom scale
-                        double zoomX = CanvasScale?.ScaleX ?? 1.0;
-                        double zoomY = CanvasScale?.ScaleY ?? 1.0;
-                        
-                        double canvasDeltaX = deltaX / zoomX;
-                        double canvasDeltaY = deltaY / zoomY;
-                        
-                        double deltaRelX = canvasDeltaX / _imgWidth;
-                        double deltaRelY = canvasDeltaY / _imgHeight;
+                        double deltaRelX = deltaX / _imgWidth;
+                        double deltaRelY = deltaY / _imgHeight;
                         
                         region.RelX = Math.Max(0.0, Math.Min(_dragStartRelX + deltaRelX, 1.0 - region.RelWidth));
                         region.RelY = Math.Max(0.0, Math.Min(_dragStartRelY + deltaRelY, 1.0 - region.RelHeight));
@@ -1328,6 +1321,15 @@ namespace OCREditor
             _selectedRegion.IsRemoved = string.IsNullOrWhiteSpace(_selectedRegion.CurrentText);
             
             RenderRegions();
+        }
+
+        private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_currentImagePath != null && File.Exists(_currentImagePath))
+            {
+                // Re-run OCR automatically when language is changed
+                RunOCR(_currentImagePath);
+            }
         }
 
         private void FontSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
