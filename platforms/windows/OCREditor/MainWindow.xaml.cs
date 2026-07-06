@@ -556,9 +556,12 @@ namespace OCREditor
                             LayerListBox.ItemsSource = _regions;
 
                             OcrTextBox.Text = fullText.ToString();
-                            StatusLabel.Text = $"OCR Complete. Found {_regions.Count} text lines.";
+                            StatusLabel.Text = $"OCR Complete. Found {_regions.Count} text lines. Applying default font...";
                             
-                            RenderRegions();
+                            // Auto-apply default font to all regions after OCR
+                            ApplyDefaultFontToAllRegions();
+                            
+                            StatusLabel.Text = $"OCR Complete. {_regions.Count} text lines rendered with default font.";
                         }
                     }
                     else
@@ -617,6 +620,39 @@ namespace OCREditor
 
             LayerListBox.ItemsSource = null;
             LayerListBox.ItemsSource = _regions;
+            
+            // Auto-apply default font in sandbox mode too
+            ApplyDefaultFontToAllRegions();
+        }
+
+        private void ApplyDefaultFontToAll_Click(object sender, RoutedEventArgs e)
+        {
+            if (_regions.Count == 0)
+            {
+                System.Windows.MessageBox.Show("No text regions to apply font to. Please open an image and run OCR first.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            
+            SaveHistoryState();
+            ApplyDefaultFontToAllRegions();
+            StatusLabel.Text = $"Applied default font to all {_regions.Count} text regions.";
+        }
+
+        private void ApplyDefaultFontToAllRegions()
+        {
+            // Get the default font from the FontFamilyComboBox selection, or use system default
+            string defaultFont = "Microsoft JhengHei";
+            if (FontFamilyComboBox.SelectedItem is string selectedFont && !string.IsNullOrEmpty(selectedFont))
+            {
+                defaultFont = selectedFont;
+            }
+
+            foreach (var region in _regions)
+            {
+                region.FontFamily = defaultFont;
+                region.IsEdited = true;
+            }
+
             RenderRegions();
         }
 

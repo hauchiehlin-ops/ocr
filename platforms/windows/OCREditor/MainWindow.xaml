@@ -275,6 +275,8 @@
                     <MenuItem Header="Edit" Foreground="White">
                         <MenuItem x:Name="MenuInsertText" Header="📝 Insert Text" IsCheckable="True" Foreground="Black"/>
                         <Separator/>
+                        <MenuItem Header="🔤 Apply Default Font to All" Click="ApplyDefaultFontToAll_Click" Foreground="Black"/>
+                        <Separator/>
                         <MenuItem x:Name="MenuUndo" Header="↩️ Undo" Click="Undo_Click" IsEnabled="False" Foreground="Black"/>
                         <MenuItem x:Name="MenuRedo" Header="↪️ Redo" Click="Redo_Click" IsEnabled="False" Foreground="Black"/>
                     </MenuItem>
