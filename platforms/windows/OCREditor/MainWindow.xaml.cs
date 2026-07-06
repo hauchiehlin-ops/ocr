@@ -186,6 +186,22 @@ namespace OCREditor
             ZoomSlider.Value = 1.0;
         }
 
+        private void ToggleLeftPanel_Click(object sender, RoutedEventArgs e)
+        {
+            if (LeftSidebar != null)
+            {
+                LeftSidebar.Visibility = ToggleLeftPanelButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        private void ToggleRightPanel_Click(object sender, RoutedEventArgs e)
+        {
+            if (RightSidebar != null)
+            {
+                RightSidebar.Visibility = ToggleRightPanelButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
         #endregion
 
         #region Canvas Mouse Events for Custom Box Drawing

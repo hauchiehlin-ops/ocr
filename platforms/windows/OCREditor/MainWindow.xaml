@@ -272,6 +272,12 @@
                     
                     <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
 
+                    <!-- Collapsible Panel Toggles -->
+                    <ToggleButton x:Name="ToggleLeftPanelButton" Content="📋 Layers" IsChecked="True" Click="ToggleLeftPanel_Click" Style="{StaticResource ModernToggleButtonStyle}" Margin="0,0,8,0" Width="85" Height="26"/>
+                    <ToggleButton x:Name="ToggleRightPanelButton" Content="⚙️ Properties" IsChecked="True" Click="ToggleRightPanel_Click" Style="{StaticResource ModernToggleButtonStyle}" Margin="0,0,12,0" Width="100" Height="26"/>
+
+                    <Separator Width="1" Height="20" Background="#2D2D2D" Margin="5,0,12,0"/>
+
                     <ComboBox x:Name="LanguageComboBox" Width="160" Height="26" VerticalAlignment="Center" SelectedIndex="0" Margin="0,0,15,0" Style="{StaticResource ModernComboBoxStyle}">
                         <ComboBox.Resources>
                             <Style TargetType="ComboBoxItem">
@@ -312,13 +318,13 @@
         <!-- Main Workspace -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260"/>  <!-- Left Sidebar: Layer List & Status -->
+                <ColumnDefinition Width="Auto"/>  <!-- Left Sidebar: Layer List & Status -->
                 <ColumnDefinition Width="*"/>    <!-- Center Canvas -->
-                <ColumnDefinition Width="340"/>  <!-- Right Inspector: Formatting Panel -->
+                <ColumnDefinition Width="Auto"/>  <!-- Right Inspector: Formatting Panel -->
             </Grid.ColumnDefinitions>
 
             <!-- LEFT SIDEBAR: Layers List -->
-            <Border Grid.Column="0" Background="#202020" BorderBrush="#2D2D2D" BorderThickness="0,0,1,0" Padding="12">
+            <Border x:Name="LeftSidebar" Grid.Column="0" Width="260" Background="#202020" BorderBrush="#2D2D2D" BorderThickness="0,0,1,0" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -362,7 +368,7 @@
             </ScrollViewer>
 
             <!-- RIGHT INSPECTOR: Formatting & Action Panel -->
-            <Border Grid.Column="2" Background="#202020" BorderBrush="#2D2D2D" BorderThickness="1,0,0,0" Padding="15">
+            <Border x:Name="RightSidebar" Grid.Column="2" Width="340" Background="#202020" BorderBrush="#2D2D2D" BorderThickness="1,0,0,0" Padding="15">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,0,0,10">
                         <TextBlock Text="Text Formatting Panel" FontSize="16" FontWeight="Bold" Foreground="White" Margin="0,0,0,5"/>
@@ -389,7 +395,14 @@
                                 <!-- Font Family -->
                                 <DockPanel Margin="0,0,0,12">
                                     <TextBlock Text="Font: " VerticalAlignment="Center" Foreground="#AAA" Width="40"/>
-                                    <ComboBox x:Name="FontFamilyComboBox" SelectionChanged="FontFamilyComboBox_SelectionChanged" VerticalAlignment="Center" Background="#181818" Foreground="White" BorderBrush="#2D2D2D"/>
+                                    <ComboBox x:Name="FontFamilyComboBox" SelectionChanged="FontFamilyComboBox_SelectionChanged" VerticalAlignment="Center" Style="{StaticResource ModernComboBoxStyle}">
+                                        <ComboBox.Resources>
+                                            <Style TargetType="ComboBoxItem">
+                                                <Setter Property="Background" Value="#252526"/>
+                                                <Setter Property="Foreground" Value="White"/>
+                                            </Style>
+                                        </ComboBox.Resources>
+                                    </ComboBox>
                                 </DockPanel>
 
                                 <!-- Styles (Bold, Italic) -->
