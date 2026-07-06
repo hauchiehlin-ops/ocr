@@ -282,7 +282,7 @@ namespace OCREditor
                         OriginalRelY = y / _imgHeight,
                         RelWidth = w / _imgWidth,
                         RelHeight = h / _imgHeight,
-                        FontSize = Math.Max(12, h * 0.85),
+                        FontSize = Math.Max(12, h * 1.3),
                         IsEdited = true
                     };
                     
@@ -499,8 +499,8 @@ namespace OCREditor
 
                                 // Estimate initial font size based on bounding box height
                                 // WPF FontSize is the em-square, which is larger than the actual glyph height.
-                                // We use 0.85x the bounding box height to make the WPF text match the original image text size.
-                                double estFontSize = Math.Max(10, boxH * 0.85);
+                                // We use 1.3x the bounding box height to make the WPF text match the original image text size.
+                                double estFontSize = Math.Max(12, boxH * 1.3);
 
                                 var region = new OCRRegion
                                 {
@@ -579,6 +579,10 @@ namespace OCREditor
 
             foreach (var r in _regions)
             {
+                if (_imgHeight > 0)
+                {
+                    r.FontSize = Math.Max(12, (_imgHeight * r.RelHeight) * 1.3);
+                }
                 r.BackgroundColor = GetAverageColorOfRegion(r);
             }
 
@@ -706,9 +710,8 @@ namespace OCREditor
                         int boxH = (int)(region.RelHeight * imgH);
 
                         // Sample at multiple distances OUTSIDE the text box in 8 directions.
-                        // Use large distances (30-150px) to escape white text-field areas
-                        // and reach the actual container/background color.
-                        var offsets = new int[] { 30, 60, 100, 150 };
+                        // Use small distances (5-20px) to tightly sample the immediate surrounding background.
+                        var offsets = new int[] { 5, 10, 15, 20 };
                         long sumR = 0, sumG = 0, sumB = 0;
                         int count = 0;
 
@@ -733,10 +736,6 @@ namespace OCREditor
                                 int px = Math.Max(0, Math.Min(sx, imgW - 1));
                                 int py = Math.Max(0, Math.Min(sy, imgH - 1));
                                 var pixel = _originalBitmap.GetPixel(px, py);
-
-                                // Skip white/near-white (text-field backgrounds inside containers)
-                                if (pixel.R > 230 && pixel.G > 230 && pixel.B > 230)
-                                    continue;
 
                                 // Skip dark pixels (text, lines, borders)
                                 if (pixel.R < 60 && pixel.G < 60 && pixel.B < 60)
