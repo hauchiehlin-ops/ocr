@@ -812,99 +812,11 @@ namespace OCREditor
 
         private System.Windows.Media.Brush CreateBackgroundCoverBrush(OCRRegion region, int coverPadding)
         {
-            lock (_bitmapLock)
-            {
-                if (_originalBitmap != null)
-                {
-                    try
-                    {
-                        int imgW = _originalBitmap.Width;
-                        int imgH = _originalBitmap.Height;
-
-                        int originalX = (int)Math.Round(region.OriginalRelX * imgW);
-                        int originalY = (int)Math.Round(region.OriginalRelY * imgH);
-                        int originalW = Math.Max(1, (int)Math.Round(region.RelWidth * imgW));
-                        int originalH = Math.Max(1, (int)Math.Round(region.RelHeight * imgH));
-                        int boxX = Math.Max(0, originalX - coverPadding);
-                        int boxY = Math.Max(0, originalY - coverPadding);
-                        int patchW = Math.Max(1, Math.Min(imgW - boxX, originalW + coverPadding * 2));
-                        int patchH = Math.Max(1, Math.Min(imgH - boxY, originalH + coverPadding * 2));
-                        int sampleGap = Math.Max(2, Math.Min(18, Math.Min(patchW, patchH) / 3));
-                        int feather = Math.Max(1, Math.Min(coverPadding, 8));
-
-                        var pixels = new byte[patchW * patchH * 4];
-                        var leftEdge = new System.Windows.Media.Color[patchH];
-                        var rightEdge = new System.Windows.Media.Color[patchH];
-                        var topEdge = new System.Windows.Media.Color[patchW];
-                        var bottomEdge = new System.Windows.Media.Color[patchW];
-
-                        for (int y = 0; y < patchH; y++)
-                        {
-                            int srcY = boxY + y;
-                            leftEdge[y] = SampleBackgroundPixel(boxX - sampleGap, srcY, -1, 0, region.BackgroundColor);
-                            rightEdge[y] = SampleBackgroundPixel(boxX + patchW + sampleGap, srcY, 1, 0, region.BackgroundColor);
-                        }
-
-                        for (int x = 0; x < patchW; x++)
-                        {
-                            int srcX = boxX + x;
-                            topEdge[x] = SampleBackgroundPixel(srcX, boxY - sampleGap, 0, -1, region.BackgroundColor);
-                            bottomEdge[x] = SampleBackgroundPixel(srcX, boxY + patchH + sampleGap, 0, 1, region.BackgroundColor);
-                        }
-
-                        for (int y = 0; y < patchH; y++)
-                        {
-                            double ty = patchH <= 1 ? 0.0 : (double)y / (patchH - 1);
-                            var left = leftEdge[y];
-                            var right = rightEdge[y];
-
-                            for (int x = 0; x < patchW; x++)
-                            {
-                                double tx = patchW <= 1 ? 0.0 : (double)x / (patchW - 1);
-                                var top = topEdge[x];
-                                var bottom = bottomEdge[x];
-
-                                var horizontal = BlendColors(left, right, tx);
-                                var vertical = BlendColors(top, bottom, ty);
-                                var color = BlendColors(horizontal, vertical, 0.5);
-
-                                // Full opacity coverage — paint the entire region with the interpolated background
-                                // Only apply feathering at the very edges of the patch for seamless blending
-                                byte alpha = CalculateFeatherAlpha(x, y, patchW, patchH, feather);
-
-                                int index = (y * patchW + x) * 4;
-                                pixels[index] = color.B;
-                                pixels[index + 1] = color.G;
-                                pixels[index + 2] = color.R;
-                                pixels[index + 3] = alpha;
-                            }
-                        }
-
-                        var bitmap = new WriteableBitmap(
-                            patchW,
-                            patchH,
-                            96,
-                            96,
-                            PixelFormats.Bgra32,
-                            null);
-                        bitmap.WritePixels(new Int32Rect(0, 0, patchW, patchH), pixels, patchW * 4, 0);
-
-                        var brush = new ImageBrush(bitmap)
-                        {
-                            Stretch = Stretch.Fill,
-                            TileMode = TileMode.None
-                        };
-                        brush.Freeze();
-                        return brush;
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Background cover generation failed: {ex.Message}");
-                    }
-                }
-            }
-
-            return new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
+            // Use a simple solid color brush matching the sampled background color.
+            // This avoids interpolation artifacts that create visible rectangular patches.
+            var brush = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
+            brush.Freeze();
+            return brush;
         }
 
         private System.Windows.Media.Brush CreateTransparentTextSprite(OCRRegion region)
@@ -1115,7 +1027,7 @@ namespace OCREditor
                 {
                     double baseWidth = region.RelWidth * _imgWidth;
                     double baseHeight = region.RelHeight * _imgHeight;
-                    double coverPadding = Math.Max(2.0, Math.Min(8.0, Math.Min(baseWidth, baseHeight) * 0.22));
+                    double coverPadding = Math.Max(4.0, Math.Min(16.0, Math.Min(baseWidth, baseHeight) * 0.35));
                     double sLeft = Math.Max(0.0, region.OriginalRelX * _imgWidth - coverPadding);
                     double sTop = Math.Max(0.0, region.OriginalRelY * _imgHeight - coverPadding);
                     double sWidth = Math.Min(_imgWidth - sLeft, baseWidth + coverPadding * 2);
@@ -1250,8 +1162,9 @@ namespace OCREditor
                 
                 var grid = new System.Windows.Controls.Grid();
 
-                if (region.IsEdited || HasMoved(region))
+                if (region.IsEdited)
                 {
+                    // Edited text: render as TextBlock with user-specified styles
                     var textBlock = new System.Windows.Controls.TextBlock
                     {
                         Text = region.CurrentText,
@@ -1267,6 +1180,12 @@ namespace OCREditor
 
                     grid.Children.Add(textBlock);
                     region.TextVisual = textBlock;
+                }
+                else if (HasMoved(region))
+                {
+                    // Moved but NOT edited: use original bitmap sprite to preserve exact appearance
+                    border.Background = CreateTransparentTextSprite(region);
+                    region.TextVisual = null;
                 }
                 else
                 {
