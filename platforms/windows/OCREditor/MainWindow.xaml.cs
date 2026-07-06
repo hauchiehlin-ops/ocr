@@ -70,6 +70,7 @@ namespace OCREditor
         private System.Windows.Point _dragStartMousePos;
         private double _dragStartRelX;
         private double _dragStartRelY;
+        private bool _isSaving = false;
 
         // Undo/Redo stacks
         private class RegionState
@@ -1073,7 +1074,12 @@ namespace OCREditor
                     Tag = region
                 };
                 
-                if (region == _selectedRegion)
+                if (_isSaving)
+                {
+                    border.BorderThickness = new Thickness(0);
+                    border.Background = System.Windows.Media.Brushes.Transparent;
+                }
+                else if (region == _selectedRegion)
                 {
                     border.BorderBrush = System.Windows.Media.Brushes.DodgerBlue;
                     border.BorderThickness = new Thickness(1.5);
@@ -1081,6 +1087,7 @@ namespace OCREditor
                 else
                 {
                     border.BorderBrush = System.Windows.Media.Brushes.Orange;
+                    border.BorderThickness = new Thickness(1);
                 }
                 
                 border.MouseEnter += (s, e) =>
@@ -1536,15 +1543,35 @@ namespace OCREditor
                 try
                 {
                     var tempSelected = _selectedRegion;
+                    double originalZoom = ZoomSlider.Value;
+                    
+                    _isSaving = true;
                     _selectedRegion = null;
+                    
+                    if (CanvasScale != null)
+                    {
+                        CanvasScale.ScaleX = 1.0;
+                        CanvasScale.ScaleY = 1.0;
+                    }
+                    
                     RenderRegions();
                     
-                    double width = CanvasGrid.ActualWidth;
-                    double height = CanvasGrid.ActualHeight;
-                    var rtb = new RenderTargetBitmap((int)width, (int)height, 96, 96, PixelFormats.Pbgra32);
+                    CanvasGrid.Measure(new Size(_imgWidth, _imgHeight));
+                    CanvasGrid.Arrange(new Rect(0, 0, _imgWidth, _imgHeight));
+                    CanvasGrid.UpdateLayout();
+                    
+                    var rtb = new RenderTargetBitmap((int)_imgWidth, (int)_imgHeight, 96, 96, PixelFormats.Pbgra32);
                     rtb.Render(CanvasGrid);
                     
+                    _isSaving = false;
                     _selectedRegion = tempSelected;
+                    
+                    if (CanvasScale != null)
+                    {
+                        CanvasScale.ScaleX = originalZoom;
+                        CanvasScale.ScaleY = originalZoom;
+                    }
+                    
                     RenderRegions();
 
                     var encoder = saveFileDialog.FilterIndex == 1 
