@@ -215,7 +215,7 @@ namespace OCREditor
         {
             if (LeftSidebar != null)
             {
-                LeftSidebar.Visibility = ToggleLeftPanelButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+                LeftSidebar.Visibility = MenuToggleLeft.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
@@ -223,7 +223,7 @@ namespace OCREditor
         {
             if (RightSidebar != null)
             {
-                RightSidebar.Visibility = ToggleRightPanelButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+                RightSidebar.Visibility = MenuToggleRight.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
             }
         }
 
@@ -392,8 +392,8 @@ namespace OCREditor
                     LayerListBox.ItemsSource = null;
                     _undoStack.Clear();
                     _redoStack.Clear();
-                    UndoButton.IsEnabled = false;
-                    RedoButton.IsEnabled = false;
+                    MenuUndo.IsEnabled = false;
+                    MenuRedo.IsEnabled = false;
                     
                     await RunOCRAsync();
                 }
@@ -1311,7 +1311,7 @@ namespace OCREditor
                     };
                     
                     bool isResizing = false;
-                    Point resizeStartPos = new Point();
+                    System.Windows.Point resizeStartPos = new System.Windows.Point();
                     double startWidth = 0;
                     double startHeight = 0;
 
@@ -1440,7 +1440,7 @@ namespace OCREditor
             if (_currentImagePath != null && File.Exists(_currentImagePath))
             {
                 // Re-run OCR automatically when language is changed
-                RunOCR(_currentImagePath);
+                _ = RunOCRAsync();
             }
         }
 
@@ -1631,8 +1631,8 @@ namespace OCREditor
             _undoStack.Push(state);
             _redoStack.Clear();
             
-            UndoButton.IsEnabled = true;
-            RedoButton.IsEnabled = false;
+            MenuUndo.IsEnabled = true;
+            MenuRedo.IsEnabled = false;
         }
 
         private void Undo_Click(object sender, RoutedEventArgs e)
@@ -1660,8 +1660,8 @@ namespace OCREditor
             var prevState = _undoStack.Pop();
             RestoreState(prevState);
             
-            UndoButton.IsEnabled = _undoStack.Count > 0;
-            RedoButton.IsEnabled = true;
+            MenuUndo.IsEnabled = _undoStack.Count > 0;
+            MenuRedo.IsEnabled = true;
             
             StatusLabel.Text = "Undo executed.";
         }
@@ -1691,8 +1691,8 @@ namespace OCREditor
             var nextState = _redoStack.Pop();
             RestoreState(nextState);
             
-            UndoButton.IsEnabled = true;
-            RedoButton.IsEnabled = _redoStack.Count > 0;
+            MenuUndo.IsEnabled = true;
+            MenuRedo.IsEnabled = _redoStack.Count > 0;
             
             StatusLabel.Text = "Redo executed.";
         }
