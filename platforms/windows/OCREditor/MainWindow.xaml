@@ -267,25 +267,25 @@
 
                 <!-- Menu Bar (Hierarchical Tool Panel) -->
                 <Menu Background="Transparent" Foreground="White" VerticalAlignment="Center" Padding="5,0" Margin="0,5,0,0">
-                    <MenuItem Header="File" Foreground="Black">
-                        <MenuItem Header="📂 Open Image" Click="OpenImage_Click"/>
-                        <MenuItem Header="💾 Save Result" Click="SaveImage_Click"/>
+                    <MenuItem Header="File" Foreground="White">
+                        <MenuItem Header="📂 Open Image" Click="OpenImage_Click" Foreground="Black"/>
+                        <MenuItem Header="💾 Save Result" Click="SaveImage_Click" Foreground="Black"/>
                     </MenuItem>
                     
-                    <MenuItem Header="Edit" Foreground="Black">
-                        <MenuItem x:Name="MenuInsertText" Header="📝 Insert Text" IsCheckable="True"/>
+                    <MenuItem Header="Edit" Foreground="White">
+                        <MenuItem x:Name="MenuInsertText" Header="📝 Insert Text" IsCheckable="True" Foreground="Black"/>
                         <Separator/>
-                        <MenuItem x:Name="MenuUndo" Header="↩️ Undo" Click="Undo_Click" IsEnabled="False"/>
-                        <MenuItem x:Name="MenuRedo" Header="↪️ Redo" Click="Redo_Click" IsEnabled="False"/>
+                        <MenuItem x:Name="MenuUndo" Header="↩️ Undo" Click="Undo_Click" IsEnabled="False" Foreground="Black"/>
+                        <MenuItem x:Name="MenuRedo" Header="↪️ Redo" Click="Redo_Click" IsEnabled="False" Foreground="Black"/>
                     </MenuItem>
                     
-                    <MenuItem Header="View" Foreground="Black">
-                        <MenuItem x:Name="MenuToggleLeft" Header="📋 Show Layers Panel" IsCheckable="True" IsChecked="True" Click="ToggleLeftPanel_Click"/>
-                        <MenuItem x:Name="MenuToggleRight" Header="⚙️ Show Properties Panel" IsCheckable="True" IsChecked="True" Click="ToggleRightPanel_Click"/>
+                    <MenuItem Header="View" Foreground="White">
+                        <MenuItem x:Name="MenuToggleLeft" Header="📋 Show Layers Panel" IsCheckable="True" IsChecked="True" Click="ToggleLeftPanel_Click" Foreground="Black"/>
+                        <MenuItem x:Name="MenuToggleRight" Header="⚙️ Show Properties Panel" IsCheckable="True" IsChecked="True" Click="ToggleRightPanel_Click" Foreground="Black"/>
                     </MenuItem>
                     
-                    <MenuItem Header="Settings" Foreground="Black">
-                        <MenuItem Header="Language">
+                    <MenuItem Header="Settings" Foreground="White">
+                        <MenuItem Header="Language" Foreground="Black">
                             <ComboBox x:Name="LanguageComboBox" Width="160" Height="26" SelectedIndex="0" SelectionChanged="LanguageComboBox_SelectionChanged">
                                 <ComboBoxItem Content="Auto (System)" Tag="auto"/>
                                 <ComboBoxItem Content="繁體中文 (zh-Hant)" Tag="zh-Hant"/>
@@ -304,10 +304,10 @@
                         </MenuItem>
                     </MenuItem>
 
-                    <MenuItem Header="Zoom" Foreground="Black">
-                        <MenuItem Header="➕ Zoom In" Click="ZoomIn_Click"/>
-                        <MenuItem Header="➖ Zoom Out" Click="ZoomOut_Click"/>
-                        <MenuItem Header="100% Reset" Click="ZoomReset_Click"/>
+                    <MenuItem Header="Zoom" Foreground="White">
+                        <MenuItem Header="➕ Zoom In" Click="ZoomIn_Click" Foreground="Black"/>
+                        <MenuItem Header="➖ Zoom Out" Click="ZoomOut_Click" Foreground="Black"/>
+                        <MenuItem Header="100% Reset" Click="ZoomReset_Click" Foreground="Black"/>
                     </MenuItem>
                 </Menu>
             </DockPanel>

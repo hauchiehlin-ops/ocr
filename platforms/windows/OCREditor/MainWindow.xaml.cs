@@ -879,8 +879,8 @@ namespace OCREditor
                                 
                                 // Smart Eraser: Only overwrite pixels that differ significantly from the background (i.e., the text)
                                 // We use a threshold to determine what is text and what is background texture
-                                double minThreshold = 30.0;
-                                double maxThreshold = 90.0;
+                                double minThreshold = 8.0;
+                                double maxThreshold = 25.0;
                                 
                                 byte alpha = 0;
                                 if (distToBg >= maxThreshold)
