@@ -1056,33 +1056,9 @@ namespace OCREditor
             
             if (_imgWidth <= 0 || _imgHeight <= 0) return;
             
-            // 1. First, draw static background covers to erase/inpaint the original text printed on the background image
-            foreach (var region in _regions)
-            {
-                if (NeedsOriginalTextCover(region))
-                {
-                    double baseWidth = region.RelWidth * _imgWidth;
-                    double baseHeight = region.RelHeight * _imgHeight;
-                    double coverPadding = Math.Max(4.0, Math.Min(16.0, Math.Min(baseWidth, baseHeight) * 0.35));
-                    double sLeft = Math.Max(0.0, region.OriginalRelX * _imgWidth - coverPadding);
-                    double sTop = Math.Max(0.0, region.OriginalRelY * _imgHeight - coverPadding);
-                    double sWidth = Math.Min(_imgWidth - sLeft, baseWidth + coverPadding * 2);
-                    double sHeight = Math.Min(_imgHeight - sTop, baseHeight + coverPadding * 2);
-
-                    var staticCover = new System.Windows.Controls.Border
-                    {
-                        Width = sWidth,
-                        Height = sHeight,
-                        Background = CreateBackgroundCoverBrush(region, (int)Math.Ceiling(coverPadding)),
-                        BorderThickness = new Thickness(0)
-                    };
-                    Canvas.SetLeft(staticCover, sLeft);
-                    Canvas.SetTop(staticCover, sTop);
-                    OverlayCanvas.Children.Add(staticCover);
-                }
-            }
-
-            // 2. Next, draw interactive, draggable text layers on top of the static covers
+            // 1. Static background covers (removed as per user request to not modify background)
+            
+            // 2. Next, draw interactive, draggable text layers
             foreach (var region in _regions)
             {
                 if (region.IsRemoved) continue; // If marked as removed, don't show the interactive border layer
