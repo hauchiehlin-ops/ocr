@@ -52,7 +52,7 @@ namespace OCREditor
             
             // Visual elements
             public System.Windows.Controls.Border? BorderElement { get; set; }
-            public System.Windows.Controls.TextBlock? TextVisual { get; set; }
+            public System.Windows.FrameworkElement? TextVisual { get; set; }
         }
 
         private List<OCRRegion> _regions = new List<OCRRegion>();

@@ -95,6 +95,7 @@ final class OCRViewModel: ObservableObject {
                 inspectorFontSize = layer.fontEstimate.sizePx
                 inspectorFontColor = Color(layer.fontEstimate.color)
                 inspectorIsBold = layer.fontEstimate.isBold
+                inspectorFontName = layer.fontEstimate.fontName
                 inspectorText = layer.text
             }
         }
@@ -108,9 +109,25 @@ final class OCRViewModel: ObservableObject {
     @Published var inspectorIsBold: Bool = false {
         didSet { updateSelectedLayerProperties() }
     }
+    @Published var inspectorFontName: String = "PingFang TC" {
+        didSet { updateSelectedLayerProperties() }
+    }
     @Published var inspectorText: String = "" {
         didSet { updateSelectedLayerText() }
     }
+    @Published var globalFontName: String = "PingFang TC"
+
+    /// 可選用的本地端通用字型清單
+    let availableFonts = [
+        "PingFang TC",
+        "PingFang SC",
+        "Heiti TC",
+        "Songti TC",
+        "Arial",
+        "Helvetica",
+        "Times New Roman",
+        "System"
+    ]
 
     /// 是否可以還原
     var canUndo: Bool {
@@ -344,6 +361,7 @@ final class OCRViewModel: ObservableObject {
             doc.layers[idx].fontEstimate.sizePx = inspectorFontSize
             doc.layers[idx].fontEstimate.color = NSColor(inspectorFontColor)
             doc.layers[idx].fontEstimate.isBold = inspectorIsBold
+            doc.layers[idx].fontEstimate.fontName = inspectorFontName
             self.canvasDocument = doc
         }
     }
@@ -398,6 +416,40 @@ final class OCRViewModel: ObservableObject {
         doc.layers.removeAll { $0.id == id }
         selectedLayerId = nil
         self.canvasDocument = doc
+    }
+
+    /// 一次性替換全檔所有文字區塊字型
+    func replaceAllTextFonts(with fontName: String) {
+        guard var doc = canvasDocument else { return }
+        
+        saveSnapshot(description: "替換全檔字型為 \(fontName)")
+        
+        // 替換所有文字圖層字型
+        for idx in doc.layers.indices {
+            if doc.layers[idx].type == .text {
+                doc.layers[idx].fontEstimate.fontName = fontName
+            }
+        }
+        self.canvasDocument = doc
+        
+        // 同步更新 scanResult 內容
+        if var result = scanResult {
+            for blockIdx in result.textBlocks.indices {
+                for lineIdx in result.textBlocks[blockIdx].lines.indices {
+                    for wordIdx in result.textBlocks[blockIdx].lines[lineIdx].words.indices {
+                        result.textBlocks[blockIdx].lines[lineIdx].words[wordIdx].fontEstimate.fontName = fontName
+                    }
+                }
+            }
+            self.scanResult = result
+        }
+        
+        // 更新目前選取圖層之屬性
+        if let id = selectedLayerId, let layer = doc.layers.first(where: { $0.id == id }), layer.type == .text {
+            self.inspectorFontName = fontName
+        }
+        
+        print("[OCRViewModel] 🔤 已替換全檔文字區塊字型為: \(fontName)")
     }
 
     // Codable Decoders for PPTX JSON

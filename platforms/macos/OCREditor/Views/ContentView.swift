@@ -404,6 +404,27 @@ extension ContentView {
                                     .toggleStyle(.checkbox)
                                 
                                 ColorPicker("文字顏色:", selection: $viewModel.inspectorFontColor)
+
+                                // 字型與一次性替換選項
+                                HStack {
+                                    Text("字型:")
+                                    Picker("", selection: $viewModel.inspectorFontName) {
+                                        ForEach(viewModel.availableFonts, id: \.self) { fontName in
+                                            Text(fontName).tag(fontName)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .labelsHidden()
+                                }
+                                
+                                Button {
+                                    viewModel.replaceAllTextFonts(with: viewModel.inspectorFontName)
+                                } label: {
+                                    Label("套用到全檔文字區塊", systemImage: "textformat")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.regular)
                             }
                         }
                         
@@ -453,6 +474,59 @@ extension ContentView {
                             .controlSize(.large)
                         }
                         .padding(.top, 20)
+                    }
+                    .padding()
+                }
+            } else if let doc = viewModel.canvasDocument {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // 1. 文件基本資訊
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("文件屬性")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("名稱: \(doc.name)")
+                                .font(.subheadline)
+                                .bold()
+                            Text("畫布尺寸: \(Int(doc.dimensions.width)) x \(Int(doc.dimensions.height))")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        Divider()
+                        
+                        // 2. 全域字型替換選項
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("一鍵字型替換")
+                                .font(.subheadline)
+                                .bold()
+                            
+                            Text("可將全檔所有文字區塊一次性替換為選定的通用字型。")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            HStack {
+                                Text("目標字型:")
+                                Picker("", selection: $viewModel.globalFontName) {
+                                    ForEach(viewModel.availableFonts, id: \.self) { fontName in
+                                        Text(fontName).tag(fontName)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                            }
+                            
+                            Button {
+                                viewModel.replaceAllTextFonts(with: viewModel.globalFontName)
+                            } label: {
+                                Label("一鍵替換全檔字型", systemImage: "textformat")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                        }
+                        
+                        Spacer()
                     }
                     .padding()
                 }

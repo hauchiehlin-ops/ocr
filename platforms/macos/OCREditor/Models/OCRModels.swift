@@ -45,19 +45,57 @@ struct FontEstimate: Equatable {
     var sizePx: CGFloat       ///< 推估字體大小 (px)
     var color: NSColor        ///< 推估文字顏色
     var isBold: Bool          ///< 是否粗體
+    var fontName: String      ///< 通用字型名稱
+
+    init(sizePx: CGFloat, color: NSColor, isBold: Bool, fontName: String = "PingFang TC") {
+        self.sizePx = sizePx
+        self.color = color
+        self.isBold = isBold
+        self.fontName = fontName
+    }
 
     /// 轉換為 NSFont (本地端預設字型 Fallback 替換)
     var nsFont: NSFont {
         let size = sizePx > 0 ? sizePx : 14.0
-        if isBold {
-            if let fallbackFont = NSFont(name: "PingFangTC-Semibold", size: size) {
-                return fallbackFont
+        
+        if fontName != "System" && !fontName.isEmpty {
+            var finalFontName = fontName
+            if isBold {
+                if fontName == "PingFang TC" {
+                    finalFontName = "PingFangTC-Semibold"
+                } else if fontName == "PingFang SC" {
+                    finalFontName = "PingFangSC-Semibold"
+                } else if fontName == "Heiti TC" {
+                    finalFontName = "STHeitiTC-Medium"
+                } else if fontName == "Songti TC" {
+                    finalFontName = "STSongti-TC-Bold"
+                } else if fontName == "Arial" {
+                    finalFontName = "Arial-BoldMT"
+                } else if fontName == "Helvetica" {
+                    finalFontName = "Helvetica-Bold"
+                } else if fontName == "Times New Roman" {
+                    finalFontName = "TimesNewRomanPS-BoldMT"
+                }
+            } else {
+                if fontName == "PingFang TC" {
+                    finalFontName = "PingFangTC-Regular"
+                } else if fontName == "PingFang SC" {
+                    finalFontName = "PingFangSC-Regular"
+                } else if fontName == "Heiti TC" {
+                    finalFontName = "STHeitiTC-Light"
+                } else if fontName == "Songti TC" {
+                    finalFontName = "STSongti-TC-Regular"
+                }
             }
+            if let customFont = NSFont(name: finalFontName, size: size) {
+                return customFont
+            }
+        }
+        
+        // Fallback to system font
+        if isBold {
             return NSFont.boldSystemFont(ofSize: size)
         } else {
-            if let fallbackFont = NSFont(name: "PingFangTC-Regular", size: size) {
-                return fallbackFont
-            }
             return NSFont.systemFont(ofSize: size)
         }
     }
@@ -66,7 +104,8 @@ struct FontEstimate: Equatable {
     static let `default` = FontEstimate(
         sizePx: 14,
         color: .black,
-        isBold: false
+        isBold: false,
+        fontName: "PingFang TC"
     )
 }
 
