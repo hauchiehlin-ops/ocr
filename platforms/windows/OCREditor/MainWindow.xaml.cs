@@ -858,11 +858,39 @@ namespace OCREditor
                                 var vertical = BlendColors(top, bottom, ty);
                                 var color = BlendColors(horizontal, vertical, 0.5);
 
+                                int srcX = boxX + x;
+                                int srcY = boxY + y;
+                                var originalPixel = _originalBitmap.GetPixel(srcX, srcY);
+                                
+                                int dr = originalPixel.R - region.BackgroundColor.R;
+                                int dg = originalPixel.G - region.BackgroundColor.G;
+                                int db = originalPixel.B - region.BackgroundColor.B;
+                                double distToBg = Math.Sqrt(dr * dr + dg * dg + db * db);
+                                
+                                // Smart Eraser: Only overwrite pixels that differ significantly from the background (i.e., the text)
+                                // We use a threshold to determine what is text and what is background texture
+                                double minThreshold = 30.0;
+                                double maxThreshold = 90.0;
+                                
+                                byte alpha = 0;
+                                if (distToBg >= maxThreshold)
+                                {
+                                    alpha = 255;
+                                }
+                                else if (distToBg > minThreshold)
+                                {
+                                    alpha = (byte)(255 * ((distToBg - minThreshold) / (maxThreshold - minThreshold)));
+                                }
+
+                                // Apply feathering at the absolute edges of the patch to prevent hard seams
+                                byte edgeFeather = CalculateFeatherAlpha(x, y, patchW, patchH, feather);
+                                alpha = (byte)(alpha * edgeFeather / 255);
+
                                 int index = (y * patchW + x) * 4;
                                 pixels[index] = color.B;
                                 pixels[index + 1] = color.G;
                                 pixels[index + 2] = color.R;
-                                pixels[index + 3] = CalculateFeatherAlpha(x, y, patchW, patchH, feather);
+                                pixels[index + 3] = alpha;
                             }
                         }
 
@@ -1008,7 +1036,7 @@ namespace OCREditor
                 int dr = pixel.R - expectedBg.R;
                 int dg = pixel.G - expectedBg.G;
                 int db = pixel.B - expectedBg.B;
-                if (Math.Sqrt(dr * dr + dg * dg + db * db) < 50)
+                if (Math.Sqrt(dr * dr + dg * dg + db * db) < 150) // Relaxed threshold to allow for gradients/textures
                 {
                     return System.Windows.Media.Color.FromRgb(pixel.R, pixel.G, pixel.B);
                 }
