@@ -389,7 +389,7 @@ namespace OCREditor
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to load image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    System.Windows.MessageBox.Show($"Failed to load image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
@@ -554,7 +554,7 @@ namespace OCREditor
                     else
                     {
                         StatusLabel.Text = "System OCR Engine not available.";
-                        MessageBox.Show("Could not initialize native OCR. Falling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Information);
+                        System.Windows.MessageBox.Show("Could not initialize native OCR. Falling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Information);
                         RunMockOCR();
                     }
                 }
@@ -568,7 +568,7 @@ namespace OCREditor
             catch (Exception ex)
             {
                 StatusLabel.Text = $"OCR Error: {ex.Message}";
-                MessageBox.Show($"OCR failed: {ex.Message}\nFalling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show($"OCR failed: {ex.Message}\nFalling back to Sandbox Mode.", "OCR Notice", MessageBoxButton.OK, MessageBoxImage.Warning);
                 RunMockOCR();
             }
             finally
@@ -1232,7 +1232,7 @@ namespace OCREditor
                         FontWeight = region.IsBold ? FontWeights.Bold : FontWeights.Normal,
                         FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
                         VerticalAlignment = VerticalAlignment.Center,
-                        HorizontalAlignment = HorizontalAlignment.Center,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                         TextAlignment = TextAlignment.Center
                     };
 
@@ -1371,7 +1371,7 @@ namespace OCREditor
 
         private void PresetColor_Click(object sender, RoutedEventArgs e)
         {
-            if (_selectedRegion == null || !(sender is Button button)) return;
+            if (_selectedRegion == null || !(sender is System.Windows.Controls.Button button)) return;
             
             SaveHistoryState();
             
@@ -1428,7 +1428,7 @@ namespace OCREditor
             }
             else
             {
-                MessageBox.Show("Please select a text layer first.", "Inpainting", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show("Please select a text layer first.", "Inpainting", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
@@ -1436,7 +1436,7 @@ namespace OCREditor
         {
             if (_selectedRegion == null)
             {
-                MessageBox.Show("Please select a text layer first.", "Translation", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Windows.MessageBox.Show("Please select a text layer first.", "Translation", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             
@@ -1618,11 +1618,11 @@ namespace OCREditor
         {
             if (_currentImagePath == null)
             {
-                MessageBox.Show("No image to save.", "Save", MessageBoxButton.OK, MessageBoxImage.Warning);
+                System.Windows.MessageBox.Show("No image to save.", "Save", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            var saveFileDialog = new SaveFileDialog
+            var saveFileDialog = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "PNG Image|*.png|JPEG Image|*.jpg",
                 FileName = Path.GetFileNameWithoutExtension(_currentImagePath) + "_edited"
@@ -1673,11 +1673,11 @@ namespace OCREditor
                     encoder.Save(stream);
                     
                     StatusLabel.Text = $"Saved image: {Path.GetFileName(saveFileDialog.FileName)}";
-                    MessageBox.Show("Edited image saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    System.Windows.MessageBox.Show("Edited image saved successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    System.Windows.MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }
