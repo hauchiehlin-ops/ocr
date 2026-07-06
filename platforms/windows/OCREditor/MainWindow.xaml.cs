@@ -1173,7 +1173,7 @@ namespace OCREditor
                     {
                         Width = sWidth,
                         Height = sHeight,
-                        Background = CreateInpaintedBackgroundSprite(region, padding),
+                        Background = CreateBackgroundCoverBrush(region, padding),
                         BorderThickness = new Thickness(0)
                     };
                     Canvas.SetLeft(staticCover, sLeft);

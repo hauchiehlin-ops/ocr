@@ -306,12 +306,15 @@
                         </MenuItem>
                     </MenuItem>
 
-                    <MenuItem Header="Zoom" Foreground="White">
-                        <MenuItem Header="➕ Zoom In" Click="ZoomIn_Click" Foreground="Black"/>
-                        <MenuItem Header="➖ Zoom Out" Click="ZoomOut_Click" Foreground="Black"/>
-                        <MenuItem Header="100% Reset" Click="ZoomReset_Click" Foreground="Black"/>
-                    </MenuItem>
                 </Menu>
+                
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" Margin="0,0,15,0" VerticalAlignment="Center">
+                    <TextBlock Text="Zoom:" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13"/>
+                    <Button Content="➖" Click="ZoomOut_Click" Background="#444" Foreground="White" BorderThickness="0" Width="24" Height="24" Padding="0" Cursor="Hand"/>
+                    <Slider x:Name="TopZoomSlider" Width="120" Minimum="0.1" Maximum="5.0" Value="{Binding ElementName=ZoomSlider, Path=Value, Mode=TwoWay}" VerticalAlignment="Center" Margin="8,0" TickFrequency="0.05" IsSnapToTickEnabled="False"/>
+                    <Button Content="➕" Click="ZoomIn_Click" Background="#444" Foreground="White" BorderThickness="0" Width="24" Height="24" Padding="0" Cursor="Hand"/>
+                    <Button Content="100%" Click="ZoomReset_Click" Background="#444" Foreground="White" BorderThickness="0" Height="24" Padding="8,0" Margin="8,0,0,0" Cursor="Hand"/>
+                </StackPanel>
             </DockPanel>
         </Border>
 
@@ -424,7 +427,18 @@
                                     <Button Background="Yellow" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
                                     <Button Background="Orange" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
                                     <Button Background="Purple" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
-                                    <Button Content="🎨" ToolTip="Custom Color" Style="{StaticResource ColorBoxStyle}" Background="Transparent" BorderBrush="#555" Click="CustomColor_Click"/>
+                                    <Button ToolTip="Custom Color" Style="{StaticResource ColorBoxStyle}" BorderBrush="#555" Click="CustomColor_Click" Padding="0">
+                                        <Button.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#FF3B30" Offset="0.0" />
+                                                <GradientStop Color="#FF9500" Offset="0.25" />
+                                                <GradientStop Color="#FFCC00" Offset="0.5" />
+                                                <GradientStop Color="#4CD964" Offset="0.75" />
+                                                <GradientStop Color="#007AFF" Offset="1.0" />
+                                            </LinearGradientBrush>
+                                        </Button.Background>
+                                        <TextBlock Text="🎨" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    </Button>
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
