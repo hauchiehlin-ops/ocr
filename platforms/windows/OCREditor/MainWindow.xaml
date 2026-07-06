@@ -386,6 +386,12 @@
                                             ValueChanged="FontSizeSlider_ValueChanged" VerticalAlignment="Center"/>
                                 </DockPanel>
 
+                                <!-- Font Family -->
+                                <DockPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Font: " VerticalAlignment="Center" Foreground="#AAA" Width="40"/>
+                                    <ComboBox x:Name="FontFamilyComboBox" SelectionChanged="FontFamilyComboBox_SelectionChanged" VerticalAlignment="Center" Background="#181818" Foreground="White" BorderBrush="#2D2D2D"/>
+                                </DockPanel>
+
                                 <!-- Styles (Bold, Italic) -->
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,10">
                                     <ToggleButton x:Name="BoldToggleButton" Content=" Bold " Width="70" Height="26" 

@@ -31,6 +31,7 @@ namespace OCREditor
         {
             public string OriginalText { get; set; } = "";
             public string CurrentText { get; set; } = "";
+            public string FontFamily { get; set; } = "Microsoft JhengHei";
             // Relative coordinates (0.0 to 1.0)
             public double RelX { get; set; }
             public double RelY { get; set; }
@@ -95,6 +96,35 @@ namespace OCREditor
             InitializeComponent();
             InitializeEngine();
             SetupCanvasMouseEvents();
+            PopulateFontFamilies();
+        }
+
+        private void PopulateFontFamilies()
+        {
+            var fontFamilies = System.Windows.Media.Fonts.SystemFontFamilies.OrderBy(f => f.Source).ToList();
+            FontFamilyComboBox.ItemsSource = fontFamilies;
+            FontFamilyComboBox.DisplayMemberPath = "Source";
+            
+            // Set default font
+            var defaultFont = fontFamilies.FirstOrDefault(f => f.Source.Contains("Microsoft JhengHei"));
+            if (defaultFont != null)
+                FontFamilyComboBox.SelectedItem = defaultFont;
+            else if (fontFamilies.Count > 0)
+                FontFamilyComboBox.SelectedIndex = 0;
+        }
+
+        private void FontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isUpdatingUiFromSelection || _selectedRegion == null) return;
+            
+            var selectedFont = FontFamilyComboBox.SelectedItem as System.Windows.Media.FontFamily;
+            if (selectedFont != null)
+            {
+                SaveHistoryState();
+                _selectedRegion.FontFamily = selectedFont.Source;
+                _selectedRegion.IsEdited = true;
+                RenderRegions();
+            }
         }
 
         private void InitializeEngine()
@@ -828,6 +858,89 @@ namespace OCREditor
             return new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
         }
 
+        private System.Windows.Media.Brush CreateTransparentTextSprite(OCRRegion region)
+        {
+            lock (_bitmapLock)
+            {
+                if (_originalBitmap != null)
+                {
+                    try
+                    {
+                        int imgW = _originalBitmap.Width;
+                        int imgH = _originalBitmap.Height;
+
+                        int originalX = (int)Math.Round(region.OriginalRelX * imgW);
+                        int originalY = (int)Math.Round(region.OriginalRelY * imgH);
+                        int originalW = Math.Max(1, (int)Math.Round(region.RelWidth * imgW));
+                        int originalH = Math.Max(1, (int)Math.Round(region.RelHeight * imgH));
+                        
+                        // Ensure bounds
+                        originalX = Math.Max(0, Math.Min(originalX, imgW - 1));
+                        originalY = Math.Max(0, Math.Min(originalY, imgH - 1));
+                        originalW = Math.Min(originalW, imgW - originalX);
+                        originalH = Math.Min(originalH, imgH - originalY);
+
+                        var pixels = new byte[originalW * originalH * 4];
+                        
+                        var bg = region.BackgroundColor;
+
+                        for (int y = 0; y < originalH; y++)
+                        {
+                            for (int x = 0; x < originalW; x++)
+                            {
+                                var pixel = _originalBitmap.GetPixel(originalX + x, originalY + y);
+                                int index = (y * originalW + x) * 4;
+                                
+                                int dr = pixel.R - bg.R;
+                                int dg = pixel.G - bg.G;
+                                int db = pixel.B - bg.B;
+                                
+                                // If the color is close to the background color, make it transparent
+                                // We use a smooth transition (alpha blending) for anti-aliased edges
+                                double dist = Math.Sqrt(dr * dr + dg * dg + db * db);
+                                double maxDist = 80.0;
+                                
+                                byte alpha = 255;
+                                if (dist < maxDist)
+                                {
+                                    // Smooth alpha interpolation
+                                    alpha = (byte)(255 * (dist / maxDist));
+                                }
+
+                                pixels[index] = pixel.B;
+                                pixels[index + 1] = pixel.G;
+                                pixels[index + 2] = pixel.R;
+                                pixels[index + 3] = alpha;
+                            }
+                        }
+
+                        var bitmap = new WriteableBitmap(
+                            originalW,
+                            originalH,
+                            96,
+                            96,
+                            PixelFormats.Bgra32,
+                            null);
+                        bitmap.WritePixels(new Int32Rect(0, 0, originalW, originalH), pixels, originalW * 4, 0);
+
+                        var brush = new ImageBrush(bitmap)
+                        {
+                            Stretch = Stretch.Fill,
+                            TileMode = TileMode.None
+                        };
+                        brush.Freeze();
+                        return brush;
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"Sprite generation failed: {ex.Message}");
+                    }
+                }
+            }
+
+            return System.Windows.Media.Brushes.Transparent;
+        }
+
         private byte CalculateFeatherAlpha(int x, int y, int width, int height, int feather)
         {
             if (feather <= 0)
@@ -1039,13 +1152,13 @@ namespace OCREditor
                     scale = _imgHeight / SourceImage.Source.Height;
                 }
                 
-                if (ShouldRenderReplacementText(region))
+                if (region.IsEdited)
                 {
                     var textBlock = new System.Windows.Controls.TextBlock
                     {
                         Text = region.CurrentText,
                         Foreground = new System.Windows.Media.SolidColorBrush(region.TextColor),
-                        FontFamily = new System.Windows.Media.FontFamily("Microsoft JhengHei"),
+                        FontFamily = new System.Windows.Media.FontFamily(region.FontFamily),
                         FontSize = region.FontSize * scale,
                         FontWeight = region.IsBold ? FontWeights.Bold : FontWeights.Normal,
                         FontStyle = region.IsItalic ? FontStyles.Italic : FontStyles.Normal,
@@ -1056,6 +1169,15 @@ namespace OCREditor
 
                     border.Child = textBlock;
                     region.TextVisual = textBlock;
+                }
+                else if (HasMoved(region))
+                {
+                    var sprite = new System.Windows.Controls.Border
+                    {
+                        Background = CreateTransparentTextSprite(region)
+                    };
+                    border.Child = sprite;
+                    region.TextVisual = sprite;
                 }
                 else
                 {
@@ -1082,6 +1204,15 @@ namespace OCREditor
             FontSizeValueText.Text = $"{(int)region.FontSize}px";
             BoldToggleButton.IsChecked = region.IsBold;
             ItalicToggleButton.IsChecked = region.IsItalic;
+            
+            foreach (var item in FontFamilyComboBox.Items)
+            {
+                if (item is System.Windows.Media.FontFamily ff && ff.Source == region.FontFamily)
+                {
+                    FontFamilyComboBox.SelectedItem = item;
+                    break;
+                }
+            }
             
             _isUpdatingUiFromSelection = false;
             
