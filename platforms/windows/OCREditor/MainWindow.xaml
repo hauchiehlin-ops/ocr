@@ -449,8 +449,14 @@
         <!-- Footer -->
         <Border Grid.Row="2" Background="#007ACC" Padding="10,4" BorderBrush="#005B9A" BorderThickness="0,1,0,0">
             <Grid>
-                <TextBlock Text="OCR Visual Editor Professional — Powered by Windows AI Platform" Foreground="White" FontSize="11" HorizontalAlignment="Left"/>
-                <TextBlock x:Name="DpiIndicator" Text="Zoom: 100%" Foreground="#D0D0D0" FontSize="11" HorizontalAlignment="Right"/>
+                <TextBlock Text="OCR Visual Editor Professional — Powered by Windows AI Platform" Foreground="White" FontSize="11" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="Zoom:" Foreground="#D0D0D0" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                    <Slider x:Name="ZoomSlider" Width="100" Minimum="0.1" Maximum="5.0" Value="1.0" 
+                            TickFrequency="0.05" IsSnapToTickEnabled="False" 
+                            ValueChanged="ZoomSlider_ValueChanged" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock x:Name="DpiIndicator" Text="100%" Foreground="#D0D0D0" FontSize="11" VerticalAlignment="Center" Width="35" TextAlignment="Right"/>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

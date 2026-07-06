@@ -183,31 +183,38 @@ namespace OCREditor
 
         private void ZoomIn_Click(object sender, RoutedEventArgs e)
         {
-            if (CanvasScale != null && CanvasScale.ScaleX < 3.0)
+            if (ZoomSlider != null)
             {
-                CanvasScale.ScaleX += 0.2;
-                CanvasScale.ScaleY += 0.2;
-                if (DpiIndicator != null) DpiIndicator.Text = $"Zoom: {CanvasScale.ScaleX * 100:0}%";
+                ZoomSlider.Value = Math.Min(ZoomSlider.Maximum, ZoomSlider.Value + 0.2);
             }
         }
 
         private void ZoomOut_Click(object sender, RoutedEventArgs e)
         {
-            if (CanvasScale != null && CanvasScale.ScaleX > 0.2)
+            if (ZoomSlider != null)
             {
-                CanvasScale.ScaleX -= 0.2;
-                CanvasScale.ScaleY -= 0.2;
-                if (DpiIndicator != null) DpiIndicator.Text = $"Zoom: {CanvasScale.ScaleX * 100:0}%";
+                ZoomSlider.Value = Math.Max(ZoomSlider.Minimum, ZoomSlider.Value - 0.2);
             }
         }
 
         private void ZoomReset_Click(object sender, RoutedEventArgs e)
         {
+            if (ZoomSlider != null)
+            {
+                ZoomSlider.Value = 1.0;
+            }
+        }
+
+        private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
             if (CanvasScale != null)
             {
-                CanvasScale.ScaleX = 1.0;
-                CanvasScale.ScaleY = 1.0;
-                if (DpiIndicator != null) DpiIndicator.Text = $"Zoom: 100%";
+                CanvasScale.ScaleX = e.NewValue;
+                CanvasScale.ScaleY = e.NewValue;
+                if (DpiIndicator != null)
+                {
+                    DpiIndicator.Text = $"{(int)(e.NewValue * 100)}%";
+                }
             }
         }
 
@@ -785,31 +792,32 @@ namespace OCREditor
                             // 8 sample points around the box: top-left, top-center, top-right,
                             // mid-left, mid-right, bottom-left, bottom-center, bottom-right
                             var points = new (int x, int y)[]
+                        // Expand slightly to get true background outside the text
+                        int padding = 6;
+                        int originalX = (int)Math.Round(region.OriginalRelX * imgW) - padding;
+                        int originalY = (int)Math.Round(region.OriginalRelY * imgH) - padding;
+                        int originalW = Math.Max(1, (int)Math.Round(region.RelWidth * imgW)) + padding * 2;
+                        int originalH = Math.Max(1, (int)Math.Round(region.RelHeight * imgH)) + padding * 2;
+
+                        int sumR = 0, sumG = 0, sumB = 0, count = 0;
+
+                        // Only sample the 2-pixel outer perimeter to avoid any anti-aliased text pixels
+                        for (int y = originalY; y < originalY + originalH; y++)
+                        {
+                            for (int x = originalX; x < originalX + originalW; x++)
                             {
-                                (boxX - off, boxY - off),
-                                (boxX + boxW / 2, boxY - off),
-                                (boxX + boxW + off, boxY - off),
-                                (boxX - off, boxY + boxH / 2),
-                                (boxX + boxW + off, boxY + boxH / 2),
-                                (boxX - off, boxY + boxH + off),
-                                (boxX + boxW / 2, boxY + boxH + off),
-                                (boxX + boxW + off, boxY + boxH + off),
-                            };
+                                if (x <= originalX + 1 || x >= originalX + originalW - 2 ||
+                                    y <= originalY + 1 || y >= originalY + originalH - 2)
+                                {
+                                    int px = Math.Max(0, Math.Min(x, imgW - 1));
+                                    int py = Math.Max(0, Math.Min(y, imgH - 1));
+                                    var pixel = _originalBitmap.GetPixel(px, py);
 
-                            foreach (var (sx, sy) in points)
-                            {
-                                int px = Math.Max(0, Math.Min(sx, imgW - 1));
-                                int py = Math.Max(0, Math.Min(sy, imgH - 1));
-                                var pixel = _originalBitmap.GetPixel(px, py);
-
-                                // Skip dark pixels (text, lines, borders)
-                                if (pixel.R < 60 && pixel.G < 60 && pixel.B < 60)
-                                    continue;
-
-                                sumR += pixel.R;
-                                sumG += pixel.G;
-                                sumB += pixel.B;
-                                count++;
+                                    sumR += pixel.R;
+                                    sumG += pixel.G;
+                                    sumB += pixel.B;
+                                    count++;
+                                }
                             }
                         }
 
@@ -882,33 +890,54 @@ namespace OCREditor
                         originalH = Math.Min(originalH, imgH - originalY);
 
                         var pixels = new byte[originalW * originalH * 4];
-                        var bg = region.BackgroundColor;
+
+                        // Feather radius to blend smoothly with surrounding background
+                        int feather = Math.Min(Math.Max(paddingX, paddingY), Math.Min(originalW, originalH) / 3);
 
                         for (int y = 0; y < originalH; y++)
                         {
                             for (int x = 0; x < originalW; x++)
                             {
-                                var pixel = _originalBitmap.GetPixel(originalX + x, originalY + y);
                                 int index = (y * originalW + x) * 4;
                                 
-                                int dr = pixel.R - bg.R;
-                                int dg = pixel.G - bg.G;
-                                int db = pixel.B - bg.B;
+                                // Bilinear interpolation from the 4 outer edges of the padded bounding box
+                                var pTop = _originalBitmap.GetPixel(originalX + x, originalY);
+                                var pBot = _originalBitmap.GetPixel(originalX + x, originalY + originalH - 1);
+                                var pLeft = _originalBitmap.GetPixel(originalX, originalY + y);
+                                var pRight = _originalBitmap.GetPixel(originalX + originalW - 1, originalY + y);
                                 
-                                double dist = Math.Sqrt(dr * dr + dg * dg + db * db);
-                                double maxDist = 60.0; // Distance threshold to classify as text vs background
+                                double ty = (double)y / (originalH - 1);
+                                double tx = (double)x / (originalW - 1);
                                 
-                                byte alpha = 0; // Transparent by default (do not touch background)
-                                if (dist > maxDist)
+                                // Interpolate vertically
+                                double rY = pTop.R * (1 - ty) + pBot.R * ty;
+                                double gY = pTop.G * (1 - ty) + pBot.G * ty;
+                                double bY = pTop.B * (1 - ty) + pBot.B * ty;
+                                
+                                // Interpolate horizontally
+                                double rX = pLeft.R * (1 - tx) + pRight.R * tx;
+                                double gX = pLeft.G * (1 - tx) + pRight.G * tx;
+                                double bX = pLeft.B * (1 - tx) + pRight.B * tx;
+                                
+                                // Average the two interpolations
+                                byte b = (byte)Math.Min(255, Math.Max(0, (bY + bX) / 2));
+                                byte g = (byte)Math.Min(255, Math.Max(0, (gY + gX) / 2));
+                                byte r = (byte)Math.Min(255, Math.Max(0, (rY + rX) / 2));
+
+                                int distX = Math.Min(x, originalW - 1 - x);
+                                int distY = Math.Min(y, originalH - 1 - y);
+                                int distToEdge = Math.Min(distX, distY);
+                                
+                                byte alpha = 255;
+                                if (distToEdge < feather)
                                 {
-                                    // It's a text pixel! We "erase" it by painting over it with the background color.
-                                    // Soft edge blending
-                                    alpha = (byte)(255 * Math.Min(1.0, (dist - maxDist) / 30.0));
+                                    // Smooth fade out at the edges
+                                    alpha = (byte)(255 * ((double)distToEdge / feather));
                                 }
 
-                                pixels[index] = bg.B;
-                                pixels[index + 1] = bg.G;
-                                pixels[index + 2] = bg.R;
+                                pixels[index] = b;
+                                pixels[index + 1] = g;
+                                pixels[index + 2] = r;
                                 pixels[index + 3] = alpha;
                             }
                         }
