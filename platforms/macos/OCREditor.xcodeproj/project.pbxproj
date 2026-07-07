@@ -7,25 +7,122 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		05299FD93C068DB136536C11 /* text_renderer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A3E7FCA0FD8FAD1077FCFCE2 /* text_renderer.cpp */; };
 		1E009655E49469328D5F6D1B /* OCREngineBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1AA04721B96FFD107425F48 /* OCREngineBridge.mm */; };
+		3BAD58E72FBD99AADCD4A144 /* denoise.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 39180BABA2540B341ABE9A4A /* denoise.cpp */; };
+		402769B49BA372B0EDED8644 /* paddle_ocr_engine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6705862E0657C44665A2B9D4 /* paddle_ocr_engine.cpp */; };
+		52DC0F55B2B92D4DFDECDBCA /* document_parser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3A997CEE413A62DDB2C31CBC /* document_parser.cpp */; };
 		5393C0E8A1EBBC9AAAF0A730 /* OCREditorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */; };
+		58AFAAEB5AC6A657AD95881F /* blender.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A54A2503B58862981C028B1F /* blender.cpp */; };
+		60C2E59DECCF0DA87717D1FC /* license_validator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9E9A4857CBB6887CCC4C6139 /* license_validator.cpp */; };
+		6288425F0558B8F61F2C9D50 /* device_fingerprint.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 699B30B132FD7B8E94A919A9 /* device_fingerprint.cpp */; };
+		660656C3AA0A25E38C90E9C7 /* compositor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CA416F1E4032877337E56B5D /* compositor.cpp */; };
+		704D1776EBE39B92CD0795B1 /* lama_engine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C6E4D0D7BADB1BA916A41AEC /* lama_engine.cpp */; };
 		7E30AED9B41938852DA1ED65 /* OCRModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F83801B4A4184B815812D4 /* OCRModels.swift */; };
+		96A847B92C9D600C89EE6E90 /* text_block.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 728B35FB513F543BF3E2F9B2 /* text_block.cpp */; };
+		A0FC5C215F18C62023B0CDCE /* binarize.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CBC08891DBC68951C7712900 /* binarize.cpp */; };
+		BCDD7F2E226B15EA7F1644AA /* context_corrector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1524CD6E52EA09E428D2595C /* context_corrector.cpp */; };
 		BCEC7CEC16B9CC81BE4737F6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40625E7673640566BDFFD21D /* ContentView.swift */; };
+		BCF5E36ACAE8E8F4D2FD3B3B /* text_layer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F397467B65086FD9FA77D2C9 /* text_layer.cpp */; };
+		BDBB1098147017389E7A2153 /* mask_generator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A17D08BE3247F4B5A9C37EAE /* mask_generator.cpp */; };
+		C2CB1E9B7843EF2FCFCC2F28 /* deskew.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3784A230115F5B757A0C1781 /* deskew.cpp */; };
+		D04F4C5C4C310C453A8EAB69 /* preprocessor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A7997A88FDC75B3AD35AC4A3 /* preprocessor.cpp */; };
+		D2F9617A0DF63EF8C897DB48 /* edge_crop.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1528423B2C51B72DF65FE2FD /* edge_crop.cpp */; };
 		E4D593CD95305B8C067FA795 /* OCRViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */; };
+		F3252591DD8CC547DA7B601D /* ocr_core_api.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6678A920B36707AAEFAE1810 /* ocr_core_api.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		0CE4051375DD63A733998F6E /* OCREditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OCREditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1524CD6E52EA09E428D2595C /* context_corrector.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = context_corrector.cpp; sourceTree = "<group>"; };
+		1528423B2C51B72DF65FE2FD /* edge_crop.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = edge_crop.cpp; sourceTree = "<group>"; };
 		26F83801B4A4184B815812D4 /* OCRModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRModels.swift; sourceTree = "<group>"; };
+		329C86630BA0FAF8444F2BA3 /* ocr_core_api.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ocr_core_api.h; sourceTree = "<group>"; };
 		33BC5080B386F6F161105D37 /* OCREngineBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OCREngineBridge.h; sourceTree = "<group>"; };
+		3784A230115F5B757A0C1781 /* deskew.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = deskew.cpp; sourceTree = "<group>"; };
+		39180BABA2540B341ABE9A4A /* denoise.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = denoise.cpp; sourceTree = "<group>"; };
+		3A997CEE413A62DDB2C31CBC /* document_parser.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = document_parser.cpp; sourceTree = "<group>"; };
 		40625E7673640566BDFFD21D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		6678A920B36707AAEFAE1810 /* ocr_core_api.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ocr_core_api.cpp; sourceTree = "<group>"; };
+		6705862E0657C44665A2B9D4 /* paddle_ocr_engine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = paddle_ocr_engine.cpp; sourceTree = "<group>"; };
+		687ED8B6966E3A76B610F25C /* text_layer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = text_layer.h; sourceTree = "<group>"; };
+		699B30B132FD7B8E94A919A9 /* device_fingerprint.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = device_fingerprint.cpp; sourceTree = "<group>"; };
+		728B35FB513F543BF3E2F9B2 /* text_block.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = text_block.cpp; sourceTree = "<group>"; };
+		73478BA523234EF4B04C7377 /* license_validator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = license_validator.h; sourceTree = "<group>"; };
+		9E9A4857CBB6887CCC4C6139 /* license_validator.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = license_validator.cpp; sourceTree = "<group>"; };
+		A17D08BE3247F4B5A9C37EAE /* mask_generator.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = mask_generator.cpp; sourceTree = "<group>"; };
 		A1AA04721B96FFD107425F48 /* OCREngineBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = OCREngineBridge.mm; sourceTree = "<group>"; };
+		A3E7FCA0FD8FAD1077FCFCE2 /* text_renderer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = text_renderer.cpp; sourceTree = "<group>"; };
+		A54A2503B58862981C028B1F /* blender.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = blender.cpp; sourceTree = "<group>"; };
 		A56897659442CFC72BB8C388 /* OCREditor-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OCREditor-Bridging-Header.h"; sourceTree = "<group>"; };
+		A7997A88FDC75B3AD35AC4A3 /* preprocessor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = preprocessor.cpp; sourceTree = "<group>"; };
+		A82678AC4E9FB24D3B7CFC1C /* context_corrector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = context_corrector.h; sourceTree = "<group>"; };
+		B46AD28362660CE5B408F992 /* lama_engine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = lama_engine.h; sourceTree = "<group>"; };
+		C47796112ABE774D6CF946C3 /* document_parser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = document_parser.h; sourceTree = "<group>"; };
+		C4D56E13A766AB8E5447AF32 /* blender.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = blender.h; sourceTree = "<group>"; };
+		C6E4D0D7BADB1BA916A41AEC /* lama_engine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = lama_engine.cpp; sourceTree = "<group>"; };
+		CA416F1E4032877337E56B5D /* compositor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = compositor.cpp; sourceTree = "<group>"; };
+		CBC08891DBC68951C7712900 /* binarize.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = binarize.cpp; sourceTree = "<group>"; };
+		D47171328DD5B318D354EFDF /* mask_generator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mask_generator.h; sourceTree = "<group>"; };
+		D4C38B177DC09832236A18AC /* compositor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compositor.h; sourceTree = "<group>"; };
+		DDA88952D348408799F1D7CE /* preprocessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = preprocessor.h; sourceTree = "<group>"; };
 		EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCREditorApp.swift; sourceTree = "<group>"; };
 		F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRViewModel.swift; sourceTree = "<group>"; };
+		F307322C8DEE8E24573D3513 /* paddle_ocr_engine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = paddle_ocr_engine.h; sourceTree = "<group>"; };
+		F397467B65086FD9FA77D2C9 /* text_layer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = text_layer.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		01957CA36FC0C870DFAF3618 /* editor */ = {
+			isa = PBXGroup;
+			children = (
+				CA416F1E4032877337E56B5D /* compositor.cpp */,
+				D4C38B177DC09832236A18AC /* compositor.h */,
+				F397467B65086FD9FA77D2C9 /* text_layer.cpp */,
+				687ED8B6966E3A76B610F25C /* text_layer.h */,
+				A3E7FCA0FD8FAD1077FCFCE2 /* text_renderer.cpp */,
+			);
+			path = editor;
+			sourceTree = "<group>";
+		};
+		06C6DD042A57C17CF98ABA86 /* preprocessor */ = {
+			isa = PBXGroup;
+			children = (
+				CBC08891DBC68951C7712900 /* binarize.cpp */,
+				39180BABA2540B341ABE9A4A /* denoise.cpp */,
+				3784A230115F5B757A0C1781 /* deskew.cpp */,
+				1528423B2C51B72DF65FE2FD /* edge_crop.cpp */,
+				A7997A88FDC75B3AD35AC4A3 /* preprocessor.cpp */,
+				DDA88952D348408799F1D7CE /* preprocessor.h */,
+			);
+			path = preprocessor;
+			sourceTree = "<group>";
+		};
+		272D5089AF00DBB4F552FA67 /* license */ = {
+			isa = PBXGroup;
+			children = (
+				699B30B132FD7B8E94A919A9 /* device_fingerprint.cpp */,
+				9E9A4857CBB6887CCC4C6139 /* license_validator.cpp */,
+				73478BA523234EF4B04C7377 /* license_validator.h */,
+			);
+			path = license;
+			sourceTree = "<group>";
+		};
+		3F8A29A311647587AB8B88B0 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				6678A920B36707AAEFAE1810 /* ocr_core_api.cpp */,
+				01957CA36FC0C870DFAF3618 /* editor */,
+				D7B44FA26DAA5B6E13C26C09 /* inpainting */,
+				272D5089AF00DBB4F552FA67 /* license */,
+				B4CE685F89045188B1D096C8 /* ocr */,
+				7160610E895323D95886E80F /* parser */,
+				06C6DD042A57C17CF98ABA86 /* preprocessor */,
+			);
+			name = Core;
+			path = ../../core/src;
+			sourceTree = "<group>";
+		};
 		4E4EF77280E77975C6B73778 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -42,6 +139,15 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		7160610E895323D95886E80F /* parser */ = {
+			isa = PBXGroup;
+			children = (
+				3A997CEE413A62DDB2C31CBC /* document_parser.cpp */,
+				C47796112ABE774D6CF946C3 /* document_parser.h */,
+			);
+			path = parser;
+			sourceTree = "<group>";
+		};
 		875D4DEB3A5EBFF91AC415B0 /* OCREditor */ = {
 			isa = PBXGroup;
 			children = (
@@ -55,12 +161,33 @@
 			path = OCREditor;
 			sourceTree = "<group>";
 		};
+		A6EA0DB373B33E510E12F572 /* Include */ = {
+			isa = PBXGroup;
+			children = (
+				329C86630BA0FAF8444F2BA3 /* ocr_core_api.h */,
+			);
+			name = Include;
+			path = ../../core/include;
+			sourceTree = "<group>";
+		};
 		ABD31BF1D25D70B4A0AFB728 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				0CE4051375DD63A733998F6E /* OCREditor.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		B4CE685F89045188B1D096C8 /* ocr */ = {
+			isa = PBXGroup;
+			children = (
+				1524CD6E52EA09E428D2595C /* context_corrector.cpp */,
+				A82678AC4E9FB24D3B7CFC1C /* context_corrector.h */,
+				6705862E0657C44665A2B9D4 /* paddle_ocr_engine.cpp */,
+				F307322C8DEE8E24573D3513 /* paddle_ocr_engine.h */,
+				728B35FB513F543BF3E2F9B2 /* text_block.cpp */,
+			);
+			path = ocr;
 			sourceTree = "<group>";
 		};
 		D498F716141AF49059F82085 /* Bridge */ = {
@@ -75,9 +202,24 @@
 		D543BCC3B09CCB71B7F8A63B = {
 			isa = PBXGroup;
 			children = (
+				3F8A29A311647587AB8B88B0 /* Core */,
+				A6EA0DB373B33E510E12F572 /* Include */,
 				875D4DEB3A5EBFF91AC415B0 /* OCREditor */,
 				ABD31BF1D25D70B4A0AFB728 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		D7B44FA26DAA5B6E13C26C09 /* inpainting */ = {
+			isa = PBXGroup;
+			children = (
+				A54A2503B58862981C028B1F /* blender.cpp */,
+				C4D56E13A766AB8E5447AF32 /* blender.h */,
+				C6E4D0D7BADB1BA916A41AEC /* lama_engine.cpp */,
+				B46AD28362660CE5B408F992 /* lama_engine.h */,
+				A17D08BE3247F4B5A9C37EAE /* mask_generator.cpp */,
+				D47171328DD5B318D354EFDF /* mask_generator.h */,
+			);
+			path = inpainting;
 			sourceTree = "<group>";
 		};
 		EC6FD2072B888C5DC7B3043E /* Views */ = {
@@ -152,6 +294,24 @@
 				1E009655E49469328D5F6D1B /* OCREngineBridge.mm in Sources */,
 				7E30AED9B41938852DA1ED65 /* OCRModels.swift in Sources */,
 				E4D593CD95305B8C067FA795 /* OCRViewModel.swift in Sources */,
+				A0FC5C215F18C62023B0CDCE /* binarize.cpp in Sources */,
+				58AFAAEB5AC6A657AD95881F /* blender.cpp in Sources */,
+				660656C3AA0A25E38C90E9C7 /* compositor.cpp in Sources */,
+				BCDD7F2E226B15EA7F1644AA /* context_corrector.cpp in Sources */,
+				3BAD58E72FBD99AADCD4A144 /* denoise.cpp in Sources */,
+				C2CB1E9B7843EF2FCFCC2F28 /* deskew.cpp in Sources */,
+				6288425F0558B8F61F2C9D50 /* device_fingerprint.cpp in Sources */,
+				52DC0F55B2B92D4DFDECDBCA /* document_parser.cpp in Sources */,
+				D2F9617A0DF63EF8C897DB48 /* edge_crop.cpp in Sources */,
+				704D1776EBE39B92CD0795B1 /* lama_engine.cpp in Sources */,
+				60C2E59DECCF0DA87717D1FC /* license_validator.cpp in Sources */,
+				BDBB1098147017389E7A2153 /* mask_generator.cpp in Sources */,
+				F3252591DD8CC547DA7B601D /* ocr_core_api.cpp in Sources */,
+				402769B49BA372B0EDED8644 /* paddle_ocr_engine.cpp in Sources */,
+				D04F4C5C4C310C453A8EAB69 /* preprocessor.cpp in Sources */,
+				96A847B92C9D600C89EE6E90 /* text_block.cpp in Sources */,
+				BCF5E36ACAE8E8F4D2FD3B3B /* text_layer.cpp in Sources */,
+				05299FD93C068DB136536C11 /* text_renderer.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -224,12 +384,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\"";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -302,12 +464,14 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\"";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
