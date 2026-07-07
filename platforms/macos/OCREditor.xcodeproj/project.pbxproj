@@ -20,6 +20,7 @@
 		33BC5080B386F6F161105D37 /* OCREngineBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OCREngineBridge.h; sourceTree = "<group>"; };
 		40625E7673640566BDFFD21D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1AA04721B96FFD107425F48 /* OCREngineBridge.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = OCREngineBridge.mm; sourceTree = "<group>"; };
+		A56897659442CFC72BB8C388 /* OCREditor-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "OCREditor-Bridging-Header.h"; sourceTree = "<group>"; };
 		EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCREditorApp.swift; sourceTree = "<group>"; };
 		F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -44,6 +45,7 @@
 		875D4DEB3A5EBFF91AC415B0 /* OCREditor */ = {
 			isa = PBXGroup;
 			children = (
+				A56897659442CFC72BB8C388 /* OCREditor-Bridging-Header.h */,
 				EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */,
 				D498F716141AF49059F82085 /* Bridge */,
 				55D18FE8DA29C89D013A1522 /* Models */,
@@ -236,6 +238,7 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hauchiehlin.ocreditor;
 				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "OCREditor/OCREditor-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
@@ -313,6 +316,7 @@
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hauchiehlin.ocreditor;
 				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "OCREditor/OCREditor-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
