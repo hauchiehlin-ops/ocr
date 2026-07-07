@@ -1157,8 +1157,8 @@ namespace OCREditor
             // This leaves the surrounding background texture completely untouched to avoid 'holes' or 'pits'.
             foreach (var region in _regions)
             {
-                // We only cover the original text strokes if it's edited or moved.
-                if (!region.IsRemoved && ShouldRenderReplacementText(region))
+                // We cover the original text strokes if it's edited, moved, or marked as removed (to erase it).
+                if (region.IsRemoved || ShouldRenderReplacementText(region))
                 {
                     // For the inpaint sprite, we use a padding to ensure we catch all text strokes
                     int padding = 6;
