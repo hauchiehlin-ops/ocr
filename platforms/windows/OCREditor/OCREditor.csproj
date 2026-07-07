@@ -11,6 +11,14 @@
     <RootNamespace>OCREditor</RootNamespace>
     <Platforms>AnyCPU;x64</Platforms>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>app_icon.ico</ApplicationIcon>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.0</Version>
+    <Company>OCREditor Team</Company>
+    <Product>OCREditor</Product>
+    <Description>AI Offline Document Layer Editor</Description>
+    <Copyright>Copyright (c) 2026</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
