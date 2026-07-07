@@ -138,7 +138,11 @@ namespace OCREditor
                 PrimaryFontComboBox.SelectedIndex = 0;
             }
             
-            var defaultSecondary = fontNames.FirstOrDefault(f => f.Contains("Arial") || f.Contains("Segoe UI"));
+            var defaultSecondary = fontNames.FirstOrDefault(f => f.Contains("Century Gothic"));
+            if (defaultSecondary == null)
+            {
+                defaultSecondary = fontNames.FirstOrDefault(f => f.Contains("Segoe UI"));
+            }
             if (defaultSecondary != null)
                 SecondaryFontComboBox.SelectedItem = defaultSecondary;
             else if (fontNames.Count > 0)
@@ -668,7 +672,7 @@ namespace OCREditor
                 primaryFont = selectedPrimary;
             }
             
-            string secondaryFont = "Arial";
+            string secondaryFont = "Century Gothic";
             if (SecondaryFontComboBox.SelectedItem is string selectedSecondary && !string.IsNullOrEmpty(selectedSecondary))
             {
                 secondaryFont = selectedSecondary;
