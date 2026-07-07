@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>macOS 平台隱私權政策 — OCREditor</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151b2c;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --primary: #8b5cf6;
+            --secondary: #06b6d4;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color); color: var(--text-color); line-height: 1.6;
+        }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 24px 80px; max-width: 1400px; margin: 0 auto; }
+        .logo { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .container { max-width: 800px; margin: 40px auto; padding: 40px; background-color: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 80px rgba(0,0,0,0.4); }
+        h1 { font-size: 32px; margin-bottom: 16px; text-align: center; }
+        .platform-tag { display: inline-block; background-color: rgba(6, 182, 212, 0.2); color: var(--secondary); padding: 4px 12px; border-radius: 99px; font-size: 14px; font-weight: 600; margin-bottom: 24px; text-align: center; width: 100%; box-sizing: border-box; }
+        h2 { font-size: 22px; margin-top: 32px; margin-bottom: 16px; color: var(--secondary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+        p { margin-bottom: 16px; color: var(--text-muted); }
+        ul { margin-bottom: 24px; padding-left: 24px; color: var(--text-muted); }
+        li { margin-bottom: 8px; }
+        footer { text-align: center; padding: 48px; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); margin-top: 80px; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
+            OCREditor
+        </a>
+    </header>
+    <main class="container">
+        <h1>隱私權與資料保護政策</h1>
+        <div class="platform-tag">適用於 macOS (CoreML/Metal) 平台</div>
+        
+        <p>本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 macOS 系統環境下，如何處理及保護您的資料。本軟體嚴格遵循 Apple 的隱私權指導原則，致力於保障您的資訊安全。</p>
+
+        <h2>1. 100% 本機端處理</h2>
+        <ul>
+            <li><strong>CoreML 神經網路引擎：</strong> 本軟體針對 Mac 設備（特別是 Apple Silicon M系列晶片）進行深度最佳化，所有圖像識別、OCR 與智慧背景塗抹運算，均透過設備本機的 CoreML 框架及 Neural Engine 執行。</li>
+            <li><strong>不依賴網路連線：</strong> 我們保證絕不將您載入的任何圖像檔、機密文件或編輯結果上傳至任何外部伺服器或 iCloud 空間（除非您自行將檔案存入 iCloud Drive）。</li>
+        </ul>
+
+        <h2>2. macOS 沙盒與權限保護</h2>
+        <p>本軟體遵守 macOS 的 App Sandbox 規範：</p>
+        <ul>
+            <li><strong>檔案存取限制：</strong> 我們僅能存取您透過「開啟檔案」對話框主動選擇的圖片，或您透過拖放 (Drag & Drop) 方式放入應用程式的檔案。未經您的授權，本軟體無法掃描或讀取您磁碟機中的其他檔案。</li>
+            <li><strong>無背景監控：</strong> 本軟體絕不會存取您的麥克風、攝影機、位置資訊、通訊錄或剪貼簿（除非您主動貼上文字），也絕無包含任何第三方的追蹤或廣告模組。</li>
+        </ul>
+
+        <h2>3. 崩潰報告與診斷資訊</h2>
+        <p>如果您在 macOS 上遇到程式崩潰，Apple 作業系統可能會詢問您是否要傳送崩潰報告給開發者。此報告僅包含系統狀態與堆疊追蹤資訊（Stack Trace），<strong>絕不包含您正在編輯的圖片內容或文字</strong>。您可以隨時在 macOS 系統設定的「隱私權與安全性」中關閉此功能。</p>
+
+        <h2>4. 政策更新</h2>
+        <p>我們將持續確保產品符合最嚴格的隱私標準，本聲明如有更新將立即公佈於此頁面。</p>
+        <p>最後更新日期：2026年7月</p>
+    </main>
+    <footer><p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+</body>
+</html>

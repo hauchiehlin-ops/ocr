@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS 平台隱私權政策 — OCREditor</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151b2c;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --primary: #8b5cf6;
+            --secondary: #06b6d4;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color); color: var(--text-color); line-height: 1.6;
+        }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 24px 80px; max-width: 1400px; margin: 0 auto; }
+        .logo { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .container { max-width: 800px; margin: 40px auto; padding: 40px; background-color: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 80px rgba(0,0,0,0.4); }
+        h1 { font-size: 32px; margin-bottom: 16px; text-align: center; }
+        .platform-tag { display: inline-block; background-color: rgba(6, 182, 212, 0.2); color: var(--secondary); padding: 4px 12px; border-radius: 99px; font-size: 14px; font-weight: 600; margin-bottom: 24px; text-align: center; width: 100%; box-sizing: border-box; }
+        h2 { font-size: 22px; margin-top: 32px; margin-bottom: 16px; color: var(--secondary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+        p { margin-bottom: 16px; color: var(--text-muted); }
+        ul { margin-bottom: 24px; padding-left: 24px; color: var(--text-muted); }
+        li { margin-bottom: 8px; }
+        footer { text-align: center; padding: 48px; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); margin-top: 80px; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
+            OCREditor
+        </a>
+    </header>
+    <main class="container">
+        <h1>隱私權與資料保護政策</h1>
+        <div class="platform-tag">適用於 iOS / iPadOS 平台</div>
+        
+        <p>本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 iOS 與 iPadOS 行動裝置上，如何處理及保護您的隱私。我們深刻理解行動裝置承載了高度私密的個人與企業資訊，因此本 App 從底層設計即落實了「在地端運算」的安全理念。</p>
+
+        <h2>1. 照片與相機權限</h2>
+        <ul>
+            <li><strong>相簿存取 (Photos)：</strong> 當您使用本軟體匯入圖片時，系統會請求相簿權限。我們只會讀取您明確選取的那一張圖片，以進行後續的編輯，<strong>絕不會掃描您的相片圖庫</strong>或上傳任何相片。</li>
+            <li><strong>相機使用 (Camera)：</strong> 若您選擇直接拍攝文件，本軟體會請求相機權限。所拍攝的畫面僅存在於您設備的暫存記憶體中，一旦您選擇捨棄或完成編輯匯出，原圖將自動銷毀，絕不會備份至我們的伺服器。</li>
+        </ul>
+
+        <h2>2. 邊緣運算 (Edge AI) 保證</h2>
+        <p>為了徹底杜絕資料外洩風險，本軟體內建了專為行動裝置壓縮的最佳化 CoreML 模型：</p>
+        <ul>
+            <li>無論是文字掃描 (OCR) 還是背景抹除修復，所有 AI 運算皆藉由您 iPhone/iPad 內的 Apple Neural Engine (ANE) 在本地端即時完成。</li>
+            <li><strong>這意味著本軟體在「完全開啟飛航模式、沒有網路連線」的情況下依然能夠 100% 正常運作。</strong> 您可以絕對放心地處理包含合約、財報或個資在內的機密截圖。</li>
+        </ul>
+
+        <h2>3. 零第三方追蹤</h2>
+        <p>根據 App Store 的隱私權標籤規範，我們在此嚴格聲明：</p>
+        <ul>
+            <li>本 App <strong>無包含</strong> Google Analytics、Facebook Pixel、Crashlytics 等任何第三方追蹤分析工具。</li>
+            <li>我們不會蒐集您的裝置識別碼 (IDFA)、定位資料或使用時長。我們只專注於提供純粹、強大且安全的文件編輯體驗。</li>
+        </ul>
+
+        <h2>4. 隱私權政策變更</h2>
+        <p>若我們的隱私作業實務有所變更（例如未來加入需要網路功能的可選附加服務），我們將會更新本政策並在 App 內提前通知您，且任何網路功能皆會以「預設關閉且需您主動同意開啟」的方式進行。</p>
+        <p>最後更新日期：2026年7月</p>
+    </main>
+    <footer><p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+</body>
+</html>

@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作手冊 — OCREditor</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151b2c;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --primary: #8b5cf6;
+            --secondary: #06b6d4;
+            --accent: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 80px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 40px;
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 80px rgba(0, 0, 0, 0.4);
+        }
+
+        h1 {
+            font-size: 36px;
+            margin-bottom: 24px;
+            text-align: center;
+            background: linear-gradient(to right, #ffffff, #e2e8f0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: 24px;
+            margin-top: 40px;
+            margin-bottom: 16px;
+            color: var(--secondary);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+        }
+
+        h3 {
+            font-size: 20px;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: var(--text-color);
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: var(--text-muted);
+        }
+
+        ul, ol {
+            margin-bottom: 24px;
+            padding-left: 24px;
+            color: var(--text-muted);
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .highlight {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        footer {
+            text-align: center;
+            padding: 48px;
+            color: var(--text-muted);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            margin-top: 80px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
+            OCREditor
+        </a>
+    </header>
+
+    <main class="container">
+        <h1>OCREditor 官方操作手冊</h1>
+        <p>歡迎使用 OCREditor！這是一款強調「端側 100% 離線運行」的智慧型文件與圖片圖層編輯器。透過領先的 AI 模型，能夠自動為您抽離圖片上的文字，並利用智慧漸層演算填補背景，實現真正的「所見即所改」。</p>
+
+        <h2>1. 系統需求與安裝</h2>
+        <ul>
+            <li><strong>Windows</strong>: 支援 Windows 10/11，需具備支援 DirectML 之顯示卡。</li>
+            <li><strong>macOS</strong>: 支援 macOS 13.0 (Ventura) 以上版本，完美適配 Apple Silicon (M1/M2/M3) 的 CoreML 晶片加速。</li>
+            <li><strong>安裝方式</strong>: 前往官方 GitHub Releases 下載對應的安裝檔，依循系統預設安裝程序即可完成。</li>
+        </ul>
+
+        <h2>2. 基本操作：載入圖片</h2>
+        <p>啟動應用程式後，點擊左上角的 <span class="highlight">「Load Image」</span> 按鈕，或直接將圖片 (JPG, PNG, TIFF) 拖曳至應用程式視窗中。應用程式會在本地端立即執行 OCR 文字識別與區塊分割。</p>
+
+        <h2>3. 編輯與背景無痕抹除 (Inpainting)</h2>
+        <h3>3.1 修改現有文字</h3>
+        <p>點擊任何被識別出來的文字區塊，輸入您想要的文字。當您開始修改時，系統會自動擷取該區塊四角的背景顏色，使用「四角雙線性漸層演算法」向內渲染背景，完美抹除原有的文字筆畫，達到無殘影的替換效果。</p>
+        
+        <h3>3.2 使用橡皮擦功能（刪除區塊）</h3>
+        <p>若圖上有不想要的浮水印或雜訊被識別為文字，您可以點擊該文字區塊，然後點選 <span class="highlight">「Delete Layer」</span>（刪除圖層）。文字區塊會消失，且底圖會自動套用漸層背景修補，就像無痕橡皮擦一樣。</p>
+        
+        <h3>3.3 手動框選未辨識區塊</h3>
+        <p>若有文字未被自動辨識，您可以點擊上方的 <span class="highlight">「Add Region」</span> 按鈕。接著在畫面上使用滑鼠左鍵拖曳，畫出一個新的文字區塊。該區塊同樣會觸發背景修補邏輯，您可以將其當作「手動橡皮擦」或是「新增翻譯區塊」使用。</p>
+
+        <h2>4. 視圖與工具列</h2>
+        <ul>
+            <li><strong>縮放功能 (Zoom)</strong>: 在右上角的工具列中，您可以使用 <code>➖</code> 和 <code>➕</code> 微調畫面比例，或者直接拖曳滑桿進行快速縮放。點擊 <code>100%</code> 可快速還原為原始大小。</li>
+            <li><strong>調色盤 (Color Palette)</strong>: 點擊彩色圓形圖標，即可開啟系統調色盤，為選定的文字區塊自訂您喜歡的顏色。系統亦提供多組快捷色塊供您快速切換。</li>
+            <li><strong>字體調整 (Font)</strong>: 支援系統內建字體列表，並可即時調整字型大小，讓排版更符合您的需求。</li>
+        </ul>
+
+        <h2>5. 儲存與匯出</h2>
+        <p>編輯完成後，點擊上方的 <span class="highlight">「Save Image」</span> 即可將目前畫面包含替換的文字與修復的背景合併，匯出為一張完整的圖檔。所有處理皆在您的設備上完成，完全確保機密文件的安全。</p>
+
+    </main>
+
+    <footer>
+        <p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p>
+    </footer>
+</body>
+</html>

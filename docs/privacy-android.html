@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android 平台隱私權政策 — OCREditor</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151b2c;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --primary: #8b5cf6;
+            --secondary: #06b6d4;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color); color: var(--text-color); line-height: 1.6;
+        }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 24px 80px; max-width: 1400px; margin: 0 auto; }
+        .logo { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .container { max-width: 800px; margin: 40px auto; padding: 40px; background-color: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 80px rgba(0,0,0,0.4); }
+        h1 { font-size: 32px; margin-bottom: 16px; text-align: center; }
+        .platform-tag { display: inline-block; background-color: rgba(6, 182, 212, 0.2); color: var(--secondary); padding: 4px 12px; border-radius: 99px; font-size: 14px; font-weight: 600; margin-bottom: 24px; text-align: center; width: 100%; box-sizing: border-box; }
+        h2 { font-size: 22px; margin-top: 32px; margin-bottom: 16px; color: var(--secondary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+        p { margin-bottom: 16px; color: var(--text-muted); }
+        ul { margin-bottom: 24px; padding-left: 24px; color: var(--text-muted); }
+        li { margin-bottom: 8px; }
+        footer { text-align: center; padding: 48px; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); margin-top: 80px; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
+            OCREditor
+        </a>
+    </header>
+    <main class="container">
+        <h1>隱私權與資料保護政策</h1>
+        <div class="platform-tag">適用於 Android 平台</div>
+        
+        <p>本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 Android 系統環境下，如何處理及保護您的隱私。我們深知安卓設備中的照片與文件涉及您的敏感個資，因此我們做出了「完全不依賴雲端」的核心承諾。</p>
+
+        <h2>1. 權限聲明與使用範圍</h2>
+        <p>在 Android 平台上，本軟體將會向您請求以下權限，且僅作最低限度的合理使用：</p>
+        <ul>
+            <li><strong>儲存空間權限 (Storage) / 媒體存取權：</strong> 用於讓您選取欲進行編輯的圖片，以及將編輯完畢的成品保存回您的相簿或檔案資料夾。除您主動選擇的圖片外，本軟體絕不會在背景掃描或上傳您的其他檔案。</li>
+            <li><strong>相機權限 (Camera)：</strong> 若您選擇使用拍照功能匯入文件，我們需要相機權限。相機捕捉的影像僅於應用程式運作期間短暫儲存於記憶體，我們不會私自備份或上傳。</li>
+        </ul>
+
+        <h2>2. Android NNAPI 本地運算</h2>
+        <ul>
+            <li>本軟體的 AI 引擎深度整合了 Android Neural Networks API (NNAPI)，這表示所有的光學字元辨識 (OCR) 與影像修補 (Inpainting)，都會利用您手機內建的 NPU/GPU/CPU 硬體晶片直接進行。</li>
+            <li><strong>無網路需求：</strong> 在整個編輯過程中，本軟體完全不會向外部伺服器發送任何封包。您可以隨時在系統設定中關閉本 App 的網路存取權限，這完全不會影響本軟體的任何功能。</li>
+        </ul>
+
+        <h2>3. 拒絕資料收集與廣告推播</h2>
+        <p>我們向 Google Play 商店及所有使用者保證：</p>
+        <ul>
+            <li>我們不會收集您的裝置資訊（如 IMEI、MAC 地址、Android ID）。</li>
+            <li>我們沒有嵌入任何廣告 SDK，不會追蹤您的使用行為來投遞廣告。</li>
+            <li>您在本軟體內輸入的所有翻譯內容或修改的文字，皆完全屬於您個人所有，僅存在於您的手機中。</li>
+        </ul>
+
+        <h2>4. 政策修改與通知</h2>
+        <p>為因應未來 Android 系統版本的升級與 Google Play 政策調整，本隱私權聲明可能會進行更新。如有任何更動，我們皆會在此頁面公告，並確保「本地端離線運算」的核心承諾不變。</p>
+        <p>最後更新日期：2026年7月</p>
+    </main>
+    <footer><p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+</body>
+</html>

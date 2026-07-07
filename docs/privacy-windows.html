@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Windows 平台隱私權政策 — OCREditor</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #151b2c;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --primary: #8b5cf6;
+            --secondary: #06b6d4;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color); color: var(--text-color); line-height: 1.6;
+        }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 24px 80px; max-width: 1400px; margin: 0 auto; }
+        .logo { font-size: 24px; font-weight: 800; background: linear-gradient(135deg, var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; display: flex; align-items: center; gap: 8px; text-decoration: none; }
+        .container { max-width: 800px; margin: 40px auto; padding: 40px; background-color: var(--card-bg); border-radius: 20px; border: 1px solid rgba(255,255,255,0.08); box-shadow: 0 20px 80px rgba(0,0,0,0.4); }
+        h1 { font-size: 32px; margin-bottom: 16px; text-align: center; }
+        .platform-tag { display: inline-block; background-color: rgba(6, 182, 212, 0.2); color: var(--secondary); padding: 4px 12px; border-radius: 99px; font-size: 14px; font-weight: 600; margin-bottom: 24px; text-align: center; width: 100%; box-sizing: border-box; }
+        h2 { font-size: 22px; margin-top: 32px; margin-bottom: 16px; color: var(--secondary); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+        p { margin-bottom: 16px; color: var(--text-muted); }
+        ul { margin-bottom: 24px; padding-left: 24px; color: var(--text-muted); }
+        li { margin-bottom: 8px; }
+        footer { text-align: center; padding: 48px; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); margin-top: 80px; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="index.html" class="logo">
+            <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
+            OCREditor
+        </a>
+    </header>
+    <main class="container">
+        <h1>隱私權與資料保護政策</h1>
+        <div class="platform-tag">適用於 Windows (WPF/DirectML) 平台</div>
+        
+        <p>本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 Windows 平台環境下，如何處理及保護您的資料。我們深知商業機密與個人隱私的重要性，因此本軟體的核心架構即是以「<strong>100% 本地端離線處理</strong>」為最高原則設計。</p>
+
+        <h2>1. 資料的收集與處理</h2>
+        <ul>
+            <li><strong>完全離線執行：</strong> 本軟體在 Windows 10/11 上運作時，所有核心功能（包含 OCR 文字辨識、LaMa 背景抹除、圖片裁切與文字渲染）均利用 Windows AI Platform 與 DirectML 技術，完全在您的本機顯示卡與 CPU 上進行。</li>
+            <li><strong>零伺服器傳輸：</strong> 我們「不會」將您載入的任何圖片、解析出的文字、或編輯後的成品上傳至任何雲端伺服器。</li>
+            <li><strong>無追蹤程式碼：</strong> 本軟體未內嵌任何廣告 SDK 或背景數據收集（Telemetry）工具，我們不會追蹤您的使用習慣或收集您的硬體識別碼。</li>
+        </ul>
+
+        <h2>2. 暫存檔案管理</h2>
+        <p>當您在 Windows 上使用本軟體時，為維持軟體的正常運作，系統可能會在您的使用者暫存資料夾（例如 <code>%TEMP%</code> 或 <code>AppData\Local\OCREditor</code>）內產生暫時性的快取檔案：</p>
+        <ul>
+            <li><strong>記憶體層級處理：</strong> 大多數的圖片資料皆於隨機存取記憶體 (RAM) 中即時運算，並未寫入硬碟。</li>
+            <li><strong>歷史紀錄：</strong> 為了提供「復原 (Undo)」功能，軟體會暫時在記憶體中存放操作紀錄，當您關閉軟體時，這些紀錄會自動銷毀。</li>
+        </ul>
+
+        <h2>3. 權限需求說明</h2>
+        <p>在 Windows 平台上，本軟體僅需極基本的使用者權限即可運行，主要包含：</p>
+        <ul>
+            <li><strong>本地檔案存取：</strong> 僅用於讀取您選擇載入的圖片，以及儲存您匯出的編輯完成檔案。</li>
+            <li><strong>GPU 加速權限：</strong> 為了呼叫 DirectML 進行高效能的 AI 運算，軟體會存取您顯示卡的運算資源，但不會讀取與軟體無關的顯示記憶體內容。</li>
+        </ul>
+
+        <h2>4. 隱私權政策的修訂</h2>
+        <p>本隱私權政策將隨軟體版本更新而可能進行微調，所有修改將即時發布於本頁面。我們承諾「完全不將使用者資料外洩至網際網路」的原則絕不改變。</p>
+        <p>最後更新日期：2026年7月</p>
+    </main>
+    <footer><p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+</body>
+</html>
