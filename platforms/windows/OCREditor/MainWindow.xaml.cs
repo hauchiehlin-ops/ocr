@@ -94,6 +94,7 @@ namespace OCREditor
 
         public MainWindow()
         {
+            LocalizationManager.ApplyLanguage("English");
             InitializeComponent();
             InitializeEngine();
             SetupCanvasMouseEvents();
@@ -1482,6 +1483,15 @@ namespace OCREditor
             {
                 // Re-run OCR automatically when language is changed
                 _ = RunOCRAsync();
+            }
+        }
+
+        private void UiLanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox cb && cb.SelectedItem is ComboBoxItem item)
+            {
+                string lang = item.Tag?.ToString() ?? "English";
+                LocalizationManager.ApplyLanguage(lang);
             }
         }
 

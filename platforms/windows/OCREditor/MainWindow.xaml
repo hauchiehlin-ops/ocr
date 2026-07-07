@@ -267,27 +267,40 @@
 
                 <!-- Menu Bar (Hierarchical Tool Panel) -->
                 <Menu Background="Transparent" Foreground="White" VerticalAlignment="Center" Padding="5,0" Margin="0,5,0,0">
-                    <MenuItem Header="File" Foreground="White">
-                        <MenuItem Header="📂 Open Image" Click="OpenImage_Click" Foreground="Black"/>
-                        <MenuItem Header="💾 Save Result" Click="SaveImage_Click" Foreground="Black"/>
+                    <MenuItem Header="{DynamicResource FileMenu}" Foreground="White">
+                        <MenuItem Header="{DynamicResource LoadImage}" Click="OpenImage_Click" Foreground="Black"/>
+                        <MenuItem Header="{DynamicResource SaveImage}" Click="SaveImage_Click" Foreground="Black"/>
                     </MenuItem>
-                    
-                    <MenuItem Header="Edit" Foreground="White">
-                        <MenuItem x:Name="MenuInsertText" Header="📝 Insert Text" IsCheckable="True" Foreground="Black"/>
+                    <MenuItem Header="{DynamicResource EditMenu}" Foreground="White">
+                        <MenuItem x:Name="MenuInsertText" Header="{DynamicResource InsertText}" IsCheckable="True" Foreground="Black"/>
                         <Separator/>
-                        <MenuItem Header="🔤 Apply Default Font to All" Click="ApplyDefaultFontToAll_Click" Foreground="Black"/>
+                        <MenuItem Header="{DynamicResource ApplyDefaultFont}" Click="ApplyDefaultFontToAll_Click" Foreground="Black"/>
                         <Separator/>
-                        <MenuItem x:Name="MenuUndo" Header="↩️ Undo" Click="Undo_Click" IsEnabled="False" Foreground="Black"/>
-                        <MenuItem x:Name="MenuRedo" Header="↪️ Redo" Click="Redo_Click" IsEnabled="False" Foreground="Black"/>
+                        <MenuItem x:Name="MenuUndo" Header="{DynamicResource Undo}" Click="Undo_Click" IsEnabled="False" Foreground="Black"/>
+                        <MenuItem x:Name="MenuRedo" Header="{DynamicResource Redo}" Click="Redo_Click" IsEnabled="False" Foreground="Black"/>
+                    </MenuItem>
+                    <MenuItem Header="{DynamicResource ViewMenu}" Foreground="White">
+                        <MenuItem x:Name="MenuToggleLeft" Header="{DynamicResource ShowLeftPanel}" IsCheckable="True" IsChecked="True" Click="ToggleLeftPanel_Click" Foreground="Black"/>
+                        <MenuItem x:Name="MenuToggleRight" Header="{DynamicResource ShowRightPanel}" IsCheckable="True" IsChecked="True" Click="ToggleRightPanel_Click" Foreground="Black"/>
                     </MenuItem>
                     
-                    <MenuItem Header="View" Foreground="White">
-                        <MenuItem x:Name="MenuToggleLeft" Header="📋 Show Layers Panel" IsCheckable="True" IsChecked="True" Click="ToggleLeftPanel_Click" Foreground="Black"/>
-                        <MenuItem x:Name="MenuToggleRight" Header="⚙️ Show Properties Panel" IsCheckable="True" IsChecked="True" Click="ToggleRightPanel_Click" Foreground="Black"/>
-                    </MenuItem>
-                    
-                    <MenuItem Header="Settings" Foreground="White">
-                        <MenuItem Header="Language" Foreground="Black">
+                    <MenuItem Header="{DynamicResource SettingsMenu}" Foreground="White">
+                        <MenuItem Header="UI Language" Foreground="Black">
+                            <ComboBox x:Name="UiLanguageComboBox" Width="160" Height="26" SelectedIndex="0" SelectionChanged="UiLanguageComboBox_SelectionChanged">
+                                <ComboBoxItem Content="English" Tag="English"/>
+                                <ComboBoxItem Content="繁體中文" Tag="繁體中文"/>
+                                <ComboBoxItem Content="简体中文" Tag="简体中文"/>
+                                <ComboBoxItem Content="日本語" Tag="日本語"/>
+                                <ComboBoxItem Content="한국어" Tag="한국어"/>
+                                <ComboBoxItem Content="ไทย" Tag="ไทย"/>
+                                <ComboBoxItem Content="Español" Tag="Español"/>
+                                <ComboBoxItem Content="Português" Tag="Português"/>
+                                <ComboBoxItem Content="Bahasa Melayu" Tag="Bahasa Melayu"/>
+                                <ComboBoxItem Content="Русский" Tag="Русский"/>
+                                <ComboBoxItem Content="Deutsch" Tag="Deutsch"/>
+                            </ComboBox>
+                        </MenuItem>
+                        <MenuItem Header="OCR Language" Foreground="Black">
                             <ComboBox x:Name="LanguageComboBox" Width="160" Height="26" SelectedIndex="0" SelectionChanged="LanguageComboBox_SelectionChanged">
                                 <ComboBoxItem Content="Auto (System)" Tag="auto"/>
                                 <ComboBoxItem Content="繁體中文 (zh-Hant)" Tag="zh-Hant"/>
@@ -309,7 +322,7 @@
                 </Menu>
                 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" Margin="0,0,15,0" VerticalAlignment="Center">
-                    <TextBlock Text="🔍 Zoom:" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13"/>
+                    <TextBlock Text="{DynamicResource Zoom}" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13"/>
                     <Border BorderBrush="#555" BorderThickness="1" CornerRadius="3" Background="#333" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
                             <Button Content="➖" Click="ZoomOut_Click" Background="Transparent" Foreground="White" BorderThickness="0,0,1,0" BorderBrush="#555" Width="24" Height="24" Cursor="Hand"/>
@@ -340,7 +353,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Text="Document Status" FontSize="14" FontWeight="Bold" Foreground="White" Margin="0,0,0,8"/>
+                    <TextBlock Grid.Row="0" Text="{DynamicResource DocumentStatus}" FontSize="14" FontWeight="Bold" Foreground="White" Margin="0,0,0,8"/>
                     <Border Grid.Row="1" Background="#1E1E1E" CornerRadius="4" Padding="8" Margin="0,0,0,15" BorderBrush="#2D2D2D" BorderThickness="1">
                         <StackPanel>
                             <TextBlock x:Name="StatusLabel" Text="No Image Loaded" TextWrapping="Wrap" Foreground="#AAA" FontSize="12"/>
@@ -349,7 +362,7 @@
                     </Border>
 
                     <DockPanel Grid.Row="2">
-                        <TextBlock DockPanel.Dock="Top" Text="Interactive Text Layers" FontSize="14" FontWeight="Bold" Foreground="White" Margin="0,0,0,8"/>
+                        <TextBlock DockPanel.Dock="Top" Text="{DynamicResource InteractiveLayers}" FontSize="14" FontWeight="Bold" Foreground="White" Margin="0,0,0,8"/>
                         <ListBox x:Name="LayerListBox" SelectionChanged="LayerListBox_SelectionChanged">
                             <ListBox.ItemTemplate>
                                 <DataTemplate>
@@ -379,22 +392,22 @@
             <Border x:Name="RightSidebar" Grid.Column="2" Width="340" Background="#202020" BorderBrush="#2D2D2D" BorderThickness="1,0,0,0" Padding="15">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="0,0,0,10">
-                        <TextBlock Text="Text Formatting Panel" FontSize="16" FontWeight="Bold" Foreground="White" Margin="0,0,0,5"/>
+                        <TextBlock Text="{DynamicResource TextFormattingPanel}" FontSize="16" FontWeight="Bold" Foreground="White" Margin="0,0,0,5"/>
                         <Separator Background="#2D2D2D" Margin="0,0,0,10"/>
 
                         <!-- Text Editor -->
-                        <TextBlock Text="Edit Content" FontWeight="SemiBold" Foreground="#CCC" Margin="0,0,0,5"/>
+                        <TextBlock Text="{DynamicResource EditContent}" FontWeight="SemiBold" Foreground="#CCC" Margin="0,0,0,5"/>
                         <TextBox x:Name="OcrTextBox" AcceptsReturn="True" TextWrapping="Wrap" Height="100" 
                                  Background="#181818" Foreground="White" BorderBrush="#2D2D2D" 
                                  Padding="8" FontSize="13" TextChanged="OcrTextBox_TextChanged"/>
 
                         <!-- Formatting Controls (Bold, Italic, FontSize) -->
-                        <TextBlock Text="Paragraph Format" FontWeight="SemiBold" Foreground="#CCC" Margin="0,15,0,5"/>
+                        <TextBlock Text="{DynamicResource ParagraphFormat}" FontWeight="SemiBold" Foreground="#CCC" Margin="0,15,0,5"/>
                         <Border Background="#1E1E1E" CornerRadius="4" Padding="10" BorderBrush="#2D2D2D" BorderThickness="1">
                             <StackPanel>
                                 <!-- Font Size -->
                                 <DockPanel Margin="0,0,0,12">
-                                    <TextBlock Text="Size: " VerticalAlignment="Center" Foreground="#AAA"/>
+                                    <TextBlock Text="{DynamicResource Size}" VerticalAlignment="Center" Foreground="#AAA"/>
                                     <TextBlock x:Name="FontSizeValueText" Text="16px" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="White" Width="45" TextAlignment="Right"/>
                                     <Slider x:Name="FontSizeSlider" Minimum="8" Maximum="400" Value="16" 
                                             ValueChanged="FontSizeSlider_ValueChanged" VerticalAlignment="Center"/>
@@ -402,7 +415,7 @@
 
                                 <!-- Font Family -->
                                 <DockPanel Margin="0,0,0,12">
-                                    <TextBlock Text="Font: " VerticalAlignment="Center" Foreground="#AAA" Width="40"/>
+                                    <TextBlock Text="{DynamicResource Font}" VerticalAlignment="Center" Foreground="#AAA" Width="40"/>
                                     <ComboBox x:Name="FontFamilyComboBox" SelectionChanged="FontFamilyComboBox_SelectionChanged" VerticalAlignment="Center" Style="{StaticResource ModernComboBoxStyle}">
                                         <ComboBox.Resources>
                                             <Style TargetType="ComboBoxItem">
@@ -415,14 +428,14 @@
 
                                 <!-- Styles (Bold, Italic) -->
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,0,0,10">
-                                    <ToggleButton x:Name="BoldToggleButton" Content=" Bold " Width="70" Height="26" 
+                                    <ToggleButton x:Name="BoldToggleButton" Content="{DynamicResource Bold}" Width="70" Height="26" 
                                                   Style="{StaticResource ModernToggleButtonStyle}" Click="BoldToggle_Click" Margin="0,0,8,0"/>
-                                    <ToggleButton x:Name="ItalicToggleButton" Content=" Italic " Width="70" Height="26" 
+                                    <ToggleButton x:Name="ItalicToggleButton" Content="{DynamicResource Italic}" Width="70" Height="26" 
                                                   Style="{StaticResource ModernToggleButtonStyle}" Click="ItalicToggle_Click"/>
                                 </StackPanel>
 
                                 <!-- Text Color -->
-                                <TextBlock Text="Color Presets: " Foreground="#AAA" Margin="0,0,0,6"/>
+                                <TextBlock Text="{DynamicResource ColorPresets}" Foreground="#AAA" Margin="0,0,0,6"/>
                                 <WrapPanel HorizontalAlignment="Left">
                                     <Button Background="Black" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
                                     <Button Background="White" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
@@ -450,16 +463,16 @@
                         </Border>
 
                         <!-- Actions (Inpainting & Translation) -->
-                        <TextBlock Text="Operations" FontWeight="SemiBold" Foreground="#CCC" Margin="0,15,0,5"/>
+                        <TextBlock Text="{DynamicResource Operations}" FontWeight="SemiBold" Foreground="#CCC" Margin="0,15,0,5"/>
                         <StackPanel>
-                            <Button Content="🌐 Translate to Traditional Chinese" Click="Translate_Click" 
+                            <Button Content="{DynamicResource TranslateBtn}" Click="Translate_Click" 
                                     Style="{StaticResource ModernButtonStyle}" Margin="0,0,0,8"/>
-                            <Button Content="🗑️ Remove Text Region" Click="RemoveText_Click" 
+                            <Button Content="{DynamicResource RemoveText}" Click="RemoveText_Click" 
                                     Style="{StaticResource DestructiveButtonStyle}"/>
                         </StackPanel>
 
                         <!-- Help Notice -->
-                        <TextBlock Text="Tip: If AI missed a word, click-and-drag directly on the image to draw a manual text box!" 
+                        <TextBlock Text="{DynamicResource Tip}" 
                                    Foreground="#888" TextWrapping="Wrap" FontSize="11" Margin="0,20,0,0" LineHeight="15"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -469,7 +482,7 @@
         <!-- Footer -->
         <Border Grid.Row="2" Background="#007ACC" Padding="10,4" BorderBrush="#005B9A" BorderThickness="0,1,0,0">
             <Grid>
-                <TextBlock Text="OCR Visual Editor Professional — Powered by Windows AI Platform" Foreground="White" FontSize="11" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                <TextBlock Text="{DynamicResource AppTitle}" Foreground="White" FontSize="11" HorizontalAlignment="Left" VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <TextBlock x:Name="DpiIndicator" Text="100%" Foreground="#D0D0D0" FontSize="11" VerticalAlignment="Center" Width="35" TextAlignment="Right"/>
                 </StackPanel>

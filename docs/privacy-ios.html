@@ -31,17 +31,30 @@
     </style>
 </head>
 <body>
-    <header>
+        <header>
         <a href="index.html" class="logo">
             <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
             OCREditor
         </a>
+        <select id="lang-select" style="background: var(--bg-surface); color: white; border: 1px solid var(--text-muted); padding: 4px; border-radius: 4px;">
+            <option value="en">English</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="th">ไทย</option>
+            <option value="es">Español</option>
+            <option value="pt">Português</option>
+            <option value="ms">Bahasa Melayu</option>
+            <option value="ru">Русский</option>
+            <option value="de">Deutsch</option>
+        </select>
     </header>
     <main class="container">
-        <h1>隱私權與資料保護政策</h1>
-        <div class="platform-tag">適用於 iOS / iPadOS 平台</div>
+        <h1 data-i18n="privacy_h1">隱私權與資料保護政策</h1>
+        <div class="platform-tag" data-i18n="privacy_tag_ios"><div class="platform-tag">適用於 iOS / iPadOS 平台</div></div>
         
-        <p>本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 iOS 與 iPadOS 行動裝置上，如何處理及保護您的隱私。我們深刻理解行動裝置承載了高度私密的個人與企業資訊，因此本 App 從底層設計即落實了「在地端運算」的安全理念。</p>
+        <p data-i18n="privacy_intro">本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 iOS 與 iPadOS 行動裝置上，如何處理及保護您的隱私。我們深刻理解行動裝置承載了高度私密的個人與企業資訊，因此本 App 從底層設計即落實了「在地端運算」的安全理念。</p>
 
         <h2>1. 照片與相機權限</h2>
         <ul>
@@ -65,8 +78,9 @@
 
         <h2>4. 隱私權政策變更</h2>
         <p>若我們的隱私作業實務有所變更（例如未來加入需要網路功能的可選附加服務），我們將會更新本政策並在 App 內提前通知您，且任何網路功能皆會以「預設關閉且需您主動同意開啟」的方式進行。</p>
-        <p>最後更新日期：2026年7月</p>
+        <p data-i18n="privacy_date">最後更新日期：2026年7月</p>
     </main>
-    <footer><p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+    <footer><p data-i18n="footer_copy">© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+    <script src="i18n.js"></script>
 </body>
 </html>

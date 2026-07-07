@@ -31,20 +31,33 @@
     </style>
 </head>
 <body>
-    <header>
+        <header>
         <a href="index.html" class="logo">
             <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
             OCREditor
         </a>
+        <select id="lang-select" style="background: var(--bg-surface); color: white; border: 1px solid var(--text-muted); padding: 4px; border-radius: 4px;">
+            <option value="en">English</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="th">ไทย</option>
+            <option value="es">Español</option>
+            <option value="pt">Português</option>
+            <option value="ms">Bahasa Melayu</option>
+            <option value="ru">Русский</option>
+            <option value="de">Deutsch</option>
+        </select>
     </header>
     <main class="container">
-        <h1>隱私權與資料保護政策</h1>
-        <div class="platform-tag">適用於 Android 平台</div>
+        <h1 data-i18n="privacy_h1">隱私權與資料保護政策</h1>
+        <div class="platform-tag" data-i18n="privacy_tag_android"><div class="platform-tag">適用於 Android 平台</div></div>
         
-        <p>本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 Android 系統環境下，如何處理及保護您的隱私。我們深知安卓設備中的照片與文件涉及您的敏感個資，因此我們做出了「完全不依賴雲端」的核心承諾。</p>
+        <p data-i18n="privacy_intro">本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 Android 系統環境下，如何處理及保護您的隱私。我們深知安卓設備中的照片與文件涉及您的敏感個資，因此我們做出了「完全不依賴雲端」的核心承諾。</p>
 
         <h2>1. 權限聲明與使用範圍</h2>
-        <p>在 Android 平台上，本軟體將會向您請求以下權限，且僅作最低限度的合理使用：</p>
+        <p data-i18n="privacy_p3">在 Android 平台上，本軟體將會向您請求以下權限，且僅作最低限度的合理使用：</p>
         <ul>
             <li><strong>儲存空間權限 (Storage) / 媒體存取權：</strong> 用於讓您選取欲進行編輯的圖片，以及將編輯完畢的成品保存回您的相簿或檔案資料夾。除您主動選擇的圖片外，本軟體絕不會在背景掃描或上傳您的其他檔案。</li>
             <li><strong>相機權限 (Camera)：</strong> 若您選擇使用拍照功能匯入文件，我們需要相機權限。相機捕捉的影像僅於應用程式運作期間短暫儲存於記憶體，我們不會私自備份或上傳。</li>
@@ -66,8 +79,9 @@
 
         <h2>4. 政策修改與通知</h2>
         <p>為因應未來 Android 系統版本的升級與 Google Play 政策調整，本隱私權聲明可能會進行更新。如有任何更動，我們皆會在此頁面公告，並確保「本地端離線運算」的核心承諾不變。</p>
-        <p>最後更新日期：2026年7月</p>
+        <p data-i18n="privacy_date">最後更新日期：2026年7月</p>
     </main>
-    <footer><p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+    <footer><p data-i18n="footer_copy">© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>
+    <script src="i18n.js"></script>
 </body>
 </html>

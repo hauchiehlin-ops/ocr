@@ -384,11 +384,26 @@
             OCREditor
         </div>
         <ul class="nav-links">
-            <li><a href="user-manual.html">📖 操作手冊</a></li>
-            <li><a id="privacy-link" href="privacy-windows.html">🛡️ 隱私權政策</a></li>
-            <li><a href="#features">產品特色</a></li>
-            <li><a href="#demo">線上互動</a></li>
-            <li><a href="https://github.com/barretlin/ocr" target="_blank">GitHub</a></li>
+            <li><a href="user-manual.html" data-i18n="nav_manual">📖 操作手冊</a></li>
+            <li><a id="privacy-link" href="privacy-windows.html" data-i18n="nav_privacy">🛡️ 隱私權政策</a></li>
+            <li><a href="#features" data-i18n="nav_features">產品特色</a></li>
+            <li><a href="#demo" data-i18n="nav_demo">線上互動</a></li>
+            <li><a href="https://github.com/barretlin/ocr" target="_blank" data-i18n="nav_github">GitHub</a></li>
+            <li>
+                <select id="lang-select" style="background: var(--bg-surface); color: white; border: 1px solid var(--border-color); padding: 4px; border-radius: 4px;">
+                    <option value="en">English</option>
+                    <option value="zh-TW">繁體中文</option>
+                    <option value="zh-CN">简体中文</option>
+                    <option value="ja">日本語</option>
+                    <option value="ko">한국어</option>
+                    <option value="th">ไทย</option>
+                    <option value="es">Español</option>
+                    <option value="pt">Português</option>
+                    <option value="ms">Bahasa Melayu</option>
+                    <option value="ru">Русский</option>
+                    <option value="de">Deutsch</option>
+                </select>
+            </li>
         </ul>
         <a href="https://github.com/barretlin/ocr/releases" class="btn-download">免費下載</a>
     </header>
@@ -396,10 +411,13 @@
     <main>
         <section class="hero">
             <div class="hero-text">
-                <h1 class="hero-title">100% 離線運行<br>多圖層 AI 編輯器</h1>
-                <p class="hero-subtitle">智慧文字識別 (OCR) 與背景抹除 (Inpainting) 三位一體，一鍵分離文件、簡報與圖片中的所有圖層。保護隱私安全，維持零伺服器開銷！</p>
+                <h1 class="hero-title" data-i18n="hero_title">OCR 視覺化編輯器專業版</h1>
+                <p class="hero-subtitle" data-i18n="hero_subtitle">100% 離線執行 ‧ CoreML/DirectML 雙端加速 ‧ 無痕修改文字</p>
+                <div class="hero-desc" style="margin-bottom: 24px; color: var(--text-muted); line-height: 1.6;" data-i18n="hero_desc">
+                    載入圖片、點擊拖曳、輕鬆修改文字。透過最先進的光學字元辨識與 Inpainting 修補演算法，實現「所見即所改」的零殘影圖片文字編輯體驗。
+                </div>
                 <div class="hero-buttons">
-                    <a href="https://github.com/barretlin/ocr/releases" class="btn-download">下載 macOS 版</a>
+                    <a href="https://github.com/barretlin/ocr/releases" class="btn-download" data-i18n="btn_download_mac">下載 macOS 版</a>
                     <a href="#demo" class="btn-secondary">線上互動示範</a>
                 </div>
             </div>
@@ -443,29 +461,29 @@
         </section>
 
         <section class="features" id="features">
-            <h2 style="font-size: 32px; font-weight: 800; text-align: center;">為什麼選擇 OCREditor？</h2>
+            <h2 style="font-size: 32px; font-weight: 800; text-align: center;" data-i18n="features_title">為什麼選擇 OCREditor？</h2>
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">🔒</div>
-                    <h3 class="feature-title">端側 100% 離線運行</h3>
-                    <p class="feature-desc">不需上傳任何圖片到雲端伺服器，所有 OCR 識別與 LaMa 抹除運算皆在您的本地設備進行，隱私安全無懈可擊。</p>
+                    <h3 class="feature-title" data-i18n="feat_offline_title">端側 100% 離線運行</h3>
+                    <p class="feature-desc" data-i18n="feat_offline_desc">不需上傳任何圖片到雲端伺服器，所有 OCR 識別與 LaMa 抹除運算皆在您的本地設備進行，隱私安全無懈可擊。</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">🥞</div>
-                    <h3 class="feature-title">多格式圖層自動分離</h3>
-                    <p class="feature-desc">支援點陣圖、PDF 內置圖片與 PPTX 簡報，導入後自動將底圖、文字與插圖抽離為獨立編輯元件，所見即所改。</p>
+                    <h3 class="feature-title" data-i18n="feat_seamless_title">多格式圖層自動分離</h3>
+                    <p class="feature-desc" data-i18n="feat_seamless_desc">支援點陣圖、PDF 內置圖片與 PPTX 簡報，導入後自動將底圖、文字與插圖抽離為獨立編輯元件，所見即所改。</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">⚡</div>
-                    <h3 class="feature-title">極速硬體端側加速</h3>
-                    <p class="feature-desc">適配 macOS CoreML 與 Windows DirectML，利用端側神經網絡加速，數毫秒內即可完成高精度的 AI 背景修復。</p>
+                    <h3 class="feature-title" data-i18n="feat_crossplatform_title">極速硬體端側加速</h3>
+                    <p class="feature-desc" data-i18n="feat_crossplatform_desc">適配 macOS CoreML 與 Windows DirectML，利用端側神經網絡加速，數毫秒內即可完成高精度的 AI 背景修復。</p>
                 </div>
             </div>
         </section>
     </main>
 
     <footer>
-        <p>© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p>
+        <p data-i18n="footer_copy">© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p>
     </footer>
 
     <script>
@@ -535,5 +553,6 @@
             }
         })();
     </script>
+    <script src="i18n.js"></script>
 </body>
 </html>
