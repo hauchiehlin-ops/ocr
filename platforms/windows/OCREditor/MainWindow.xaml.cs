@@ -125,6 +125,8 @@ namespace OCREditor
 
             fontNames = fontNames.Distinct().OrderBy(name => name).ToList();
             FontFamilyComboBox.ItemsSource = fontNames;
+            PrimaryFontComboBox.ItemsSource = fontNames;
+            SecondaryFontComboBox.ItemsSource = fontNames;
             
             var defaultFont = fontNames.FirstOrDefault(f => f.Contains("Microsoft JhengHei"));
             if (defaultFont != null)
@@ -147,9 +149,6 @@ namespace OCREditor
                 SecondaryFontComboBox.SelectedItem = defaultSecondary;
             else if (fontNames.Count > 0)
                 SecondaryFontComboBox.SelectedIndex = 0;
-            
-            PrimaryFontComboBox.ItemsSource = fontNames;
-            SecondaryFontComboBox.ItemsSource = fontNames;
         }
 
         private void FontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
