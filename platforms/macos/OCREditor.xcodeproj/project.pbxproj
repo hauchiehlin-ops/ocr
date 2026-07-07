@@ -26,6 +26,7 @@
 		BCF5E36ACAE8E8F4D2FD3B3B /* text_layer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F397467B65086FD9FA77D2C9 /* text_layer.cpp */; };
 		BDBB1098147017389E7A2153 /* mask_generator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A17D08BE3247F4B5A9C37EAE /* mask_generator.cpp */; };
 		C2CB1E9B7843EF2FCFCC2F28 /* deskew.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3784A230115F5B757A0C1781 /* deskew.cpp */; };
+		CC473182D65905F983E17BD0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAFF2123B37A2CFBB63ABAB5 /* Assets.xcassets */; };
 		D04F4C5C4C310C453A8EAB69 /* preprocessor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A7997A88FDC75B3AD35AC4A3 /* preprocessor.cpp */; };
 		D2F9617A0DF63EF8C897DB48 /* edge_crop.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1528423B2C51B72DF65FE2FD /* edge_crop.cpp */; };
 		E4D593CD95305B8C067FA795 /* OCRViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */; };
@@ -43,6 +44,7 @@
 		39180BABA2540B341ABE9A4A /* denoise.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = denoise.cpp; sourceTree = "<group>"; };
 		3A997CEE413A62DDB2C31CBC /* document_parser.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = document_parser.cpp; sourceTree = "<group>"; };
 		40625E7673640566BDFFD21D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		4C019A5E2E4D1AC6350138D0 /* OCREditor.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OCREditor.entitlements; sourceTree = "<group>"; };
 		6678A920B36707AAEFAE1810 /* ocr_core_api.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ocr_core_api.cpp; sourceTree = "<group>"; };
 		6705862E0657C44665A2B9D4 /* paddle_ocr_engine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = paddle_ocr_engine.cpp; sourceTree = "<group>"; };
 		687ED8B6966E3A76B610F25C /* text_layer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = text_layer.h; sourceTree = "<group>"; };
@@ -62,6 +64,7 @@
 		C4D56E13A766AB8E5447AF32 /* blender.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = blender.h; sourceTree = "<group>"; };
 		C6E4D0D7BADB1BA916A41AEC /* lama_engine.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = lama_engine.cpp; sourceTree = "<group>"; };
 		CA416F1E4032877337E56B5D /* compositor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = compositor.cpp; sourceTree = "<group>"; };
+		CAFF2123B37A2CFBB63ABAB5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CBC08891DBC68951C7712900 /* binarize.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = binarize.cpp; sourceTree = "<group>"; };
 		D47171328DD5B318D354EFDF /* mask_generator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mask_generator.h; sourceTree = "<group>"; };
 		D4C38B177DC09832236A18AC /* compositor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compositor.h; sourceTree = "<group>"; };
@@ -151,7 +154,9 @@
 		875D4DEB3A5EBFF91AC415B0 /* OCREditor */ = {
 			isa = PBXGroup;
 			children = (
+				CAFF2123B37A2CFBB63ABAB5 /* Assets.xcassets */,
 				A56897659442CFC72BB8C388 /* OCREditor-Bridging-Header.h */,
+				4C019A5E2E4D1AC6350138D0 /* OCREditor.entitlements */,
 				EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */,
 				D498F716141AF49059F82085 /* Bridge */,
 				55D18FE8DA29C89D013A1522 /* Models */,
@@ -238,6 +243,7 @@
 			buildConfigurationList = A0672F976B85BABF95016582 /* Build configuration list for PBXNativeTarget "OCREditor" */;
 			buildPhases = (
 				A6BFD857DFD4F46A4CC680E8 /* Sources */,
+				DFF3D6226BDC5493084E0AF8 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -283,6 +289,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DFF3D6226BDC5493084E0AF8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CC473182D65905F983E17BD0 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A6BFD857DFD4F46A4CC680E8 /* Sources */ = {
@@ -385,6 +402,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				CODE_SIGN_ENTITLEMENTS = OCREditor/OCREditor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -392,6 +410,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -465,6 +484,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				CODE_SIGN_ENTITLEMENTS = OCREditor/OCREditor.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -472,6 +492,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
