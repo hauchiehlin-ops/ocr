@@ -301,8 +301,13 @@
                             </ComboBox>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource ForceComputerFont}" x:Name="MenuForceComputerFont" IsCheckable="True" Foreground="Black"/>
-                        <MenuItem Header="{DynamicResource GlobalDefaultFont}" Foreground="Black">
-                            <ComboBox x:Name="GlobalDefaultFontComboBox" Width="160" Height="26" SelectedIndex="0">
+                        <MenuItem Header="{DynamicResource PrimaryDefaultFont}" Foreground="Black">
+                            <ComboBox x:Name="PrimaryFontComboBox" Width="160" Height="26" SelectedIndex="0">
+                                <!-- Populated in code behind -->
+                            </ComboBox>
+                        </MenuItem>
+                        <MenuItem Header="{DynamicResource SecondaryDefaultFont}" Foreground="Black">
+                            <ComboBox x:Name="SecondaryFontComboBox" Width="160" Height="26" SelectedIndex="0">
                                 <!-- Populated in code behind -->
                             </ComboBox>
                         </MenuItem>

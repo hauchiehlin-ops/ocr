@@ -126,20 +126,26 @@ namespace OCREditor
             fontNames = fontNames.Distinct().OrderBy(name => name).ToList();
             FontFamilyComboBox.ItemsSource = fontNames;
             
-            // Set default font
             var defaultFont = fontNames.FirstOrDefault(f => f.Contains("Microsoft JhengHei"));
             if (defaultFont != null)
             {
                 FontFamilyComboBox.SelectedItem = defaultFont;
-                GlobalDefaultFontComboBox.SelectedItem = defaultFont;
+                PrimaryFontComboBox.SelectedItem = defaultFont;
             }
             else if (fontNames.Count > 0)
             {
                 FontFamilyComboBox.SelectedIndex = 0;
-                GlobalDefaultFontComboBox.SelectedIndex = 0;
+                PrimaryFontComboBox.SelectedIndex = 0;
             }
             
-            GlobalDefaultFontComboBox.ItemsSource = fontNames;
+            var defaultSecondary = fontNames.FirstOrDefault(f => f.Contains("Arial") || f.Contains("Segoe UI"));
+            if (defaultSecondary != null)
+                SecondaryFontComboBox.SelectedItem = defaultSecondary;
+            else if (fontNames.Count > 0)
+                SecondaryFontComboBox.SelectedIndex = 0;
+            
+            PrimaryFontComboBox.ItemsSource = fontNames;
+            SecondaryFontComboBox.ItemsSource = fontNames;
         }
 
         private void FontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -656,18 +662,27 @@ namespace OCREditor
 
         private void ApplyDefaultFontToAllRegions()
         {
-            // Get the default font from the GlobalDefaultFontComboBox selection, or use system default
-            string defaultFont = "Microsoft JhengHei";
-            if (GlobalDefaultFontComboBox.SelectedItem is string selectedFont && !string.IsNullOrEmpty(selectedFont))
+            string primaryFont = "Microsoft JhengHei";
+            if (PrimaryFontComboBox.SelectedItem is string selectedPrimary && !string.IsNullOrEmpty(selectedPrimary))
             {
-                defaultFont = selectedFont;
+                primaryFont = selectedPrimary;
             }
+            
+            string secondaryFont = "Arial";
+            if (SecondaryFontComboBox.SelectedItem is string selectedSecondary && !string.IsNullOrEmpty(selectedSecondary))
+            {
+                secondaryFont = selectedSecondary;
+            }
+
+            // Fallback font string (e.g. "Arial, Microsoft JhengHei")
+            // The Latin font should be first so it handles English text, and CJK font second to handle Chinese characters
+            string compositeFont = $"{secondaryFont}, {primaryFont}";
 
             bool forceComputerFont = MenuForceComputerFont.IsChecked;
 
             foreach (var region in _regions)
             {
-                region.FontFamily = defaultFont;
+                region.FontFamily = compositeFont;
                 if (forceComputerFont)
                 {
                     region.IsEdited = true;
