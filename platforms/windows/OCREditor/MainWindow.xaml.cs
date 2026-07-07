@@ -842,13 +842,22 @@ namespace OCREditor
             return region.IsEdited || HasMoved(region);
         }
 
-        private System.Windows.Media.Brush CreateBackgroundCoverBrush(OCRRegion region, int coverPadding)
+        private System.Windows.Media.Color GetAverageCornerColor(int cx, int cy, int imgW, int imgH)
         {
-            // Use a simple solid color brush matching the sampled background color.
-            // This avoids interpolation artifacts that create visible rectangular patches.
-            var brush = new System.Windows.Media.SolidColorBrush(region.BackgroundColor);
-            brush.Freeze();
-            return brush;
+            int sumR = 0, sumG = 0, sumB = 0, count = 0;
+            for (int dy = -2; dy <= 2; dy++)
+            {
+                for (int dx = -2; dx <= 2; dx++)
+                {
+                    int px = Math.Max(0, Math.Min(cx + dx, imgW - 1));
+                    int py = Math.Max(0, Math.Min(cy + dy, imgH - 1));
+                    var p = _originalBitmap.GetPixel(px, py);
+                    sumR += p.R; sumG += p.G; sumB += p.B;
+                    count++;
+                }
+            }
+            if (count == 0) return System.Windows.Media.Colors.Transparent;
+            return System.Windows.Media.Color.FromRgb((byte)(sumR/count), (byte)(sumG/count), (byte)(sumB/count));
         }
 
         private System.Windows.Media.Brush CreateInpaintedBackgroundSprite(OCRRegion region, int paddingPixels)
@@ -879,8 +888,12 @@ namespace OCREditor
 
                         var pixels = new byte[originalW * originalH * 4];
 
-                        // Feather radius to blend smoothly with surrounding background
                         int feather = Math.Min(Math.Max(paddingX, paddingY), Math.Min(originalW, originalH) / 3);
+
+                        var cTL = GetAverageCornerColor(originalX, originalY, imgW, imgH);
+                        var cTR = GetAverageCornerColor(originalX + originalW - 1, originalY, imgW, imgH);
+                        var cBL = GetAverageCornerColor(originalX, originalY + originalH - 1, imgW, imgH);
+                        var cBR = GetAverageCornerColor(originalX + originalW - 1, originalY + originalH - 1, imgW, imgH);
 
                         for (int y = 0; y < originalH; y++)
                         {
@@ -888,29 +901,20 @@ namespace OCREditor
                             {
                                 int index = (y * originalW + x) * 4;
                                 
-                                // Bilinear interpolation from the 4 outer edges of the padded bounding box
-                                var pTop = _originalBitmap.GetPixel(originalX + x, originalY);
-                                var pBot = _originalBitmap.GetPixel(originalX + x, originalY + originalH - 1);
-                                var pLeft = _originalBitmap.GetPixel(originalX, originalY + y);
-                                var pRight = _originalBitmap.GetPixel(originalX + originalW - 1, originalY + y);
+                                double tx = originalW > 1 ? (double)x / (originalW - 1) : 0;
+                                double ty = originalH > 1 ? (double)y / (originalH - 1) : 0;
                                 
-                                double ty = (double)y / (originalH - 1);
-                                double tx = (double)x / (originalW - 1);
-                                
-                                // Interpolate vertically
-                                double rY = pTop.R * (1 - ty) + pBot.R * ty;
-                                double gY = pTop.G * (1 - ty) + pBot.G * ty;
-                                double bY = pTop.B * (1 - ty) + pBot.B * ty;
-                                
-                                // Interpolate horizontally
-                                double rX = pLeft.R * (1 - tx) + pRight.R * tx;
-                                double gX = pLeft.G * (1 - tx) + pRight.G * tx;
-                                double bX = pLeft.B * (1 - tx) + pRight.B * tx;
-                                
-                                // Average the two interpolations
-                                byte b = (byte)Math.Min(255, Math.Max(0, (bY + bX) / 2));
-                                byte g = (byte)Math.Min(255, Math.Max(0, (gY + gX) / 2));
-                                byte r = (byte)Math.Min(255, Math.Max(0, (rY + rX) / 2));
+                                double rTop = cTL.R * (1 - tx) + cTR.R * tx;
+                                double gTop = cTL.G * (1 - tx) + cTR.G * tx;
+                                double bTop = cTL.B * (1 - tx) + cTR.B * tx;
+
+                                double rBot = cBL.R * (1 - tx) + cBR.R * tx;
+                                double gBot = cBL.G * (1 - tx) + cBR.G * tx;
+                                double bBot = cBL.B * (1 - tx) + cBR.B * tx;
+
+                                byte r = (byte)Math.Min(255, Math.Max(0, rTop * (1 - ty) + rBot * ty));
+                                byte g = (byte)Math.Min(255, Math.Max(0, gTop * (1 - ty) + gBot * ty));
+                                byte b = (byte)Math.Min(255, Math.Max(0, bTop * (1 - ty) + bBot * ty));
 
                                 int distX = Math.Min(x, originalW - 1 - x);
                                 int distY = Math.Min(y, originalH - 1 - y);
@@ -919,7 +923,6 @@ namespace OCREditor
                                 byte alpha = 255;
                                 if (distToEdge < feather)
                                 {
-                                    // Smooth fade out at the edges
                                     alpha = (byte)(255 * ((double)distToEdge / feather));
                                 }
 
@@ -1172,7 +1175,7 @@ namespace OCREditor
                     {
                         Width = sWidth,
                         Height = sHeight,
-                        Background = CreateBackgroundCoverBrush(region, padding),
+                        Background = CreateInpaintedBackgroundSprite(region, padding),
                         BorderThickness = new Thickness(0)
                     };
                     Canvas.SetLeft(staticCover, sLeft);

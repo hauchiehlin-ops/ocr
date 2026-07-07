@@ -309,11 +309,16 @@
                 </Menu>
                 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right" Margin="0,0,15,0" VerticalAlignment="Center">
-                    <TextBlock Text="Zoom:" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13"/>
-                    <Button Content="➖" Click="ZoomOut_Click" Background="#444" Foreground="White" BorderThickness="0" Width="24" Height="24" Padding="0" Cursor="Hand"/>
-                    <Slider x:Name="TopZoomSlider" Width="120" Minimum="0.1" Maximum="5.0" Value="{Binding ElementName=ZoomSlider, Path=Value, Mode=TwoWay}" VerticalAlignment="Center" Margin="8,0" TickFrequency="0.05" IsSnapToTickEnabled="False"/>
-                    <Button Content="➕" Click="ZoomIn_Click" Background="#444" Foreground="White" BorderThickness="0" Width="24" Height="24" Padding="0" Cursor="Hand"/>
-                    <Button Content="100%" Click="ZoomReset_Click" Background="#444" Foreground="White" BorderThickness="0" Height="24" Padding="8,0" Margin="8,0,0,0" Cursor="Hand"/>
+                    <TextBlock Text="🔍 Zoom:" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0" FontSize="13"/>
+                    <Border BorderBrush="#555" BorderThickness="1" CornerRadius="3" Background="#333" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="➖" Click="ZoomOut_Click" Background="Transparent" Foreground="White" BorderThickness="0,0,1,0" BorderBrush="#555" Width="24" Height="24" Cursor="Hand"/>
+                            <TextBlock Text="{Binding ElementName=ZoomSlider, Path=Value, StringFormat={}{0:P0}}" Width="50" Background="Transparent" Foreground="White" VerticalAlignment="Center" TextAlignment="Center"/>
+                            <Button Content="➕" Click="ZoomIn_Click" Background="Transparent" Foreground="White" BorderThickness="1,0,0,0" BorderBrush="#555" Width="24" Height="24" Cursor="Hand"/>
+                        </StackPanel>
+                    </Border>
+                    <Slider x:Name="ZoomSlider" Width="100" Minimum="0.1" Maximum="5.0" Value="1.0" ValueChanged="ZoomSlider_ValueChanged" VerticalAlignment="Center" Margin="0,0,8,0" TickFrequency="0.05" IsSnapToTickEnabled="False"/>
+                    <Button Content="100%" Click="ZoomReset_Click" Background="#444" Foreground="White" BorderThickness="0" Height="24" Padding="8,0" Margin="0,0,0,0" Cursor="Hand"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -428,16 +433,17 @@
                                     <Button Background="Orange" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
                                     <Button Background="Purple" Style="{StaticResource ColorBoxStyle}" Click="PresetColor_Click"/>
                                     <Button ToolTip="Custom Color" Style="{StaticResource ColorBoxStyle}" BorderBrush="#555" Click="CustomColor_Click" Padding="0">
-                                        <Button.Background>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                <GradientStop Color="#FF3B30" Offset="0.0" />
-                                                <GradientStop Color="#FF9500" Offset="0.25" />
-                                                <GradientStop Color="#FFCC00" Offset="0.5" />
-                                                <GradientStop Color="#4CD964" Offset="0.75" />
-                                                <GradientStop Color="#007AFF" Offset="1.0" />
-                                            </LinearGradientBrush>
-                                        </Button.Background>
-                                        <TextBlock Text="🎨" FontFamily="Segoe UI Emoji" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                        <Ellipse Width="16" Height="16">
+                                            <Ellipse.Fill>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#FF3B30" Offset="0.0" />
+                                                    <GradientStop Color="#FF9500" Offset="0.25" />
+                                                    <GradientStop Color="#FFCC00" Offset="0.5" />
+                                                    <GradientStop Color="#4CD964" Offset="0.75" />
+                                                    <GradientStop Color="#007AFF" Offset="1.0" />
+                                                </LinearGradientBrush>
+                                            </Ellipse.Fill>
+                                        </Ellipse>
                                     </Button>
                                 </WrapPanel>
                             </StackPanel>
@@ -465,10 +471,6 @@
             <Grid>
                 <TextBlock Text="OCR Visual Editor Professional — Powered by Windows AI Platform" Foreground="White" FontSize="11" HorizontalAlignment="Left" VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <TextBlock Text="Zoom:" Foreground="#D0D0D0" FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                    <Slider x:Name="ZoomSlider" Width="100" Minimum="0.1" Maximum="5.0" Value="1.0" 
-                            TickFrequency="0.05" IsSnapToTickEnabled="False" 
-                            ValueChanged="ZoomSlider_ValueChanged" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBlock x:Name="DpiIndicator" Text="100%" Foreground="#D0D0D0" FontSize="11" VerticalAlignment="Center" Width="35" TextAlignment="Right"/>
                 </StackPanel>
             </Grid>
