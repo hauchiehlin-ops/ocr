@@ -1,0 +1,9 @@
+{
+  "id" : "7bebca80-5dad-4cd0-849c-fa61404f2aeb",
+  "targets" : [
+    {
+      "id" : "968f717f-dd26-4085-ad8f-20b472e3d9ad",
+      "name" : "OCREditor"
+    }
+  ]
+}
