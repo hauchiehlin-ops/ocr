@@ -129,9 +129,17 @@ namespace OCREditor
             // Set default font
             var defaultFont = fontNames.FirstOrDefault(f => f.Contains("Microsoft JhengHei"));
             if (defaultFont != null)
+            {
                 FontFamilyComboBox.SelectedItem = defaultFont;
+                GlobalDefaultFontComboBox.SelectedItem = defaultFont;
+            }
             else if (fontNames.Count > 0)
+            {
                 FontFamilyComboBox.SelectedIndex = 0;
+                GlobalDefaultFontComboBox.SelectedIndex = 0;
+            }
+            
+            GlobalDefaultFontComboBox.ItemsSource = fontNames;
         }
 
         private void FontFamilyComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -648,16 +656,22 @@ namespace OCREditor
 
         private void ApplyDefaultFontToAllRegions()
         {
-            // Get the default font from the FontFamilyComboBox selection, or use system default
+            // Get the default font from the GlobalDefaultFontComboBox selection, or use system default
             string defaultFont = "Microsoft JhengHei";
-            if (FontFamilyComboBox.SelectedItem is string selectedFont && !string.IsNullOrEmpty(selectedFont))
+            if (GlobalDefaultFontComboBox.SelectedItem is string selectedFont && !string.IsNullOrEmpty(selectedFont))
             {
                 defaultFont = selectedFont;
             }
 
+            bool forceComputerFont = MenuForceComputerFont.IsChecked;
+
             foreach (var region in _regions)
             {
                 region.FontFamily = defaultFont;
+                if (forceComputerFont)
+                {
+                    region.IsEdited = true;
+                }
             }
 
             RenderRegions();
@@ -1148,6 +1162,37 @@ namespace OCREditor
             OcrTextBox.SelectAll();
         }
 
+        private void PrepareRegionForTransform(OCRRegion region, System.Windows.Controls.Border border)
+        {
+            if (!region.IsEdited && !HasMoved(region))
+            {
+                // Assign transparent sprite to border so user can see it dragging/resizing
+                border.Background = CreateTransparentTextSprite(region);
+
+                // Add an inpainted cover where it used to be so it doesn't leave a ghost behind
+                int padding = 6;
+                double sLeft = Math.Max(0.0, region.OriginalRelX * _imgWidth - padding);
+                double sTop = Math.Max(0.0, region.OriginalRelY * _imgHeight - padding);
+                double baseWidth = region.RelWidth * _imgWidth;
+                double baseHeight = region.RelHeight * _imgHeight;
+                double sWidth = Math.Min(_imgWidth - sLeft, baseWidth + padding * 2);
+                double sHeight = Math.Min(_imgHeight - sTop, baseHeight + padding * 2);
+
+                var staticCover = new System.Windows.Controls.Border
+                {
+                    Width = sWidth,
+                    Height = sHeight,
+                    Background = CreateInpaintedBackgroundSprite(region, padding),
+                    BorderThickness = new Thickness(0)
+                };
+                Canvas.SetLeft(staticCover, sLeft);
+                Canvas.SetTop(staticCover, sTop);
+
+                // Insert at bottom so it doesn't cover other active borders
+                OverlayCanvas.Children.Insert(0, staticCover);
+            }
+        }
+
         private void RenderRegions()
         {
             OverlayCanvas.Children.Clear();
@@ -1249,6 +1294,8 @@ namespace OCREditor
                         _dragStartMousePos = e.GetPosition(OverlayCanvas); // Relative to Canvas
                         _dragStartRelX = region.RelX;
                         _dragStartRelY = region.RelY;
+                        
+                        PrepareRegionForTransform(region, border);
                         
                         border.CaptureMouse();
                         SelectRegion(region);
@@ -1363,6 +1410,9 @@ namespace OCREditor
                         resizeStartPos = re.GetPosition(OverlayCanvas);
                         startWidth = border.Width;
                         startHeight = border.Height;
+                        
+                        PrepareRegionForTransform(region, border);
+                        
                         resizeHandle.CaptureMouse();
                         re.Handled = true;
                     };

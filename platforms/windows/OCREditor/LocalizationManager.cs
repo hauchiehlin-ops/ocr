@@ -16,7 +16,29 @@ namespace OCREditor
             {
                 "English", new Dictionary<string, string>
                 {
-                    { "FileMenu", "File" },
+                    { "FileMenu", "File",
+                    { "ForceComputerFont", "Force Local Fonts after OCR",
+                    { "ForceComputerFont", "OCR後強制套用電腦字型",
+                    { "ForceComputerFont", "OCR后强制应用电脑字体",
+                    { "ForceComputerFont", "OCR後にローカルフォントを強制適用",
+                    { "ForceComputerFont", "OCR 후 로컬 글꼴 강제 적용",
+                    { "ForceComputerFont", "บังคับใช้ฟอนต์ในเครื่องหลัง OCR",
+                    { "ForceComputerFont", "Forzar fuentes locales tras OCR",
+                    { "ForceComputerFont", "Forçar fontes locais após OCR",
+                    { "ForceComputerFont", "Paksa fon tempatan selepas OCR",
+                    { "ForceComputerFont", "Принудительно локальные шрифты",
+                    { "ForceComputerFont", "Lokale Schriftarten erzwingen" },
+                    { "GlobalDefaultFont", "Standard-OCR-Schriftart" } },
+                    { "GlobalDefaultFont", "Шрифт OCR по умолчанию" } },
+                    { "GlobalDefaultFont", "Fon OCR lalai" } },
+                    { "GlobalDefaultFont", "Fonte OCR padrão" } },
+                    { "GlobalDefaultFont", "Fuente OCR predeterminada" } },
+                    { "GlobalDefaultFont", "ฟอนต์เริ่มต้น OCR" } },
+                    { "GlobalDefaultFont", "기본 OCR 글꼴" } },
+                    { "GlobalDefaultFont", "デフォルトOCRフォント" } },
+                    { "GlobalDefaultFont", "全局默认字体" } },
+                    { "GlobalDefaultFont", "全域預設字型" } },
+                    { "GlobalDefaultFont", "Default OCR Font" } },
                     { "EditMenu", "Edit" },
                     { "ViewMenu", "View" },
                     { "SettingsMenu", "Settings" },
@@ -53,7 +75,9 @@ namespace OCREditor
             {
                 "繁體中文", new Dictionary<string, string>
                 {
-                    { "FileMenu", "檔案" },
+                    { "FileMenu", "檔案",
+                    { "ForceComputerFont", "OCR後強制套用電腦字型" },
+                    { "GlobalDefaultFont", "全域預設字型" } },
                     { "EditMenu", "編輯" },
                     { "ViewMenu", "檢視" },
                     { "SettingsMenu", "設定" },
@@ -90,7 +114,9 @@ namespace OCREditor
             {
                 "简体中文", new Dictionary<string, string>
                 {
-                    { "FileMenu", "文件" },
+                    { "FileMenu", "文件",
+                    { "ForceComputerFont", "OCR后强制应用电脑字体" },
+                    { "GlobalDefaultFont", "全局默认字体" } },
                     { "EditMenu", "编辑" },
                     { "ViewMenu", "视图" },
                     { "SettingsMenu", "设置" },
@@ -127,7 +153,9 @@ namespace OCREditor
             {
                 "日本語", new Dictionary<string, string>
                 {
-                    { "FileMenu", "ファイル" },
+                    { "FileMenu", "ファイル",
+                    { "ForceComputerFont", "OCR後にローカルフォントを強制適用" },
+                    { "GlobalDefaultFont", "デフォルトOCRフォント" } },
                     { "EditMenu", "編集" },
                     { "ViewMenu", "表示" },
                     { "SettingsMenu", "設定" },
@@ -164,7 +192,9 @@ namespace OCREditor
             {
                 "한국어", new Dictionary<string, string>
                 {
-                    { "FileMenu", "파일" },
+                    { "FileMenu", "파일",
+                    { "ForceComputerFont", "OCR 후 로컬 글꼴 강제 적용" },
+                    { "GlobalDefaultFont", "기본 OCR 글꼴" } },
                     { "EditMenu", "편집" },
                     { "ViewMenu", "보기" },
                     { "SettingsMenu", "설정" },
@@ -201,7 +231,9 @@ namespace OCREditor
             {
                 "ไทย", new Dictionary<string, string>
                 {
-                    { "FileMenu", "ไฟล์" },
+                    { "FileMenu", "ไฟล์",
+                    { "ForceComputerFont", "บังคับใช้ฟอนต์ในเครื่องหลัง OCR" },
+                    { "GlobalDefaultFont", "ฟอนต์เริ่มต้น OCR" } },
                     { "EditMenu", "แก้ไข" },
                     { "ViewMenu", "มุมมอง" },
                     { "SettingsMenu", "การตั้งค่า" },
@@ -238,7 +270,9 @@ namespace OCREditor
             {
                 "Español", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Archivo" },
+                    { "FileMenu", "Archivo",
+                    { "ForceComputerFont", "Forzar fuentes locales tras OCR" },
+                    { "GlobalDefaultFont", "Fuente OCR predeterminada" } },
                     { "EditMenu", "Editar" },
                     { "ViewMenu", "Ver" },
                     { "SettingsMenu", "Configuración" },
@@ -275,7 +309,9 @@ namespace OCREditor
             {
                 "Português", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Arquivo" },
+                    { "FileMenu", "Arquivo",
+                    { "ForceComputerFont", "Forçar fontes locais após OCR" },
+                    { "GlobalDefaultFont", "Fonte OCR padrão" } },
                     { "EditMenu", "Editar" },
                     { "ViewMenu", "Exibir" },
                     { "SettingsMenu", "Configurações" },
@@ -312,7 +348,9 @@ namespace OCREditor
             {
                 "Bahasa Melayu", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Fail" },
+                    { "FileMenu", "Fail",
+                    { "ForceComputerFont", "Paksa fon tempatan selepas OCR" },
+                    { "GlobalDefaultFont", "Fon OCR lalai" } },
                     { "EditMenu", "Edit" },
                     { "ViewMenu", "Lihat" },
                     { "SettingsMenu", "Tetapan" },
@@ -349,7 +387,9 @@ namespace OCREditor
             {
                 "Русский", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Файл" },
+                    { "FileMenu", "Файл",
+                    { "ForceComputerFont", "Принудительно локальные шрифты" },
+                    { "GlobalDefaultFont", "Шрифт OCR по умолчанию" } },
                     { "EditMenu", "Правка" },
                     { "ViewMenu", "Вид" },
                     { "SettingsMenu", "Настройки" },
@@ -386,7 +426,9 @@ namespace OCREditor
             {
                 "Deutsch", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Datei" },
+                    { "FileMenu", "Datei",
+                    { "ForceComputerFont", "Lokale Schriftarten erzwingen" },
+                    { "GlobalDefaultFont", "Standard-OCR-Schriftart" } },
                     { "EditMenu", "Bearbeiten" },
                     { "ViewMenu", "Ansicht" },
                     { "SettingsMenu", "Einstellungen" },
