@@ -62,8 +62,17 @@
         }
 
         @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 16px;
+            }
             .nav-links {
-                display: none;
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 16px;
+            }
+            .btn-download {
+                display: none; /* Hide the top right download button on mobile, keeping the hero one */
             }
         }
 
@@ -317,6 +326,46 @@
 
         .mockup-btn:hover {
             opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .hero-canvas-mockup {
+                flex-direction: column;
+                height: auto;
+                max-width: 100%;
+            }
+            .mockup-sidebar, .mockup-inspector {
+                width: 100%;
+                border-right: none;
+                border-left: none;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+            }
+            .mockup-sidebar h4, .mockup-inspector h4 {
+                width: 100%;
+            }
+            .mockup-main {
+                height: 300px;
+                padding: 12px;
+            }
+            .mockup-text-1 {
+                top: 20px;
+                left: 20px;
+                font-size: 20px;
+            }
+            .mockup-text-2 {
+                top: 60px;
+                left: 20px;
+                font-size: 11px;
+            }
+            .mockup-image {
+                bottom: 10px;
+                right: 10px;
+                width: 60px;
+                height: 60px;
+            }
         }
 
         /* 特色功能卡片 */
