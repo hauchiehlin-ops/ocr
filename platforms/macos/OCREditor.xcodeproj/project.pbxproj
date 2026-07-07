@@ -391,7 +391,7 @@
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\"";
+				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -471,7 +471,7 @@
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\"";
+				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
