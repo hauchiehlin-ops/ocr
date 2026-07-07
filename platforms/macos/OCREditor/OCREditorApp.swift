@@ -12,6 +12,7 @@ struct OCREditorApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .preferredColorScheme(.dark)
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1200, height: 800)

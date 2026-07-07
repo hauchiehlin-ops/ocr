@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var hoveredLayerId: UUID? = nil
     @State private var sidebarWidth: CGFloat = 300
     @State private var inspectorWidth: CGFloat = 320
+    @State private var canvasZoom: CGFloat = 1.0
 
     var body: some View {
         NavigationSplitView {
@@ -91,19 +92,23 @@ extension ContentView {
     private var sidebarContent: some View {
         VStack(spacing: 0) {
             List {
-                Section("處理狀態") {
+                Section {
                     statusView
+                        .padding(.vertical, 4)
+                } header: {
+                    Text("Document Status")
+                        .font(.headline)
                 }
                 
                 if let doc = viewModel.canvasDocument {
-                    Section("圖層元件清單") {
+                    Section {
                         ForEach(doc.layers) { layer in
                             HStack {
                                 Image(systemName: iconForLayer(layer.type))
                                     .foregroundColor(.secondary)
                                     .frame(width: 20)
                                 
-                                Text(layer.name)
+                                Text(layer.type == .text ? (layer.text.isEmpty ? layer.name : layer.text) : layer.name)
                                     .font(.body)
                                     .lineLimit(1)
                                 
@@ -220,6 +225,7 @@ extension ContentView {
                         }
                     }
                     .padding(40)
+                    .scaleEffect(canvasZoom)
                 }
                 .background(Color(nsColor: .underPageBackgroundColor))
             }
@@ -338,10 +344,12 @@ extension ContentView {
     @ViewBuilder
     private var inspectorArea: some View {
         VStack(spacing: 0) {
-            Text("元件屬性控制")
-                .font(.headline)
+            Text("Text Formatting Panel")
+                .font(.title2)
+                .bold()
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
             
             Divider()
             
@@ -371,7 +379,7 @@ extension ContentView {
                         // 2. 文字編輯區塊
                         if layer.type == .text {
                             VStack(alignment: .leading, spacing: 10) {
-                                Text("編輯段落內容")
+                                Text("Edit Content")
                                     .font(.subheadline)
                                     .bold()
                                 
@@ -386,28 +394,22 @@ extension ContentView {
                                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                                     )
                                 
-                                Text("調整文字樣式")
+                                Text("Paragraph Format")
                                     .font(.subheadline)
                                     .bold()
                                     .padding(.top, 10)
                                 
                                 // 字級
                                 HStack {
-                                    Text("大小:")
+                                    Text("Size:")
                                     Slider(value: $viewModel.inspectorFontSize, in: 8...120, step: 1)
                                     Text("\(Int(viewModel.inspectorFontSize))px")
                                         .frame(width: 45, alignment: .trailing)
                                 }
                                 
-                                // 粗體與顏色
-                                Toggle("粗體格式 (Bold)", isOn: $viewModel.inspectorIsBold)
-                                    .toggleStyle(.checkbox)
-                                
-                                ColorPicker("文字顏色:", selection: $viewModel.inspectorFontColor)
-
-                                // 字型與一次性替換選項
+                                // 字型
                                 HStack {
-                                    Text("字型:")
+                                    Text("Font:")
                                     Picker("", selection: $viewModel.inspectorFontName) {
                                         ForEach(viewModel.availableFonts, id: \.self) { fontName in
                                             Text(fontName).tag(fontName)
@@ -417,14 +419,46 @@ extension ContentView {
                                     .labelsHidden()
                                 }
                                 
-                                Button {
-                                    viewModel.replaceAllTextFonts(with: viewModel.inspectorFontName)
-                                } label: {
-                                    Label("套用到全檔文字區塊", systemImage: "textformat")
-                                        .frame(maxWidth: .infinity)
+                                // 粗體與斜體按鈕列
+                                HStack(spacing: 12) {
+                                    Toggle(isOn: $viewModel.inspectorIsBold) {
+                                        Text("Bold")
+                                            .fontWeight(.bold)
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .toggleStyle(.button)
+                                    
+                                    // 預留斜體（目前 viewModel 未實作斜體，可用視覺佔位）
+                                    Button(action: {}) {
+                                        Text("Italic")
+                                            .italic()
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.bordered)
                                 }
-                                .buttonStyle(.bordered)
-                                .controlSize(.regular)
+                                
+                                Text("Color Presets:")
+                                    .font(.subheadline)
+                                    .padding(.top, 10)
+                                
+                                // 顏色圓點預設列
+                                HStack(spacing: 12) {
+                                    let colors: [Color] = [.white, .red, .green, .blue, .yellow, .purple]
+                                    ForEach(0..<colors.count, id: \.self) { i in
+                                        Circle()
+                                            .fill(colors[i])
+                                            .frame(width: 24, height: 24)
+                                            .overlay(Circle().stroke(Color.gray, lineWidth: 1))
+                                            .onTapGesture {
+                                                viewModel.inspectorFontColor = colors[i]
+                                            }
+                                    }
+                                }
+                                
+                                Text("Operations")
+                                    .font(.subheadline)
+                                    .bold()
+                                    .padding(.top, 10)
                             }
                         }
                         
@@ -442,9 +476,9 @@ extension ContentView {
                                                 .controlSize(.small)
                                                 .padding(.trailing, 4)
                                         } else {
-                                            Image(systemName: "translate")
+                                            Image(systemName: "globe")
                                         }
-                                        Text("原地離線翻譯")
+                                        Text("Translate to Current Language")
                                     }
                                     .frame(maxWidth: .infinity)
                                 }
@@ -464,16 +498,22 @@ extension ContentView {
                                 .controlSize(.large)
                             }
                             
-                            Button(role: .destructive) {
+                            Button {
                                 viewModel.deleteSelectedLayer()
                             } label: {
-                                Label("刪除此元件", systemImage: "trash")
+                                Label("Remove Text Region", systemImage: "trash")
                                     .frame(maxWidth: .infinity)
+                                    .foregroundColor(.white)
                             }
                             .buttonStyle(.borderedProminent)
+                            .tint(.red)
                             .controlSize(.large)
                         }
-                        .padding(.top, 20)
+                        
+                        Text("Tip: If AI missed a word, click-and-drag directly on the image to draw a manual text box!")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 10)
                     }
                     .padding()
                 }
@@ -593,6 +633,43 @@ extension ContentView {
             .disabled(!viewModel.canRedo)
             .help("重做 (⇧⌘Z)")
             .keyboardShortcut("z", modifiers: [.command, .shift])
+            
+            Divider()
+            
+            // Zoom Controls
+            HStack(spacing: 8) {
+                Text("Zoom:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Button(action: { canvasZoom = max(0.2, canvasZoom - 0.2) }) {
+                    Image(systemName: "minus")
+                }
+                .buttonStyle(.plain)
+                
+                Text("\(Int(canvasZoom * 100))%")
+                    .font(.caption)
+                    .frame(width: 40)
+                
+                Button(action: { canvasZoom = min(5.0, canvasZoom + 0.2) }) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.plain)
+                
+                Slider(value: $canvasZoom, in: 0.2...5.0)
+                    .frame(width: 100)
+            }
+            .padding(.horizontal, 8)
+            
+            Divider()
+            
+            HStack {
+                Text("Engine:")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("System OCR")
+                    .font(.caption)
+                    .bold()
+            }
         }
     }
 }
