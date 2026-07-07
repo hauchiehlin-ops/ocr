@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		05299FD93C068DB136536C11 /* text_renderer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A3E7FCA0FD8FAD1077FCFCE2 /* text_renderer.cpp */; };
 		1E009655E49469328D5F6D1B /* OCREngineBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1AA04721B96FFD107425F48 /* OCREngineBridge.mm */; };
+		20A45150DBBFF67A7E1AB768 /* models in Resources */ = {isa = PBXBuildFile; fileRef = D59CD3FC396C220862251F66 /* models */; };
 		3BAD58E72FBD99AADCD4A144 /* denoise.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 39180BABA2540B341ABE9A4A /* denoise.cpp */; };
 		402769B49BA372B0EDED8644 /* paddle_ocr_engine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6705862E0657C44665A2B9D4 /* paddle_ocr_engine.cpp */; };
 		52DC0F55B2B92D4DFDECDBCA /* document_parser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3A997CEE413A62DDB2C31CBC /* document_parser.cpp */; };
@@ -68,6 +69,7 @@
 		CBC08891DBC68951C7712900 /* binarize.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = binarize.cpp; sourceTree = "<group>"; };
 		D47171328DD5B318D354EFDF /* mask_generator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mask_generator.h; sourceTree = "<group>"; };
 		D4C38B177DC09832236A18AC /* compositor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compositor.h; sourceTree = "<group>"; };
+		D59CD3FC396C220862251F66 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = ../../models; sourceTree = SOURCE_ROOT; };
 		DDA88952D348408799F1D7CE /* preprocessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = preprocessor.h; sourceTree = "<group>"; };
 		EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCREditorApp.swift; sourceTree = "<group>"; };
 		F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRViewModel.swift; sourceTree = "<group>"; };
@@ -207,6 +209,7 @@
 		D543BCC3B09CCB71B7F8A63B = {
 			isa = PBXGroup;
 			children = (
+				D59CD3FC396C220862251F66 /* models */,
 				3F8A29A311647587AB8B88B0 /* Core */,
 				A6EA0DB373B33E510E12F572 /* Include */,
 				875D4DEB3A5EBFF91AC415B0 /* OCREditor */,
@@ -296,6 +299,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				CC473182D65905F983E17BD0 /* Assets.xcassets in Resources */,
+				20A45150DBBFF67A7E1AB768 /* models in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

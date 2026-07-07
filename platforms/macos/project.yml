@@ -14,6 +14,9 @@ targets:
       - path: ../../core/include
         type: group
         name: Include
+      - path: ../../models
+        type: folder
+        buildPhase: resources
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.hauchiehlin.ocreditor
       CODE_SIGN_STYLE: Automatic
