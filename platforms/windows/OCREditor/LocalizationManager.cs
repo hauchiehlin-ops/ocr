@@ -16,40 +16,10 @@ namespace OCREditor
             {
                 "English", new Dictionary<string, string>
                 {
-                    { "FileMenu", "File",
-                    { "ForceComputerFont", "Force Local Fonts after OCR",
-                    { "ForceComputerFont", "OCR後強制套用電腦字型",
-                    { "ForceComputerFont", "OCR后强制应用电脑字体",
-                    { "ForceComputerFont", "OCR後にローカルフォントを強制適用",
-                    { "ForceComputerFont", "OCR 후 로컬 글꼴 강제 적용",
-                    { "ForceComputerFont", "บังคับใช้ฟอนต์ในเครื่องหลัง OCR",
-                    { "ForceComputerFont", "Forzar fuentes locales tras OCR",
-                    { "ForceComputerFont", "Forçar fontes locais após OCR",
-                    { "ForceComputerFont", "Paksa fon tempatan selepas OCR",
-                    { "ForceComputerFont", "Принудительно локальные шрифты",
-                    { "ForceComputerFont", "Lokale Schriftarten erzwingen",
-                    { "PrimaryDefaultFont", "Primary OCR Font (CJK)",
-                    { "PrimaryDefaultFont", "主要預設字型 (中日韓)",
-                    { "PrimaryDefaultFont", "主要默认字体 (中日韩)",
-                    { "PrimaryDefaultFont", "プライマリOCRフォント (CJK)",
-                    { "PrimaryDefaultFont", "기본 OCR 글꼴 (CJK)",
-                    { "PrimaryDefaultFont", "ฟอนต์หลัก OCR",
-                    { "PrimaryDefaultFont", "Fuente OCR primaria",
-                    { "PrimaryDefaultFont", "Fonte OCR primária",
-                    { "PrimaryDefaultFont", "Fon OCR Utama",
-                    { "PrimaryDefaultFont", "Основной шрифт OCR",
-                    { "PrimaryDefaultFont", "Primäre OCR-Schriftart" },
-                    { "SecondaryDefaultFont", "Sekundäre OCR-Schriftart (Englisch)" } },
-                    { "SecondaryDefaultFont", "Дополнительный шрифт OCR (Англ)" } },
-                    { "SecondaryDefaultFont", "Fon OCR Sekunder (Inggeris)" } },
-                    { "SecondaryDefaultFont", "Fonte OCR secundária (Inglês)" } },
-                    { "SecondaryDefaultFont", "Fuente OCR secundaria (Inglés)" } },
-                    { "SecondaryDefaultFont", "ฟอนต์รอง OCR (ภาษาอังกฤษ)" } },
-                    { "SecondaryDefaultFont", "보조 OCR 글꼴 (영숫자)" } },
-                    { "SecondaryDefaultFont", "セカンダリOCRフォント (英数)" } },
-                    { "SecondaryDefaultFont", "次要默认字体 (英数)" } },
-                    { "SecondaryDefaultFont", "次要預設字型 (英數)" } },
-                    { "SecondaryDefaultFont", "Secondary OCR Font (Latin)" } } } } } } } } } } } } },
+                    { "ForceComputerFont", "Force Local Fonts after OCR" },
+                    { "PrimaryDefaultFont", "Primary OCR Font (CJK)" },
+                    { "SecondaryDefaultFont", "Secondary OCR Font (Latin)" },
+                    { "FileMenu", "File" },
                     { "EditMenu", "Edit" },
                     { "ViewMenu", "View" },
                     { "SettingsMenu", "Settings" },
@@ -86,10 +56,10 @@ namespace OCREditor
             {
                 "繁體中文", new Dictionary<string, string>
                 {
-                    { "FileMenu", "檔案",
-                    { "ForceComputerFont", "OCR後強制套用電腦字型",
+                    { "ForceComputerFont", "OCR後強制套用電腦字型" },
                     { "PrimaryDefaultFont", "主要預設字型 (中日韓)" },
-                    { "SecondaryDefaultFont", "次要預設字型 (英數)" } } },
+                    { "SecondaryDefaultFont", "次要預設字型 (英數)" },
+                    { "FileMenu", "檔案" },
                     { "EditMenu", "編輯" },
                     { "ViewMenu", "檢視" },
                     { "SettingsMenu", "設定" },
@@ -126,10 +96,10 @@ namespace OCREditor
             {
                 "简体中文", new Dictionary<string, string>
                 {
-                    { "FileMenu", "文件",
-                    { "ForceComputerFont", "OCR后强制应用电脑字体",
+                    { "ForceComputerFont", "OCR后强制应用电脑字体" },
                     { "PrimaryDefaultFont", "主要默认字体 (中日韩)" },
-                    { "SecondaryDefaultFont", "次要默认字体 (英数)" } } },
+                    { "SecondaryDefaultFont", "次要默认字体 (英数)" },
+                    { "FileMenu", "文件" },
                     { "EditMenu", "编辑" },
                     { "ViewMenu", "视图" },
                     { "SettingsMenu", "设置" },
@@ -166,10 +136,10 @@ namespace OCREditor
             {
                 "日本語", new Dictionary<string, string>
                 {
-                    { "FileMenu", "ファイル",
-                    { "ForceComputerFont", "OCR後にローカルフォントを強制適用",
+                    { "ForceComputerFont", "OCR後にローカルフォントを強制適用" },
                     { "PrimaryDefaultFont", "プライマリOCRフォント (CJK)" },
-                    { "SecondaryDefaultFont", "セカンダリOCRフォント (英数)" } } },
+                    { "SecondaryDefaultFont", "セカンダリOCRフォント (英数)" },
+                    { "FileMenu", "ファイル" },
                     { "EditMenu", "編集" },
                     { "ViewMenu", "表示" },
                     { "SettingsMenu", "設定" },
@@ -206,10 +176,10 @@ namespace OCREditor
             {
                 "한국어", new Dictionary<string, string>
                 {
-                    { "FileMenu", "파일",
-                    { "ForceComputerFont", "OCR 후 로컬 글꼴 강제 적용",
+                    { "ForceComputerFont", "OCR 후 로컬 글꼴 강제 적용" },
                     { "PrimaryDefaultFont", "기본 OCR 글꼴 (CJK)" },
-                    { "SecondaryDefaultFont", "보조 OCR 글꼴 (영숫자)" } } },
+                    { "SecondaryDefaultFont", "보조 OCR 글꼴 (영숫자)" },
+                    { "FileMenu", "파일" },
                     { "EditMenu", "편집" },
                     { "ViewMenu", "보기" },
                     { "SettingsMenu", "설정" },
@@ -246,10 +216,10 @@ namespace OCREditor
             {
                 "ไทย", new Dictionary<string, string>
                 {
-                    { "FileMenu", "ไฟล์",
-                    { "ForceComputerFont", "บังคับใช้ฟอนต์ในเครื่องหลัง OCR",
+                    { "ForceComputerFont", "บังคับใช้ฟอนต์ในเครื่องหลัง OCR" },
                     { "PrimaryDefaultFont", "ฟอนต์หลัก OCR" },
-                    { "SecondaryDefaultFont", "ฟอนต์รอง OCR (ภาษาอังกฤษ)" } } },
+                    { "SecondaryDefaultFont", "ฟอนต์รอง OCR (ภาษาอังกฤษ)" },
+                    { "FileMenu", "ไฟล์" },
                     { "EditMenu", "แก้ไข" },
                     { "ViewMenu", "มุมมอง" },
                     { "SettingsMenu", "การตั้งค่า" },
@@ -286,10 +256,10 @@ namespace OCREditor
             {
                 "Español", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Archivo",
-                    { "ForceComputerFont", "Forzar fuentes locales tras OCR",
+                    { "ForceComputerFont", "Forzar fuentes locales tras OCR" },
                     { "PrimaryDefaultFont", "Fuente OCR primaria" },
-                    { "SecondaryDefaultFont", "Fuente OCR secundaria (Inglés)" } } },
+                    { "SecondaryDefaultFont", "Fuente OCR secundaria (Inglés)" },
+                    { "FileMenu", "Archivo" },
                     { "EditMenu", "Editar" },
                     { "ViewMenu", "Ver" },
                     { "SettingsMenu", "Configuración" },
@@ -326,10 +296,10 @@ namespace OCREditor
             {
                 "Português", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Arquivo",
-                    { "ForceComputerFont", "Forçar fontes locais após OCR",
+                    { "ForceComputerFont", "Forçar fontes locais após OCR" },
                     { "PrimaryDefaultFont", "Fonte OCR primária" },
-                    { "SecondaryDefaultFont", "Fonte OCR secundária (Inglês)" } } },
+                    { "SecondaryDefaultFont", "Fonte OCR secundária (Inglês)" },
+                    { "FileMenu", "Arquivo" },
                     { "EditMenu", "Editar" },
                     { "ViewMenu", "Exibir" },
                     { "SettingsMenu", "Configurações" },
@@ -366,10 +336,10 @@ namespace OCREditor
             {
                 "Bahasa Melayu", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Fail",
-                    { "ForceComputerFont", "Paksa fon tempatan selepas OCR",
+                    { "ForceComputerFont", "Paksa fon tempatan selepas OCR" },
                     { "PrimaryDefaultFont", "Fon OCR Utama" },
-                    { "SecondaryDefaultFont", "Fon OCR Sekunder (Inggeris)" } } },
+                    { "SecondaryDefaultFont", "Fon OCR Sekunder (Inggeris)" },
+                    { "FileMenu", "Fail" },
                     { "EditMenu", "Edit" },
                     { "ViewMenu", "Lihat" },
                     { "SettingsMenu", "Tetapan" },
@@ -406,10 +376,10 @@ namespace OCREditor
             {
                 "Русский", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Файл",
-                    { "ForceComputerFont", "Принудительно локальные шрифты",
+                    { "ForceComputerFont", "Принудительно локальные шрифты" },
                     { "PrimaryDefaultFont", "Основной шрифт OCR" },
-                    { "SecondaryDefaultFont", "Дополнительный шрифт OCR (Англ)" } } },
+                    { "SecondaryDefaultFont", "Дополнительный шрифт OCR (Англ)" },
+                    { "FileMenu", "Файл" },
                     { "EditMenu", "Правка" },
                     { "ViewMenu", "Вид" },
                     { "SettingsMenu", "Настройки" },
@@ -446,10 +416,10 @@ namespace OCREditor
             {
                 "Deutsch", new Dictionary<string, string>
                 {
-                    { "FileMenu", "Datei",
-                    { "ForceComputerFont", "Lokale Schriftarten erzwingen",
+                    { "ForceComputerFont", "Lokale Schriftarten erzwingen" },
                     { "PrimaryDefaultFont", "Primäre OCR-Schriftart" },
-                    { "SecondaryDefaultFont", "Sekundäre OCR-Schriftart (Englisch)" } } },
+                    { "SecondaryDefaultFont", "Sekundäre OCR-Schriftart (Englisch)" },
+                    { "FileMenu", "Datei" },
                     { "EditMenu", "Bearbeiten" },
                     { "ViewMenu", "Ansicht" },
                     { "SettingsMenu", "Einstellungen" },
