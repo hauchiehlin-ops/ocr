@@ -604,8 +604,12 @@ extension ContentView {
         switch result {
         case .success(let urls):
             guard let url = urls.first else { return }
+            let secured = url.startAccessingSecurityScopedResource()
             Task {
                 await viewModel.scanImage(from: url)
+                if secured {
+                    url.stopAccessingSecurityScopedResource()
+                }
             }
         case .failure(let error):
             viewModel.errorMessage = "檔案開啟失敗: \(error.localizedDescription)"
@@ -615,7 +619,10 @@ extension ContentView {
     private func handleImageReplaceImport(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
-            guard let url = urls.first, let img = NSImage(contentsOf: url) else { return }
+            guard let url = urls.first else { return }
+            let secured = url.startAccessingSecurityScopedResource()
+            defer { if secured { url.stopAccessingSecurityScopedResource() } }
+            guard let img = NSImage(contentsOf: url) else { return }
             viewModel.replaceSelectedLayerImage(with: img)
         case .failure(let error):
             viewModel.errorMessage = "替換圖片讀取失敗: \(error.localizedDescription)"
@@ -630,8 +637,12 @@ extension ContentView {
                 provider.loadItem(forTypeIdentifier: type.identifier) { item, error in
                     DispatchQueue.main.async {
                         if let url = item as? URL {
+                            let secured = url.startAccessingSecurityScopedResource()
                             Task {
                                 await viewModel.scanImage(from: url)
+                                if secured {
+                                    url.stopAccessingSecurityScopedResource()
+                                }
                             }
                         } else if let data = item as? Data, let image = NSImage(data: data) {
                             Task {
