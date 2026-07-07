@@ -9,6 +9,7 @@ import Foundation
 import AppKit
 import SwiftUI
 import PDFKit
+import Vision
 
 // MARK: - 狀態列舉
 
@@ -704,8 +705,8 @@ final class OCRViewModel: ObservableObject {
     /// 執行 OCR 辨識
     private func performOCR(on image: NSImage) async {
         guard let engine = engine, engine.isReady else {
-            state = .error("OCR 引擎未初始化，請確認模型檔案已正確放置。")
-            errorMessage = "引擎未就緒。請檢查 models/ 目錄是否存在於 App Bundle 中。"
+            print("[OCRViewModel] ⚠️ C++ 引擎未就緒，自動降級使用 Apple Vision 原生 OCR...")
+            await performNativeOCR(on: image)
             return
         }
 
@@ -776,6 +777,139 @@ final class OCRViewModel: ObservableObject {
         } else {
             state = .error("OCR 辨識失敗")
             errorMessage = "無法辨識影像中的文字，請嘗試其他影像。"
+        }
+    }
+    
+    // MARK: - Apple Vision Native OCR Fallback
+    
+    private func performNativeOCR(on image: NSImage) async {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            state = .error("無法轉換影像格式以進行 Vision 辨識")
+            return
+        }
+        
+        let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        // 根據需求可加入 zh-Hant 等支援語言 (macOS 11+)
+        request.recognitionLanguages = ["zh-Hant", "zh-Hans", "en-US"]
+        
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                request.completionHandler = { _, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+                do {
+                    try requestHandler.perform([request])
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+            
+            guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                state = .error("Vision API 辨識無結果")
+                return
+            }
+            
+            // 將 Vision 結果轉換為我們的資料結構
+            var layers: [CanvasLayer] = []
+            let imgWidth = CGFloat(cgImage.width)
+            let imgHeight = CGFloat(cgImage.height)
+            let dimensions = CGSize(width: imgWidth, height: imgHeight)
+            
+            let bgLayer = CanvasLayer(
+                layerId: "image_bg_vision",
+                type: .image,
+                name: "原始影像底圖",
+                boundingBox: BoundingBox(
+                    topLeft: CGPoint(x: 0, y: dimensions.height),
+                    topRight: CGPoint(x: dimensions.width, y: dimensions.height),
+                    bottomRight: CGPoint(x: dimensions.width, y: 0),
+                    bottomLeft: CGPoint(x: 0, y: 0)
+                ),
+                image: image
+            )
+            layers.append(bgLayer)
+            
+            var textBlocks: [OCRTextBlock] = []
+            
+            for (index, observation) in observations.enumerated() {
+                guard let candidate = observation.topCandidates(1).first else { continue }
+                
+                // Vision 的座標系統原點在左下角，Y軸往上
+                // 需要轉換為 Top-Left 原點
+                let vnBox = observation.boundingBox
+                
+                let tlx = vnBox.minX * imgWidth
+                // Y 原點從左下轉換為左上
+                let tly = (1.0 - vnBox.maxY) * imgHeight
+                let boxWidth = vnBox.width * imgWidth
+                let boxHeight = vnBox.height * imgHeight
+                
+                let bbox = BoundingBox(
+                    topLeft: CGPoint(x: tlx, y: tly),
+                    topRight: CGPoint(x: tlx + boxWidth, y: tly),
+                    bottomRight: CGPoint(x: tlx + boxWidth, y: tly + boxHeight),
+                    bottomLeft: CGPoint(x: tlx, y: tly + boxHeight)
+                )
+                
+                let wordId = UUID()
+                let fontEst = FontEstimate(
+                    sizePx: boxHeight * 0.8,
+                    color: NSColor.black,
+                    isBold: false,
+                    fontName: "PingFang TC"
+                )
+                
+                let ocrWord = OCRWord(
+                    id: wordId,
+                    text: candidate.string,
+                    confidence: Double(candidate.confidence),
+                    boundingBox: bbox,
+                    fontEstimate: fontEst
+                )
+                
+                let ocrLine = OCRLine(id: UUID(), words: [ocrWord])
+                textBlocks.append(OCRTextBlock(id: UUID(), lines: [ocrLine]))
+                
+                let layer = CanvasLayer(
+                    layerId: "vision_text_\(index)",
+                    type: .text,
+                    name: "文字元件 \(index)",
+                    text: candidate.string,
+                    boundingBox: bbox,
+                    fontEstimate: fontEst
+                )
+                layers.append(layer)
+            }
+            
+            self.scanResult = OCRScanResult(
+                originalImage: image,
+                dimensions: dimensions,
+                textBlocks: textBlocks
+            )
+            
+            self.canvasDocument = CanvasDocument(
+                name: "自訂影像畫布 (Vision Fallback)",
+                dimensions: dimensions,
+                layers: layers
+            )
+            
+            editHistory = [EditSnapshot(textBlocks: textBlocks, description: "初始辨識 (Apple Vision)")]
+            editHistoryIndex = 0
+            
+            state = .complete
+            progress = 1.0
+            print("[OCRViewModel] ✅ Vision 原生辨識完成: \(observations.count) 區塊")
+            
+        } catch {
+            state = .error("Apple Vision OCR 失敗: \(error.localizedDescription)")
+            errorMessage = "無法使用原生 OCR 辨識影像中的文字。"
         }
     }
 
