@@ -59,7 +59,10 @@ const translations = {
     "privacy_li_3_2": "GPU Access: To utilize hardware acceleration without accessing unrelated VRAM.",
     "privacy_h2_4": "4. Policy Updates",
     "privacy_p4": "We may update this policy slightly, but the 'no data leaves your device' principle will NEVER change.",
-    "privacy_date": "Last Updated: July 2026"
+    "privacy_date": "Last Updated: July 2026",
+    "manual_li_4_4": "<strong>Global Fonts Settings:</strong> In the Settings menu, you can separately configure 'Primary (CJK)' and 'Secondary (Latin)' default fonts. After OCR, text will automatically bind to this dual-font combination.",
+    "manual_li_4_5": "<strong>Force Computer Font:</strong> When enabled, the original image fonts will be discarded immediately after OCR, fully applying your chosen dual default fonts to maintain high visual consistency.",
+    "privacy_li_1_4": "<strong>Settings and Preferences:</strong> All application settings (including font preferences and OCR configurations) are stored solely on your local device and are never transmitted to any external servers."
   },
   "zh-TW": {
     "nav_manual": "📖 操作手冊",
