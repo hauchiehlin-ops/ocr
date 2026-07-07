@@ -1488,7 +1488,7 @@ namespace OCREditor
 
         private void UiLanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender is ComboBox cb && cb.SelectedItem is ComboBoxItem item)
+            if (sender is System.Windows.Controls.ComboBox cb && cb.SelectedItem is System.Windows.Controls.ComboBoxItem item)
             {
                 string lang = item.Tag?.ToString() ?? "English";
                 LocalizationManager.ApplyLanguage(lang);

@@ -429,7 +429,7 @@ namespace OCREditor
             var dict = _dictionaries[language];
             foreach (var kvp in dict)
             {
-                Application.Current.Resources[kvp.Key] = kvp.Value;
+                System.Windows.Application.Current.Resources[kvp.Key] = kvp.Value;
             }
         }
     }
