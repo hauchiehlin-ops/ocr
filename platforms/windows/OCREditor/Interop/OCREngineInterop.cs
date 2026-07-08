@@ -56,7 +56,8 @@ namespace OCREditor.Interop
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
                    EntryPoint = "ocr_engine_create", CharSet = CharSet.Ansi)]
         internal static extern IntPtr ocr_engine_create(
-            [MarshalAs(UnmanagedType.LPStr)] string modelDir);
+            [MarshalAs(UnmanagedType.LPStr)] string modelDir,
+            [MarshalAs(UnmanagedType.LPStr)] string configJson);
 
         /// <summary>
         /// Destroy a previously created engine and free its resources.
@@ -78,6 +79,16 @@ namespace OCREditor.Interop
             int width,
             int height,
             int channels);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_recognize_region")]
+        internal static extern IntPtr ocr_recognize_region(
+            IntPtr engine,
+            byte[] pixels,
+            int width,
+            int height,
+            int channels,
+            int x, int y, int w, int h);
 
         /// <summary>
         /// Remove (inpaint) text regions defined by bounding boxes.
@@ -143,6 +154,17 @@ namespace OCREditor.Interop
             byte[] newPixels,
             int width,
             int height);
+
+        /// <summary>
+        /// Save a document to the OCR history database.
+        /// </summary>
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_history_save_document", CharSet = CharSet.Ansi)]
+        internal static extern int ocr_history_save_document(
+            [MarshalAs(UnmanagedType.LPStr)] string docId,
+            [MarshalAs(UnmanagedType.LPStr)] string jsonData,
+            [MarshalAs(UnmanagedType.LPStr)] string title,
+            [MarshalAs(UnmanagedType.LPStr)] string previewImagePath);
      }
 
     // -----------------------------------------------------------------------
@@ -361,12 +383,13 @@ namespace OCREditor.Interop
         /// <exception cref="ArgumentNullException">
         /// Thrown if <paramref name="modelDirectory"/> is <c>null</c>.
         /// </exception>
-        public OCREngineInterop(string modelDirectory)
+        public OCREngineInterop(string modelDirectory, string language = "ch_tra,eng")
         {
             if (modelDirectory is null)
                 throw new ArgumentNullException(nameof(modelDirectory));
 
-            _engineHandle = NativeMethods.ocr_engine_create(modelDirectory);
+            string configJson = $"{{\"language\":\"{language}\"}}";
+            _engineHandle = NativeMethods.ocr_engine_create(modelDirectory, configJson);
 
             if (_engineHandle == IntPtr.Zero)
             {
@@ -402,20 +425,62 @@ namespace OCREditor.Interop
 
             var (pixels, width, height) = BitmapToRgba(bitmap);
 
-            IntPtr jsonPtr = NativeMethods.ocr_recognize(
-                _engineHandle, pixels, width, height, channels: 4);
+            try
+            {
+                IntPtr jsonPtr = NativeMethods.ocr_recognize(
+                    _engineHandle, pixels, width, height, channels: 4);
 
-            if (jsonPtr == IntPtr.Zero)
+                if (jsonPtr == IntPtr.Zero)
+                    return null;
+
+                try
+                {
+                    string json = Marshal.PtrToStringUTF8(jsonPtr) ?? string.Empty;
+                    return JsonSerializer.Deserialize<OCRResult>(json, JsonOptions);
+                }
+                finally
+                {
+                    NativeMethods.ocr_free_string(jsonPtr);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OCREngineInterop] Native Exception in Recognize: {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Run OCR recognition on a specific region of a GDI+ <see cref="Bitmap"/>.
+        /// </summary>
+        public OCRResult? RecognizeRegion(Bitmap bitmap, Rectangle region)
+        {
+            ThrowIfDisposed();
+
+            var (pixels, width, height) = BitmapToRgba(bitmap);
 
             try
             {
-                string json = Marshal.PtrToStringUTF8(jsonPtr) ?? string.Empty;
-                return JsonSerializer.Deserialize<OCRResult>(json, JsonOptions);
+                IntPtr jsonPtr = NativeMethods.ocr_recognize_region(
+                    _engineHandle, pixels, width, height, 4, region.X, region.Y, region.Width, region.Height);
+
+                if (jsonPtr == IntPtr.Zero)
+                    return null;
+
+                try
+                {
+                    string json = Marshal.PtrToStringUTF8(jsonPtr) ?? string.Empty;
+                    return JsonSerializer.Deserialize<OCRResult>(json, JsonOptions);
+                }
+                finally
+                {
+                    NativeMethods.ocr_free_string(jsonPtr);
+                }
             }
-            finally
+            catch (Exception ex)
             {
-                NativeMethods.ocr_free_string(jsonPtr);
+                Console.WriteLine($"[OCREngineInterop] Native Exception in RecognizeRegion: {ex.Message}");
+                return null;
             }
         }
 
@@ -447,23 +512,31 @@ namespace OCREditor.Interop
                 .Select(b => b.ToNative())
                 .ToArray();
 
-            IntPtr resultPtr = NativeMethods.ocr_remove_text(
-                _engineHandle, pixels, width, height,
-                channels: 4, nativeBoxes, nativeBoxes.Length);
-
-            if (resultPtr == IntPtr.Zero)
-                return null;
-
             try
             {
-                // TODO: Convert OcrImageResult pixels back to a managed Bitmap.
-                // For now, return a clone of the original to satisfy the API
-                // contract without crashing.
-                return (Bitmap)bitmap.Clone();
+                IntPtr resultPtr = NativeMethods.ocr_remove_text(
+                    _engineHandle, pixels, width, height,
+                    channels: 4, nativeBoxes, nativeBoxes.Length);
+
+                if (resultPtr == IntPtr.Zero)
+                    return null;
+
+                try
+                {
+                    // TODO: Convert OcrImageResult pixels back to a managed Bitmap.
+                    // For now, return a clone of the original to satisfy the API
+                    // contract without crashing.
+                    return (Bitmap)bitmap.Clone();
+                }
+                finally
+                {
+                    NativeMethods.ocr_free_image_result(resultPtr);
+                }
             }
-            finally
+            catch (Exception ex)
             {
-                NativeMethods.ocr_free_image_result(resultPtr);
+                Console.WriteLine($"[OCREngineInterop] Native Exception in RemoveText: {ex.Message}");
+                return null;
             }
         }
 
@@ -489,23 +562,31 @@ namespace OCREditor.Interop
             var (pixels, width, height) = BitmapToRgba(bitmap);
             NativeBBox nativeBox = box.ToNative();
 
-            IntPtr resultPtr = NativeMethods.ocr_replace_text(
-                _engineHandle, pixels, width, height,
-                channels: 4, ref nativeBox, newText, fontConfigJson: null);
-
-            if (resultPtr == IntPtr.Zero)
-                return null;
-
             try
             {
-                // TODO: Convert OcrImageResult pixels back to a managed Bitmap.
-                // For now, return a clone of the original to satisfy the API
-                // contract without crashing.
-                return (Bitmap)bitmap.Clone();
+                IntPtr resultPtr = NativeMethods.ocr_replace_text(
+                    _engineHandle, pixels, width, height,
+                    channels: 4, ref nativeBox, newText, fontConfigJson: null);
+
+                if (resultPtr == IntPtr.Zero)
+                    return null;
+
+                try
+                {
+                    // TODO: Convert OcrImageResult pixels back to a managed Bitmap.
+                    // For now, return a clone of the original to satisfy the API
+                    // contract without crashing.
+                    return (Bitmap)bitmap.Clone();
+                }
+                finally
+                {
+                    NativeMethods.ocr_free_image_result(resultPtr);
+                }
             }
-            finally
+            catch (Exception ex)
             {
-                NativeMethods.ocr_free_image_result(resultPtr);
+                Console.WriteLine($"[OCREngineInterop] Native Exception in ReplaceText: {ex.Message}");
+                return null;
             }
         }
 
@@ -613,6 +694,55 @@ namespace OCREditor.Interop
             var (pixels, width, height) = BitmapToRgba(newImage);
             int result = NativeMethods.ocr_canvas_replace_layer_image(_engineHandle, layerId, pixels, width, height);
             return result == 1;
+        }
+
+        /// <summary>
+        /// Save the current document to the SQLite history.
+        /// </summary>
+        public static bool SaveDraftToHistory(string docId, string jsonData, string title, string previewImagePath)
+        {
+            try
+            {
+                int result = NativeMethods.ocr_history_save_document(docId, jsonData, title, previewImagePath);
+                return result == 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OCREngineInterop] Failed to save history: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Pre-process image using GDI+ ColorMatrix to simulate Apple Vision contrast and binarization.
+        /// </summary>
+        public static Bitmap PreprocessImage(Bitmap source)
+        {
+            if (source == null) return null;
+            
+            Bitmap result = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(result))
+            {
+                // Increase contrast by 1.5x, equivalent to CIColorControls.contrast = 1.5
+                float contrast = 1.5f;
+                float t = (1.0f - contrast) / 2.0f;
+                
+                ColorMatrix cm = new ColorMatrix(new float[][] {
+                    new float[] {contrast, 0, 0, 0, 0},
+                    new float[] {0, contrast, 0, 0, 0},
+                    new float[] {0, 0, contrast, 0, 0},
+                    new float[] {0, 0, 0, 1, 0},
+                    new float[] {t, t, t, 0, 1}
+                });
+                
+                using (ImageAttributes ia = new ImageAttributes())
+                {
+                    ia.SetColorMatrix(cm, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+                    g.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height), 
+                                0, 0, source.Width, source.Height, GraphicsUnit.Pixel, ia);
+                }
+            }
+            return result;
         }
 
         // -- IDisposable implementation -------------------------------------

@@ -86,9 +86,14 @@ set(OCR_CORE_SOURCES
 
     # Core API
     src/ocr_core_api.cpp
+    src/SettingsManager.cpp
 
     # Document Parser
     src/parser/document_parser.cpp
+
+    # History Manager (SQLite)
+    third_party/sqlite/sqlite3.c
+    src/history/DocumentHistoryManager.cpp
 )
 
 # Optional: Inpainting module
@@ -124,6 +129,7 @@ target_include_directories(ocr_core
         $<INSTALL_INTERFACE:include>
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/sqlite
         ${ONNXRUNTIME_DIR}/include
 )
 

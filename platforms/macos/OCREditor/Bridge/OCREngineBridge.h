@@ -6,7 +6,15 @@
 //
 
 #import <Foundation/Foundation.h>
+#if TARGET_OS_OSX
 #import <AppKit/AppKit.h>
+#define PlatformImage NSImage
+#define PlatformColor NSColor
+#else
+#import <UIKit/UIKit.h>
+#define PlatformImage UIImage
+#define PlatformColor UIColor
+#endif
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -43,14 +51,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) CGFloat      confidence;     ///< 信心度 (0.0–1.0)
 @property (nonatomic, strong) OCRBoundingBox *boundingBox; ///< 位置
 @property (nonatomic, assign) CGFloat      estimatedFontSize; ///< 推估字體大小 (px)
-@property (nonatomic, strong, nullable) NSColor *estimatedColor;  ///< 推估文字顏色
+@property (nonatomic, strong, nullable) PlatformColor *estimatedColor;  ///< 推估文字顏色
 @property (nonatomic, assign) BOOL         isBold;         ///< 是否粗體
 
 - (instancetype)initWithText:(NSString *)text
                   confidence:(CGFloat)confidence
                  boundingBox:(OCRBoundingBox *)boundingBox
            estimatedFontSize:(CGFloat)fontSize
-              estimatedColor:(nullable NSColor *)color
+              estimatedColor:(nullable PlatformColor *)color
                       isBold:(BOOL)isBold;
 
 @end
@@ -102,8 +110,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// 全文（由所有行文字串接而成）
 @property (nonatomic, readonly) NSString *fullText;
 
+/// 原始 JSON 字串 (保留給 C++ 匯出或進階處理使用)
+@property (nonatomic, copy) NSString *rawJson;
+
 - (instancetype)initWithImageDimensions:(CGSize)dimensions
-                             textBlocks:(NSArray<OCRTextBlock *> *)textBlocks;
+                             textBlocks:(NSArray<OCRTextBlock *> *)textBlocks
+                                rawJson:(NSString *)rawJson;
 
 @end
 
@@ -117,21 +129,32 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 以模型目錄路徑初始化引擎
 /// @param modelDirectory 模型檔案所在目錄
-- (nullable instancetype)initWithModelDirectory:(NSString *)modelDirectory;
+/// @param language 語系提示，例如 "ch_tra,eng" 或 "ch_sim"
+- (nullable instancetype)initWithModelDirectory:(NSString *)modelDirectory
+                                       language:(NSString *)language;
 
 /// 辨識影像中的文字
 /// @param image  輸入影像
 /// @param error  失敗時回傳錯誤
 /// @return OCRResult 或 nil
-- (nullable OCRResult *)recognizeImage:(NSImage *)image
+- (nullable OCRResult *)recognizeImage:(PlatformImage *)image
                                  error:(NSError **)error;
+
+/// 辨識影像中特定區域的文字 (Regional Re-OCR)
+/// @param image  輸入影像
+/// @param rect   目標區域
+/// @param error  失敗時回傳錯誤
+/// @return OCRResult 或 nil
+- (nullable OCRResult *)recognizeRegionInImage:(PlatformImage *)image
+                                        inRect:(CGRect)rect
+                                         error:(NSError **)error;
 
 /// 移除影像中指定位置的文字（修復背景）
 /// @param image     輸入影像
 /// @param locations 要移除的區域陣列 (OCRBoundingBox)
 /// @param error     失敗時回傳錯誤
 /// @return 處理後的影像或 nil
-- (nullable NSImage *)removeTextFromImage:(NSImage *)image
+- (nullable PlatformImage *)removeTextFromImage:(PlatformImage *)image
                               atLocations:(NSArray<OCRBoundingBox *> *)locations
                                     error:(NSError **)error;
 
@@ -142,7 +165,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// @param fontName 字體名稱（可為 nil 使用預設）
 /// @param error    失敗時回傳錯誤
 /// @return 處理後的影像或 nil
-- (nullable NSImage *)replaceTextInImage:(NSImage *)image
+- (nullable PlatformImage *)replaceTextInImage:(PlatformImage *)image
                               atLocation:(OCRBoundingBox *)location
                              withNewText:(NSString *)newText
                                 fontName:(nullable NSString *)fontName
@@ -154,6 +177,35 @@ NS_ASSUME_NONNULL_BEGIN
 /// @return 圖層 JSON 字串或 nil
 - (nullable NSString *)parsePptxFile:(NSString *)pptxPath
                                error:(NSError **)error;
+
+// ============================================================
+// Export & Formatting API
+// ============================================================
+/// Export the OCR JSON result to a structured Markdown string.
+/// @param jsonStr The Positional Text Tree JSON string returned by ocr_recognize.
++ (nullable NSString *)exportMarkdownFromJson:(NSString *)jsonStr;
+
+// ============================================================
+// Settings & Sync API
+// ============================================================
++ (void)initializeSettingsWithFilePath:(NSString *)filePath;
++ (BOOL)syncSettingsFromJson:(NSString *)jsonString;
++ (NSString *)getAllSettingsJson;
+
++ (void)setStringSetting:(NSString *)value forKey:(NSString *)key;
++ (NSString *)stringSettingForKey:(NSString *)key defaultValue:(NSString *)defaultValue;
+
++ (void)setIntSetting:(NSInteger)value forKey:(NSString *)key;
++ (NSInteger)intSettingForKey:(NSString *)key defaultValue:(NSInteger)defaultValue;
+
+// ============================================================
+// Document History API
+// ============================================================
++ (void)initializeHistoryWithFilePath:(NSString *)filePath;
++ (BOOL)saveDocumentToHistoryWithId:(NSString *)docId json:(NSString *)json title:(NSString *)title previewImagePath:(nullable NSString *)previewPath;
++ (BOOL)deleteDocumentFromHistory:(NSString *)docId;
++ (NSString *)getAllDocumentsFromHistory;
++ (NSString *)getDocumentDataFromHistory:(NSString *)docId;
 
 @end
 

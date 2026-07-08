@@ -24,6 +24,7 @@
 #include "license/license_validator.h"
 #endif
 
+#include "SettingsManager.h"
 #include <string>
 #include <memory>
 #include <mutex>
@@ -33,11 +34,13 @@
 // Internal Engine State
 // ============================================================
 
+static ocr::SettingsManager g_settings_manager;
+
 static const char* OCR_CORE_VERSION = "1.0.0";
 
 struct OCRHandle {
     std::unique_ptr<ocr::Preprocessor>      preprocessor;
-    std::unique_ptr<ocr::PaddleOCREngine>   ocr_engine;
+    std::shared_ptr<ocr::PaddleOCREngine>   ocr_engine;
     std::unique_ptr<ocr::TextLayer>         text_layer;
     std::unique_ptr<ocr::Compositor>        compositor;
 
@@ -86,8 +89,21 @@ OCR_API OCRHandle* ocr_engine_create(const char* model_dir,
         // Initialize preprocessor
         handle->preprocessor = std::make_unique<ocr::Preprocessor>();
 
-        // Initialize OCR engine with model files and config options
-        handle->ocr_engine = std::make_unique<ocr::PaddleOCREngine>(model_path, config_json ? config_json : "");
+        // Singleton Cache for OCR engine
+        static std::mutex g_engine_mutex;
+        static std::shared_ptr<ocr::PaddleOCREngine> g_cached_ocr_engine;
+        static std::string g_cached_model_path;
+        
+        {
+            std::lock_guard<std::mutex> global_lock(g_engine_mutex);
+            if (g_cached_ocr_engine && g_cached_model_path == model_path) {
+                handle->ocr_engine = g_cached_ocr_engine;
+            } else {
+                handle->ocr_engine = std::make_shared<ocr::PaddleOCREngine>(model_path, config_json ? config_json : "");
+                g_cached_ocr_engine = handle->ocr_engine;
+                g_cached_model_path = model_path;
+            }
+        }
 
         // Initialize text layer manager
         handle->text_layer = std::make_unique<ocr::TextLayer>();
@@ -150,12 +166,84 @@ OCR_API const char* ocr_recognize(OCRHandle* handle,
             result, width, height);
 
         // Return a copy for the caller to own
-        return duplicate_string(json);
+        return duplicate_string(json.c_str());
 
     } catch (const std::exception& e) {
-        handle->last_error = std::string("Recognition failed: ") + e.what();
+        handle->last_error = e.what();
         return nullptr;
     }
+}
+
+OCR_API const char* ocr_recognize_region(OCRHandle* handle,
+                                          const uint8_t* image_data,
+                                          int width, int height, int channels,
+                                          int x, int y, int w, int h) {
+    if (!handle || !handle->is_ready || !image_data) {
+        return nullptr;
+    }
+
+    // Basic bounds checking
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    if (x + w > width) w = width - x;
+    if (y + h > height) h = height - y;
+    if (w <= 0 || h <= 0) return nullptr;
+
+    std::lock_guard<std::mutex> lock(handle->mutex);
+
+    try {
+        // Manual crop: copy the ROI pixels into a new Image
+        ocr::Image cropped(w, h, channels);
+        for (int row = 0; row < h; ++row) {
+            const uint8_t* src = image_data + ((y + row) * width + x) * channels;
+            uint8_t* dst = cropped.mutable_data() + row * w * channels;
+            std::memcpy(dst, src, static_cast<size_t>(w) * channels);
+        }
+
+        ocr::Image processed = handle->preprocessor->process(cropped);
+        ocr::OCRResult result = handle->ocr_engine->recognize(processed);
+
+        // Offset the bounding boxes back to global coordinates.
+        // bbox is float[8]: [tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y]
+        for (auto& block : result.blocks) {
+            for (int i = 0; i < 8; i += 2) block.bbox[i]     += x;
+            for (int i = 1; i < 8; i += 2) block.bbox[i]     += y;
+            for (auto& line : block.lines) {
+                for (int i = 0; i < 8; i += 2) line.bbox[i]  += x;
+                for (int i = 1; i < 8; i += 2) line.bbox[i]  += y;
+                for (auto& word : line.words) {
+                    for (int i = 0; i < 8; i += 2) word.bbox[i] += x;
+                    for (int i = 1; i < 8; i += 2) word.bbox[i] += y;
+                }
+            }
+        }
+
+        std::string json = handle->text_layer->buildResultJSON(result, width, height);
+        char* c_str = new char[json.length() + 1];
+        std::strcpy(c_str, json.c_str());
+        return c_str;
+    } catch (const std::exception& e) {
+        handle->last_error = e.what();
+        return nullptr;
+    }
+}
+
+// ============================================================
+// Export & Formatting
+// ============================================================
+#include "editor/DocumentExporter.h"
+
+OCR_API const char* ocr_export_markdown(const char* json_str) {
+    if (!json_str) return nullptr;
+    std::string md = ocr::DocumentExporter::exportToMarkdown(json_str);
+    
+    if (md.empty()) return nullptr;
+    
+    char* result = (char*)malloc(md.length() + 1);
+    if (result) {
+        strcpy(result, md.c_str());
+    }
+    return result;
 }
 
 // ============================================================
@@ -307,6 +395,111 @@ OCR_API void ocr_free_image_result(OCRImageResult* result) {
 }
 
 // ============================================================
+// Settings & Sync API
+// ============================================================
+
+OCR_API void ocr_settings_init(const char* file_path) {
+    if (file_path) {
+        g_settings_manager.setFilePath(file_path);
+        g_settings_manager.load();
+    }
+}
+
+OCR_API int ocr_settings_sync_from_json(const char* json_str) {
+    if (!json_str) return 0;
+    if (g_settings_manager.fromJsonString(json_str)) {
+        g_settings_manager.save();
+        return 1;
+    }
+    return 0;
+}
+
+OCR_API const char* ocr_settings_get_all_json(void) {
+    return duplicate_string(g_settings_manager.toJsonString());
+}
+
+OCR_API void ocr_settings_set_string(const char* key, const char* value) {
+    if (key && value) {
+        g_settings_manager.setString(key, value);
+        g_settings_manager.save();
+    }
+}
+
+OCR_API const char* ocr_settings_get_string(const char* key, const char* default_val) {
+    if (!key) return duplicate_string(default_val ? default_val : "");
+    return duplicate_string(g_settings_manager.getString(key, default_val ? default_val : ""));
+}
+
+OCR_API void ocr_settings_set_int(const char* key, int value) {
+    if (key) {
+        g_settings_manager.setInt(key, value);
+        g_settings_manager.save();
+    }
+}
+
+OCR_API int ocr_settings_get_int(const char* key, int default_val) {
+    if (!key) return default_val;
+    return g_settings_manager.getInt(key, default_val);
+}
+
+// ============================================================
+// Document History API (SQLite)
+// ============================================================
+#include "history/DocumentHistoryManager.h"
+
+int ocr_history_init(const char* db_path) {
+    if (!db_path) return 0;
+    return ocr::DocumentHistoryManager::getInstance().init(db_path) ? 1 : 0;
+}
+
+int ocr_history_save_document(const char* doc_id, const char* json_data, const char* title, const char* preview_image_path) {
+    if (!doc_id || !json_data) return 0;
+    return ocr::DocumentHistoryManager::getInstance().saveDocument(
+        doc_id, json_data, title ? title : "", preview_image_path ? preview_image_path : ""
+    ) ? 1 : 0;
+}
+
+int ocr_history_delete_document(const char* doc_id) {
+    if (!doc_id) return 0;
+    return ocr::DocumentHistoryManager::getInstance().deleteDocument(doc_id) ? 1 : 0;
+}
+
+const char* ocr_history_get_all_documents(void) {
+    auto docs = ocr::DocumentHistoryManager::getInstance().getAllDocuments();
+    
+    // Construct a simple JSON array manually
+    std::string json = "[";
+    for (size_t i = 0; i < docs.size(); ++i) {
+        json += "{";
+        json += "\"id\": \"" + docs[i].id + "\", ";
+        json += "\"title\": \"" + docs[i].title + "\", ";
+        json += "\"preview_image_path\": \"" + docs[i].preview_image_path + "\", ";
+        json += "\"timestamp\": " + std::to_string(docs[i].timestamp);
+        json += "}";
+        if (i < docs.size() - 1) json += ", ";
+    }
+    json += "]";
+    
+    char* c_str = (char*)malloc(json.length() + 1);
+    if (c_str) {
+        strcpy(c_str, json.c_str());
+    }
+    return c_str;
+}
+
+const char* ocr_history_get_document_data(const char* doc_id) {
+    if (!doc_id) return nullptr;
+    std::string data = ocr::DocumentHistoryManager::getInstance().getDocumentData(doc_id);
+    if (data.empty()) return nullptr;
+    
+    char* c_str = (char*)malloc(data.length() + 1);
+    if (c_str) {
+        strcpy(c_str, data.c_str());
+    }
+    return c_str;
+}
+
+// ============================================================
 // Utility Functions
 // ============================================================
 
@@ -363,3 +556,15 @@ OCR_API int ocr_canvas_replace_layer_image(OCRHandle* handle,
     (void)width; (void)height;
     return 1;
 }
+
+// ============================================================
+// Platform-Specific Unity Build Inclusions
+// ============================================================
+#ifdef __APPLE__
+// These source files are included directly here to avoid needing to manually 
+// add them to the Xcode project (which lacks folder sync for older pbxproj).
+// This is a standard unity-build technique for cross-platform C++.
+#include "SettingsManager.cpp"
+#include "editor/DocumentExporter.cpp"
+#include "history/DocumentHistoryManager.cpp"
+#endif

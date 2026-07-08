@@ -14,7 +14,7 @@ using OCREditor.Interop;
 
 namespace OCREditor
 {
-    public partial class MainWindow : Window
+    public partial class MainWindow : Wpf.Ui.Controls.FluentWindow
     {
         private OCREngineInterop? _ocrEngine; // Kept for architecture compatibility
         private string? _currentImagePath;
@@ -71,6 +71,13 @@ namespace OCREditor
         private double _dragStartRelX;
         private double _dragStartRelY;
         private bool _isSaving = false;
+        
+        // Regional Re-OCR
+        private bool _isSelectingRegion = false;
+        private System.Windows.Point? _selectionStartPoint;
+        private System.Windows.Shapes.Rectangle? _selectionRectUI;
+        
+        private List<System.Windows.Shapes.Line> _guideLines = new List<System.Windows.Shapes.Line>();
 
         // Undo/Redo stacks
         private class RegionState
@@ -92,13 +99,47 @@ namespace OCREditor
         private Stack<OCRState> _undoStack = new Stack<OCRState>();
         private Stack<OCRState> _redoStack = new Stack<OCRState>();
 
+        private System.Windows.Threading.DispatcherTimer? _autoSaveTimer;
+
         public MainWindow()
         {
             LocalizationManager.ApplyLanguage("English");
             InitializeComponent();
+            
+            // Initialize WPF-UI Theme
+            Wpf.Ui.Appearance.ApplicationThemeManager.Apply(this);
+            
             InitializeEngine();
             SetupCanvasMouseEvents();
             PopulateFontFamilies();
+            StartAutoSaveTimer();
+        }
+
+        private void StartAutoSaveTimer()
+        {
+            _autoSaveTimer = new System.Windows.Threading.DispatcherTimer();
+            _autoSaveTimer.Interval = TimeSpan.FromSeconds(60);
+            _autoSaveTimer.Tick += (s, e) => SaveDraftToHistory();
+            _autoSaveTimer.Start();
+        }
+
+        private void SaveDraftToHistory()
+        {
+            if (_regions.Count == 0 || _ocrEngine == null || !_ocrEngine.IsReady)
+                return;
+
+            try
+            {
+                var options = new JsonSerializerOptions { WriteIndented = false };
+                string jsonData = JsonSerializer.Serialize(_regions, options);
+                string title = string.IsNullOrEmpty(_currentImagePath) ? "Untitled Draft" : Path.GetFileName(_currentImagePath);
+                OCREngineInterop.SaveDraftToHistory("windows-draft-id", jsonData, title, _currentImagePath ?? "");
+                System.Diagnostics.Debug.WriteLine("[MainWindow] Auto-saved draft to history.");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[MainWindow] Auto-save failed: {ex.Message}");
+            }
         }
 
         private void PopulateFontFamilies()
@@ -165,19 +206,23 @@ namespace OCREditor
             }
         }
 
-        private void InitializeEngine()
+        private void InitializeEngine(string language = "ch_tra,eng")
         {
-            // Kept for logging and architecture compatibility,
-            // but we fall back to Windows Native OCR first.
             try
             {
+                if (_ocrEngine != null)
+                {
+                    _ocrEngine.Dispose();
+                    _ocrEngine = null;
+                }
+
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 string modelsPath = Path.Combine(baseDir, "models");
 
                 if (Directory.Exists(modelsPath))
                 {
-                    _ocrEngine = new OCREngineInterop(modelsPath);
-                    StatusLabel.Text = "OCR C++ Core Engine initialized.";
+                    _ocrEngine = new OCREngineInterop(modelsPath, language);
+                    StatusLabel.Text = $"OCR C++ Core Engine initialized (Lang: {language}).";
                 }
                 else
                 {
@@ -187,6 +232,22 @@ namespace OCREditor
             catch (Exception ex)
             {
                 StatusLabel.Text = $"Using Windows Native OCR Engine. (C++ init bypassed: {ex.Message})";
+            }
+        }
+
+        private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (LanguageComboBox.SelectedItem is ComboBoxItem selectedItem && selectedItem.Tag is string langTag)
+            {
+                // langTag will be something like "zh-Hant" or "auto"
+                // Map it to PaddleOCR formats if needed
+                string mappedLanguage = "ch_tra,eng";
+                if (langTag == "zh-Hans") mappedLanguage = "ch_sim,eng";
+                else if (langTag == "en") mappedLanguage = "eng";
+                else if (langTag == "ja") mappedLanguage = "japan";
+                else if (langTag == "ko") mappedLanguage = "korean";
+
+                InitializeEngine(mappedLanguage);
             }
         }
 
@@ -264,6 +325,25 @@ namespace OCREditor
             // not when they click on an existing Border overlay.
             if (e.OriginalSource == OverlayCanvas && e.LeftButton == System.Windows.Input.MouseButtonState.Pressed)
             {
+                if (_isSelectingRegion)
+                {
+                    _selectionStartPoint = e.GetPosition(OverlayCanvas);
+                    OverlayCanvas.CaptureMouse();
+                    
+                    _selectionRectUI = new System.Windows.Shapes.Rectangle
+                    {
+                        Stroke = System.Windows.Media.Brushes.Orange,
+                        StrokeThickness = 2,
+                        StrokeDashArray = new DoubleCollection() { 4, 4 },
+                        Fill = new SolidColorBrush(System.Windows.Media.Color.FromArgb(50, 255, 165, 0))
+                    };
+                    Canvas.SetLeft(_selectionRectUI, _selectionStartPoint.Value.X);
+                    Canvas.SetTop(_selectionRectUI, _selectionStartPoint.Value.Y);
+                    OverlayCanvas.Children.Add(_selectionRectUI);
+                    e.Handled = true;
+                    return;
+                }
+
                 _isDrawing = true;
                 _drawStartPoint = e.GetPosition(OverlayCanvas);
                 OverlayCanvas.CaptureMouse();
@@ -285,7 +365,20 @@ namespace OCREditor
 
         private void Canvas_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            if (_isDrawing && _dragRect != null)
+            if (_isSelectingRegion && _selectionStartPoint.HasValue && _selectionRectUI != null)
+            {
+                var curPoint = e.GetPosition(OverlayCanvas);
+                double x = Math.Min(_selectionStartPoint.Value.X, curPoint.X);
+                double y = Math.Min(_selectionStartPoint.Value.Y, curPoint.Y);
+                double w = Math.Abs(_selectionStartPoint.Value.X - curPoint.X);
+                double h = Math.Abs(_selectionStartPoint.Value.Y - curPoint.Y);
+
+                Canvas.SetLeft(_selectionRectUI, x);
+                Canvas.SetTop(_selectionRectUI, y);
+                _selectionRectUI.Width = w;
+                _selectionRectUI.Height = h;
+            }
+            else if (_isDrawing && _dragRect != null)
             {
                 var curPoint = e.GetPosition(OverlayCanvas);
 
@@ -301,9 +394,30 @@ namespace OCREditor
             }
         }
 
-        private void Canvas_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private async void Canvas_MouseUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (_isDrawing && _dragRect != null)
+            if (_isSelectingRegion && _selectionRectUI != null)
+            {
+                OverlayCanvas.ReleaseMouseCapture();
+
+                double x = Canvas.GetLeft(_selectionRectUI);
+                double y = Canvas.GetTop(_selectionRectUI);
+                double w = _selectionRectUI.Width;
+                double h = _selectionRectUI.Height;
+
+                OverlayCanvas.Children.Remove(_selectionRectUI);
+                _selectionRectUI = null;
+                _selectionStartPoint = null;
+
+                if (w > 15 && h > 10)
+                {
+                    await PerformRegionalOCRAsync(new System.Windows.Rect(x, y, w, h));
+                }
+                
+                // Toggle off after use?
+                // RegionOcrToggleButton.IsChecked = false; // Option to single-use
+            }
+            else if (_isDrawing && _dragRect != null)
             {
                 _isDrawing = false;
                 OverlayCanvas.ReleaseMouseCapture();
@@ -444,31 +558,21 @@ namespace OCREditor
                     targetHeight = (int)(original.Height * scale);
                 }
 
-                var processed = new Bitmap(targetWidth, targetHeight);
-                using (var g = Graphics.FromImage(processed))
+                var scaled = new Bitmap(targetWidth, targetHeight);
+                using (var g = Graphics.FromImage(scaled))
                 {
                     g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                    
-                    // Convert to high contrast grayscale
-                    var colorMatrix = new System.Drawing.Imaging.ColorMatrix(
-                        new float[][]
-                        {
-                            new float[] {.34f, .34f, .34f, 0, 0},
-                            new float[] {.5f, .5f, .5f, 0, 0},
-                            new float[] {.16f, .16f, .16f, 0, 0},
-                            new float[] {0, 0, 0, 1, 0},
-                            new float[] {0, 0, 0, 0, 1}
-                        });
-                    var attributes = new System.Drawing.Imaging.ImageAttributes();
-                    attributes.SetColorMatrix(colorMatrix);
-                    
                     g.DrawImage(original, new System.Drawing.Rectangle(0, 0, targetWidth, targetHeight),
-                        0, 0, original.Width, original.Height, GraphicsUnit.Pixel, attributes);
+                        0, 0, original.Width, original.Height, GraphicsUnit.Pixel);
                 }
                 
-                string tempPath = Path.Combine(Path.GetTempPath(), "ocr_preprocessed.png");
-                processed.Save(tempPath, ImageFormat.Png);
-                return tempPath;
+                // Use the C++ Interop logic for consistency with Apple Vision contrast
+                using (var processed = OCREngineInterop.PreprocessImage(scaled))
+                {
+                    string tempPath = Path.Combine(Path.GetTempPath(), "ocr_preprocessed.png");
+                    processed.Save(tempPath, ImageFormat.Png);
+                    return tempPath;
+                }
             }
         }
 
@@ -795,6 +899,45 @@ namespace OCREditor
             if (relX >= 0.50 && relY < 0.50) return System.Windows.Media.Color.FromRgb(240, 242, 245); // Top-Right light blue-gray
             if (relX < 0.50 && relY >= 0.50) return System.Windows.Media.Color.FromRgb(235, 245, 235); // Bottom-Left light green
             return System.Windows.Media.Color.FromRgb(255, 243, 227); // Bottom-Right light pinkish-cream
+        }
+
+        private void ClearGuideLines()
+        {
+            foreach (var line in _guideLines)
+                OverlayCanvas.Children.Remove(line);
+            _guideLines.Clear();
+        }
+
+        private void DrawVerticalGuide(double relX)
+        {
+            var line = new System.Windows.Shapes.Line
+            {
+                X1 = relX * _imgWidth,
+                Y1 = 0,
+                X2 = relX * _imgWidth,
+                Y2 = _imgHeight,
+                Stroke = System.Windows.Media.Brushes.Orange,
+                StrokeThickness = 1,
+                StrokeDashArray = new System.Windows.Media.DoubleCollection { 4, 4 }
+            };
+            OverlayCanvas.Children.Add(line);
+            _guideLines.Add(line);
+        }
+
+        private void DrawHorizontalGuide(double relY)
+        {
+            var line = new System.Windows.Shapes.Line
+            {
+                X1 = 0,
+                Y1 = relY * _imgHeight,
+                X2 = _imgWidth,
+                Y2 = relY * _imgHeight,
+                Stroke = System.Windows.Media.Brushes.Orange,
+                StrokeThickness = 1,
+                StrokeDashArray = new System.Windows.Media.DoubleCollection { 4, 4 }
+            };
+            OverlayCanvas.Children.Add(line);
+            _guideLines.Add(line);
         }
 
         private System.Windows.Media.Color GetAverageColorOfRegion(OCRRegion region)
@@ -1329,11 +1472,54 @@ namespace OCREditor
                         double deltaX = curMousePos.X - _dragStartMousePos.X;
                         double deltaY = curMousePos.Y - _dragStartMousePos.Y;
                         
-                        double deltaRelX = deltaX / _imgWidth;
-                        double deltaRelY = deltaY / _imgHeight;
+                        double rawRelX = _dragStartRelX + (deltaX / _imgWidth);
+                        double rawRelY = _dragStartRelY + (deltaY / _imgHeight);
                         
-                        region.RelX = Math.Max(0.0, Math.Min(_dragStartRelX + deltaRelX, 1.0 - region.RelWidth));
-                        region.RelY = Math.Max(0.0, Math.Min(_dragStartRelY + deltaRelY, 1.0 - region.RelHeight));
+                        double snappedRelX = rawRelX;
+                        double snappedRelY = rawRelY;
+                        
+                        double myLeft = rawRelX;
+                        double myHCenter = rawRelX + region.RelWidth / 2;
+                        double myRight = rawRelX + region.RelWidth;
+                        
+                        double myTop = rawRelY;
+                        double myVCenter = rawRelY + region.RelHeight / 2;
+                        double myBottom = rawRelY + region.RelHeight;
+                        
+                        double snapThresholdX = 4.0 / _imgWidth;
+                        double snapThresholdY = 4.0 / _imgHeight;
+                        
+                        bool didSnapX = false;
+                        bool didSnapY = false;
+                        
+                        ClearGuideLines();
+                        
+                        foreach (var other in _regions) {
+                            if (other == region || other.IsRemoved) continue;
+                            
+                            double oLeft = other.RelX;
+                            double oHCenter = other.RelX + other.RelWidth / 2;
+                            double oRight = other.RelX + other.RelWidth;
+                            
+                            double oTop = other.RelY;
+                            double oVCenter = other.RelY + other.RelHeight / 2;
+                            double oBottom = other.RelY + other.RelHeight;
+                            
+                            if (!didSnapX) {
+                                if (Math.Abs(myLeft - oLeft) < snapThresholdX) { snappedRelX = oLeft; didSnapX = true; DrawVerticalGuide(oLeft); }
+                                else if (Math.Abs(myRight - oRight) < snapThresholdX) { snappedRelX = oRight - region.RelWidth; didSnapX = true; DrawVerticalGuide(oRight); }
+                                else if (Math.Abs(myHCenter - oHCenter) < snapThresholdX) { snappedRelX = oHCenter - region.RelWidth / 2; didSnapX = true; DrawVerticalGuide(oHCenter); }
+                            }
+                            
+                            if (!didSnapY) {
+                                if (Math.Abs(myTop - oTop) < snapThresholdY) { snappedRelY = oTop; didSnapY = true; DrawHorizontalGuide(oTop); }
+                                else if (Math.Abs(myBottom - oBottom) < snapThresholdY) { snappedRelY = oBottom - region.RelHeight; didSnapY = true; DrawHorizontalGuide(oBottom); }
+                                else if (Math.Abs(myVCenter - oVCenter) < snapThresholdY) { snappedRelY = oVCenter - region.RelHeight / 2; didSnapY = true; DrawHorizontalGuide(oVCenter); }
+                            }
+                        }
+                        
+                        region.RelX = Math.Max(0.0, Math.Min(snappedRelX, 1.0 - region.RelWidth));
+                        region.RelY = Math.Max(0.0, Math.Min(snappedRelY, 1.0 - region.RelHeight));
                         
                         // Update UI coordinates in real-time smoothly
                         Canvas.SetLeft(border, region.RelX * _imgWidth);
@@ -1350,6 +1536,7 @@ namespace OCREditor
                         _isDraggingRegion = false;
                         _draggingRegion = null;
                         border.ReleaseMouseCapture();
+                        ClearGuideLines();
                         
                         RenderRegions(); // Re-render to finalize and refresh layout
                         StatusLabel.Text = "Repositioned text layer.";
@@ -1639,6 +1826,93 @@ namespace OCREditor
                     _selectedRegion.IsEdited = true;
                     RenderRegions();
                 }
+            }
+        }
+
+        private void RegionOcrToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            _isSelectingRegion = true;
+            OverlayCanvas.Cursor = System.Windows.Input.Cursors.Cross;
+            StatusLabel.Text = "Draw a rectangle on the canvas to re-run OCR on that region.";
+        }
+
+        private void RegionOcrToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            _isSelectingRegion = false;
+            OverlayCanvas.Cursor = System.Windows.Input.Cursors.Arrow;
+            StatusLabel.Text = "Regional OCR mode disabled.";
+        }
+
+        private async System.Threading.Tasks.Task PerformRegionalOCRAsync(System.Windows.Rect rect)
+        {
+            if (_ocrEngine == null || !_ocrEngine.IsReady || _originalBitmap == null) return;
+
+            StatusLabel.Text = "Running Regional OCR...";
+            ProgressBar.Visibility = Visibility.Visible;
+            ProgressBar.IsIndeterminate = true;
+
+            try
+            {
+                // Convert WPF Rect to physical pixels
+                System.Drawing.Rectangle region = new System.Drawing.Rectangle(
+                    (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
+
+                var result = await System.Threading.Tasks.Task.Run(() => 
+                {
+                    lock (_bitmapLock)
+                    {
+                        if (_originalBitmap == null) return null;
+                        
+                        var processedImage = OCREngineInterop.PreprocessImage(_originalBitmap);
+                        var res = _ocrEngine.RecognizeRegion(processedImage ?? _originalBitmap, region);
+                        processedImage?.Dispose();
+                        return res;
+                    }
+                });
+
+                if (result != null && result.Blocks.Count > 0)
+                {
+                    SaveHistoryState();
+                    
+                    foreach (var block in result.Blocks)
+                    {
+                        var newRegion = new OCRRegion
+                        {
+                            OriginalText = block.Text,
+                            CurrentText = block.Text,
+                            RelX = (rect.X + block.BoundingBox.X) / _imgWidth,
+                            RelY = (rect.Y + block.BoundingBox.Y) / _imgHeight,
+                            OriginalRelX = (rect.X + block.BoundingBox.X) / _imgWidth,
+                            OriginalRelY = (rect.Y + block.BoundingBox.Y) / _imgHeight,
+                            RelWidth = block.BoundingBox.Width / _imgWidth,
+                            RelHeight = block.BoundingBox.Height / _imgHeight,
+                            FontSize = Math.Max(12, block.BoundingBox.Height * 0.8),
+                            IsEdited = false
+                        };
+
+                        _regions.Add(newRegion);
+                    }
+
+                    LayerListBox.ItemsSource = null;
+                    LayerListBox.ItemsSource = _regions;
+                    RenderRegions();
+                    
+                    StatusLabel.Text = $"Regional OCR complete. Found {result.Blocks.Count} blocks.";
+                }
+                else
+                {
+                    StatusLabel.Text = "Regional OCR complete. No text found.";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusLabel.Text = $"Regional OCR failed: {ex.Message}";
+            }
+            finally
+            {
+                ProgressBar.Visibility = Visibility.Hidden;
+                ProgressBar.IsIndeterminate = false;
+                RegionOcrToggleButton.IsChecked = false;
             }
         }
 

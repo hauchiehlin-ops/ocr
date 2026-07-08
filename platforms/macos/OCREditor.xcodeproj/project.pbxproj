@@ -7,40 +7,72 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		045589897C68E2888557BFC9 /* OCREditorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */; };
 		05299FD93C068DB136536C11 /* text_renderer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A3E7FCA0FD8FAD1077FCFCE2 /* text_renderer.cpp */; };
+		0699A9D93EB446200B55A7A6 /* text_block.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 728B35FB513F543BF3E2F9B2 /* text_block.cpp */; };
+		07DE3182E36D34FAA3455B64 /* binarize.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CBC08891DBC68951C7712900 /* binarize.cpp */; };
+		17ECD815F03A03D7D1494469 /* NotoSerifTC-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = 34FF151ADD0923B170B5D161 /* NotoSerifTC-Regular.otf */; };
 		1E009655E49469328D5F6D1B /* OCREngineBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1AA04721B96FFD107425F48 /* OCREngineBridge.mm */; };
 		20A45150DBBFF67A7E1AB768 /* models in Resources */ = {isa = PBXBuildFile; fileRef = D59CD3FC396C220862251F66 /* models */; };
+		216FD5B3CF6D98E7D10E049E /* mask_generator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A17D08BE3247F4B5A9C37EAE /* mask_generator.cpp */; };
+		326E9580755523867C23E38B /* edge_crop.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1528423B2C51B72DF65FE2FD /* edge_crop.cpp */; };
+		34A885B0E907E7B5CA1A4B15 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40625E7673640566BDFFD21D /* ContentView.swift */; };
+		3A6FF8AB20D5FAB39D9865F7 /* text_layer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F397467B65086FD9FA77D2C9 /* text_layer.cpp */; };
 		3BAD58E72FBD99AADCD4A144 /* denoise.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 39180BABA2540B341ABE9A4A /* denoise.cpp */; };
 		402769B49BA372B0EDED8644 /* paddle_ocr_engine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6705862E0657C44665A2B9D4 /* paddle_ocr_engine.cpp */; };
+		4A84F51674EB566F60736B28 /* deskew.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3784A230115F5B757A0C1781 /* deskew.cpp */; };
+		50D3640E6BBB76AF82D9F0CC /* OCRModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F83801B4A4184B815812D4 /* OCRModels.swift */; };
+		517EDA1844B61966AB41D72C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAFF2123B37A2CFBB63ABAB5 /* Assets.xcassets */; };
 		52DC0F55B2B92D4DFDECDBCA /* document_parser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3A997CEE413A62DDB2C31CBC /* document_parser.cpp */; };
 		5393C0E8A1EBBC9AAAF0A730 /* OCREditorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */; };
 		58AFAAEB5AC6A657AD95881F /* blender.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A54A2503B58862981C028B1F /* blender.cpp */; };
+		59A8AB62E0FD8D9761D62F62 /* context_corrector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1524CD6E52EA09E428D2595C /* context_corrector.cpp */; };
+		59F0CA0B27C169F94CAB4373 /* PlatformAliases.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB16C363CA6BE23226C738F5 /* PlatformAliases.swift */; };
+		5E4D4CB734D47355951D14E6 /* denoise.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 39180BABA2540B341ABE9A4A /* denoise.cpp */; };
 		60C2E59DECCF0DA87717D1FC /* license_validator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9E9A4857CBB6887CCC4C6139 /* license_validator.cpp */; };
 		6288425F0558B8F61F2C9D50 /* device_fingerprint.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 699B30B132FD7B8E94A919A9 /* device_fingerprint.cpp */; };
 		660656C3AA0A25E38C90E9C7 /* compositor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CA416F1E4032877337E56B5D /* compositor.cpp */; };
+		681CD3621296040F7DD6F04B /* document_parser.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3A997CEE413A62DDB2C31CBC /* document_parser.cpp */; };
 		704D1776EBE39B92CD0795B1 /* lama_engine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C6E4D0D7BADB1BA916A41AEC /* lama_engine.cpp */; };
+		79DF967758358220C80E328A /* ocr_core_api.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6678A920B36707AAEFAE1810 /* ocr_core_api.cpp */; };
 		7E30AED9B41938852DA1ED65 /* OCRModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26F83801B4A4184B815812D4 /* OCRModels.swift */; };
+		7E5A39968E36174345B1F9AF /* PlatformAliases.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB16C363CA6BE23226C738F5 /* PlatformAliases.swift */; };
+		894EABF04B4D39C780751253 /* OCRViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */; };
+		8B4387BBDAD5932A6A90815A /* text_renderer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A3E7FCA0FD8FAD1077FCFCE2 /* text_renderer.cpp */; };
+		90F792CFC868074AAE4827D1 /* compositor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CA416F1E4032877337E56B5D /* compositor.cpp */; };
 		96A847B92C9D600C89EE6E90 /* text_block.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 728B35FB513F543BF3E2F9B2 /* text_block.cpp */; };
+		98C26FC123DCCB441D1BB1B6 /* NotoSansTC-Regular.otf in Resources */ = {isa = PBXBuildFile; fileRef = 04E980AEC73AEF94E8BABAF6 /* NotoSansTC-Regular.otf */; };
+		9BC28475A193D08F3941B936 /* blender.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A54A2503B58862981C028B1F /* blender.cpp */; };
 		A0FC5C215F18C62023B0CDCE /* binarize.cpp in Sources */ = {isa = PBXBuildFile; fileRef = CBC08891DBC68951C7712900 /* binarize.cpp */; };
+		BBE2F9055B2A8FC3A2E99B72 /* models in Resources */ = {isa = PBXBuildFile; fileRef = D59CD3FC396C220862251F66 /* models */; };
 		BCDD7F2E226B15EA7F1644AA /* context_corrector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1524CD6E52EA09E428D2595C /* context_corrector.cpp */; };
 		BCEC7CEC16B9CC81BE4737F6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40625E7673640566BDFFD21D /* ContentView.swift */; };
 		BCF5E36ACAE8E8F4D2FD3B3B /* text_layer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = F397467B65086FD9FA77D2C9 /* text_layer.cpp */; };
 		BDBB1098147017389E7A2153 /* mask_generator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A17D08BE3247F4B5A9C37EAE /* mask_generator.cpp */; };
 		C2CB1E9B7843EF2FCFCC2F28 /* deskew.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 3784A230115F5B757A0C1781 /* deskew.cpp */; };
+		C56BCE67EB4FF338F2283700 /* paddle_ocr_engine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6705862E0657C44665A2B9D4 /* paddle_ocr_engine.cpp */; };
 		CC473182D65905F983E17BD0 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CAFF2123B37A2CFBB63ABAB5 /* Assets.xcassets */; };
 		D04F4C5C4C310C453A8EAB69 /* preprocessor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A7997A88FDC75B3AD35AC4A3 /* preprocessor.cpp */; };
 		D2F9617A0DF63EF8C897DB48 /* edge_crop.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1528423B2C51B72DF65FE2FD /* edge_crop.cpp */; };
+		D72F1915BA78961AEF0E29AF /* lama_engine.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C6E4D0D7BADB1BA916A41AEC /* lama_engine.cpp */; };
 		E4D593CD95305B8C067FA795 /* OCRViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */; };
+		F15A5D552FDDDDC2D9D532D5 /* device_fingerprint.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 699B30B132FD7B8E94A919A9 /* device_fingerprint.cpp */; };
+		F243DF78E397C59D73B5F6BE /* OCREngineBridge.mm in Sources */ = {isa = PBXBuildFile; fileRef = A1AA04721B96FFD107425F48 /* OCREngineBridge.mm */; };
 		F3252591DD8CC547DA7B601D /* ocr_core_api.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 6678A920B36707AAEFAE1810 /* ocr_core_api.cpp */; };
+		F65BB95700EEA1E1B382E835 /* license_validator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9E9A4857CBB6887CCC4C6139 /* license_validator.cpp */; };
+		F674564DA4451B6DBBE05649 /* preprocessor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A7997A88FDC75B3AD35AC4A3 /* preprocessor.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		04E980AEC73AEF94E8BABAF6 /* NotoSansTC-Regular.otf */ = {isa = PBXFileReference; includeInIndex = 1; name = "NotoSansTC-Regular.otf"; path = "../../../assets/fonts/NotoSansTC-Regular.otf"; sourceTree = "<group>"; };
 		0CE4051375DD63A733998F6E /* OCREditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OCREditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		133BC0B0B79D64845A1FD23E /* OCREditor-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "OCREditor-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1524CD6E52EA09E428D2595C /* context_corrector.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = context_corrector.cpp; sourceTree = "<group>"; };
 		1528423B2C51B72DF65FE2FD /* edge_crop.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = edge_crop.cpp; sourceTree = "<group>"; };
 		26F83801B4A4184B815812D4 /* OCRModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRModels.swift; sourceTree = "<group>"; };
 		329C86630BA0FAF8444F2BA3 /* ocr_core_api.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ocr_core_api.h; sourceTree = "<group>"; };
 		33BC5080B386F6F161105D37 /* OCREngineBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OCREngineBridge.h; sourceTree = "<group>"; };
+		34FF151ADD0923B170B5D161 /* NotoSerifTC-Regular.otf */ = {isa = PBXFileReference; includeInIndex = 1; name = "NotoSerifTC-Regular.otf"; path = "../../../assets/fonts/NotoSerifTC-Regular.otf"; sourceTree = "<group>"; };
 		3784A230115F5B757A0C1781 /* deskew.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = deskew.cpp; sourceTree = "<group>"; };
 		39180BABA2540B341ABE9A4A /* denoise.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = denoise.cpp; sourceTree = "<group>"; };
 		3A997CEE413A62DDB2C31CBC /* document_parser.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = document_parser.cpp; sourceTree = "<group>"; };
@@ -70,6 +102,7 @@
 		D47171328DD5B318D354EFDF /* mask_generator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mask_generator.h; sourceTree = "<group>"; };
 		D4C38B177DC09832236A18AC /* compositor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compositor.h; sourceTree = "<group>"; };
 		D59CD3FC396C220862251F66 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = ../../models; sourceTree = SOURCE_ROOT; };
+		DB16C363CA6BE23226C738F5 /* PlatformAliases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformAliases.swift; sourceTree = "<group>"; };
 		DDA88952D348408799F1D7CE /* preprocessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = preprocessor.h; sourceTree = "<group>"; };
 		EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCREditorApp.swift; sourceTree = "<group>"; };
 		F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRViewModel.swift; sourceTree = "<group>"; };
@@ -101,6 +134,14 @@
 				DDA88952D348408799F1D7CE /* preprocessor.h */,
 			);
 			path = preprocessor;
+			sourceTree = "<group>";
+		};
+		26212AA9EE718F580DEEE6B3 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				88256A26569B30C537D05F31 /* Fonts */,
+			);
+			name = Resources;
 			sourceTree = "<group>";
 		};
 		272D5089AF00DBB4F552FA67 /* license */ = {
@@ -160,12 +201,23 @@
 				A56897659442CFC72BB8C388 /* OCREditor-Bridging-Header.h */,
 				4C019A5E2E4D1AC6350138D0 /* OCREditor.entitlements */,
 				EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */,
+				DB16C363CA6BE23226C738F5 /* PlatformAliases.swift */,
 				D498F716141AF49059F82085 /* Bridge */,
 				55D18FE8DA29C89D013A1522 /* Models */,
 				4E4EF77280E77975C6B73778 /* ViewModels */,
 				EC6FD2072B888C5DC7B3043E /* Views */,
+				26212AA9EE718F580DEEE6B3 /* Resources */,
 			);
 			path = OCREditor;
+			sourceTree = "<group>";
+		};
+		88256A26569B30C537D05F31 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				04E980AEC73AEF94E8BABAF6 /* NotoSansTC-Regular.otf */,
+				34FF151ADD0923B170B5D161 /* NotoSerifTC-Regular.otf */,
+			);
+			name = Fonts;
 			sourceTree = "<group>";
 		};
 		A6EA0DB373B33E510E12F572 /* Include */ = {
@@ -180,6 +232,7 @@
 		ABD31BF1D25D70B4A0AFB728 /* Products */ = {
 			isa = PBXGroup;
 			children = (
+				133BC0B0B79D64845A1FD23E /* OCREditor-iOS.app */,
 				0CE4051375DD63A733998F6E /* OCREditor.app */,
 			);
 			name = Products;
@@ -253,10 +306,24 @@
 			dependencies = (
 			);
 			name = OCREditor;
-			packageProductDependencies = (
-			);
 			productName = OCREditor;
 			productReference = 0CE4051375DD63A733998F6E /* OCREditor.app */;
+			productType = "com.apple.product-type.application";
+		};
+		FABC98ACB15C68B9DFA7A43B /* OCREditor-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6BE5628C41EEC96B62FAAC6B /* Build configuration list for PBXNativeTarget "OCREditor-iOS" */;
+			buildPhases = (
+				B6851386F497CD77EACEE702 /* Sources */,
+				EE4C2EEDAEDB7A88938B0A38 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "OCREditor-iOS";
+			productName = "OCREditor-iOS";
+			productReference = 133BC0B0B79D64845A1FD23E /* OCREditor-iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -269,6 +336,10 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B8C4DF0AD77DC06885FD7473 = {
+						DevelopmentTeam = 6UJ8GS752W;
+						ProvisioningStyle = Automatic;
+					};
+					FABC98ACB15C68B9DFA7A43B = {
 						DevelopmentTeam = 6UJ8GS752W;
 						ProvisioningStyle = Automatic;
 					};
@@ -289,6 +360,7 @@
 			projectRoot = "";
 			targets = (
 				B8C4DF0AD77DC06885FD7473 /* OCREditor */,
+				FABC98ACB15C68B9DFA7A43B /* OCREditor-iOS */,
 			);
 		};
 /* End PBXProject section */
@@ -300,6 +372,17 @@
 			files = (
 				CC473182D65905F983E17BD0 /* Assets.xcassets in Resources */,
 				20A45150DBBFF67A7E1AB768 /* models in Resources */,
+				98C26FC123DCCB441D1BB1B6 /* NotoSansTC-Regular.otf in Resources */,
+				17ECD815F03A03D7D1494469 /* NotoSerifTC-Regular.otf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EE4C2EEDAEDB7A88938B0A38 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				517EDA1844B61966AB41D72C /* Assets.xcassets in Resources */,
+				BBE2F9055B2A8FC3A2E99B72 /* models in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -315,6 +398,7 @@
 				1E009655E49469328D5F6D1B /* OCREngineBridge.mm in Sources */,
 				7E30AED9B41938852DA1ED65 /* OCRModels.swift in Sources */,
 				E4D593CD95305B8C067FA795 /* OCRViewModel.swift in Sources */,
+				59F0CA0B27C169F94CAB4373 /* PlatformAliases.swift in Sources */,
 				A0FC5C215F18C62023B0CDCE /* binarize.cpp in Sources */,
 				58AFAAEB5AC6A657AD95881F /* blender.cpp in Sources */,
 				660656C3AA0A25E38C90E9C7 /* compositor.cpp in Sources */,
@@ -336,9 +420,70 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B6851386F497CD77EACEE702 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				34A885B0E907E7B5CA1A4B15 /* ContentView.swift in Sources */,
+				045589897C68E2888557BFC9 /* OCREditorApp.swift in Sources */,
+				F243DF78E397C59D73B5F6BE /* OCREngineBridge.mm in Sources */,
+				50D3640E6BBB76AF82D9F0CC /* OCRModels.swift in Sources */,
+				894EABF04B4D39C780751253 /* OCRViewModel.swift in Sources */,
+				7E5A39968E36174345B1F9AF /* PlatformAliases.swift in Sources */,
+				07DE3182E36D34FAA3455B64 /* binarize.cpp in Sources */,
+				9BC28475A193D08F3941B936 /* blender.cpp in Sources */,
+				90F792CFC868074AAE4827D1 /* compositor.cpp in Sources */,
+				59A8AB62E0FD8D9761D62F62 /* context_corrector.cpp in Sources */,
+				5E4D4CB734D47355951D14E6 /* denoise.cpp in Sources */,
+				4A84F51674EB566F60736B28 /* deskew.cpp in Sources */,
+				F15A5D552FDDDDC2D9D532D5 /* device_fingerprint.cpp in Sources */,
+				681CD3621296040F7DD6F04B /* document_parser.cpp in Sources */,
+				326E9580755523867C23E38B /* edge_crop.cpp in Sources */,
+				D72F1915BA78961AEF0E29AF /* lama_engine.cpp in Sources */,
+				F65BB95700EEA1E1B382E835 /* license_validator.cpp in Sources */,
+				216FD5B3CF6D98E7D10E049E /* mask_generator.cpp in Sources */,
+				79DF967758358220C80E328A /* ocr_core_api.cpp in Sources */,
+				C56BCE67EB4FF338F2283700 /* paddle_ocr_engine.cpp in Sources */,
+				F674564DA4451B6DBBE05649 /* preprocessor.cpp in Sources */,
+				0699A9D93EB446200B55A7A6 /* text_block.cpp in Sources */,
+				3A6FF8AB20D5FAB39D9865F7 /* text_layer.cpp in Sources */,
+				8B4387BBDAD5932A6A90815A /* text_renderer.cpp in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
+		009F5723091A96E7226A1761 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 6UJ8GS752W;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"$(SRCROOT)/../../core/include\"",
+					"\"$(SRCROOT)/../../core/src\"",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hauchiehlin.ocreditor;
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "OCREditor/OCREditor-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		12F3C39DF4FB4459C629FDA1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -394,7 +539,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -413,7 +557,12 @@
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				HEADER_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"$(SRCROOT)/../../core/include\"",
+					"\"$(SRCROOT)/../../core/src\"",
+				);
+				INFOPLIST_KEY_ATSApplicationFontsPath = .;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -421,6 +570,10 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hauchiehlin.ocreditor;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "OCREditor/OCREditor-Bridging-Header.h";
@@ -476,12 +629,41 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
+		};
+		C8F167FBA5E4459E8B2928E5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 6UJ8GS752W;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"$(SRCROOT)/../../core/include\"",
+					"\"$(SRCROOT)/../../core/src\"",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hauchiehlin.ocreditor;
+				SDKROOT = iphoneos;
+				SWIFT_OBJC_BRIDGING_HEADER = "OCREditor/OCREditor-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
 		};
 		EE5175472EB7E8A36834E62D /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -495,7 +677,12 @@
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				HEADER_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"$(SRCROOT)/../../core/include\"",
+					"\"$(SRCROOT)/../../core/src\"",
+				);
+				INFOPLIST_KEY_ATSApplicationFontsPath = .;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -503,6 +690,10 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lsqlite3",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hauchiehlin.ocreditor;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "OCREditor/OCREditor-Bridging-Header.h";
@@ -518,6 +709,15 @@
 			buildConfigurations = (
 				12F3C39DF4FB4459C629FDA1 /* Debug */,
 				88844B5C1D0557064E367741 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6BE5628C41EEC96B62FAAC6B /* Build configuration list for PBXNativeTarget "OCREditor-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C8F167FBA5E4459E8B2928E5 /* Debug */,
+				009F5723091A96E7226A1761 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

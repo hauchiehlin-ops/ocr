@@ -60,3 +60,12 @@ platforms/macos/OCREditor/Bridge/OCREngineBridge.o
 *.dll
 *.dylib
 *.so
+
+# Sensitive credentials
+*.p8
+AuthKey_*.p8
+
+# Build logs and temp scripts
+*.log
+rewrite_main.py
+add_*.rb

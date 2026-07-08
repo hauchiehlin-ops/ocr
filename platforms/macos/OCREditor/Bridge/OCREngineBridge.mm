@@ -6,11 +6,10 @@
 //
 
 #import "OCREngineBridge.h"
+#include "ocr_core_api.h"
+#include <dlfcn.h>
 
-// C++ 核心 API 標頭
-extern "C" {
-#import "ocr_core_api.h"
-}
+#import <Foundation/Foundation.h>
 
 #pragma mark - OCRBoundingBox 實作
 
@@ -59,7 +58,7 @@ extern "C" {
                   confidence:(CGFloat)confidence
                  boundingBox:(OCRBoundingBox *)boundingBox
            estimatedFontSize:(CGFloat)fontSize
-              estimatedColor:(nullable NSColor *)color
+              estimatedColor:(nullable PlatformColor *)color
                       isBold:(BOOL)isBold {
     self = [super init];
     if (self) {
@@ -136,11 +135,13 @@ extern "C" {
 @implementation OCRResult
 
 - (instancetype)initWithImageDimensions:(CGSize)dimensions
-                             textBlocks:(NSArray<OCRTextBlock *> *)textBlocks {
+                             textBlocks:(NSArray<OCRTextBlock *> *)textBlocks
+                                rawJson:(NSString *)rawJson {
     self = [super init];
     if (self) {
         _imageDimensions = dimensions;
-        _textBlocks      = [textBlocks copy];
+        _textBlocks = [textBlocks copy];
+        _rawJson = [rawJson copy];
     }
     return self;
 }
@@ -183,11 +184,13 @@ extern "C" {
 
 #pragma mark 生命週期
 
-- (nullable instancetype)initWithModelDirectory:(NSString *)modelDirectory {
+- (nullable instancetype)initWithModelDirectory:(NSString *)modelDirectory
+                                       language:(NSString *)language {
     self = [super init];
     if (self) {
         const char *path = [modelDirectory fileSystemRepresentation];
-        _engineHandle = ocr_engine_create(path, NULL);
+        NSString *configJson = [NSString stringWithFormat:@"{\"language\":\"%@\"}", language ?: @"ch_tra,eng"];
+        _engineHandle = ocr_engine_create(path, [configJson UTF8String]);
         if (_engineHandle == NULL) {
             NSLog(@"[OCREngineBridge] ❌ 無法以路徑初始化引擎: %@", modelDirectory);
             return nil;
@@ -211,7 +214,7 @@ extern "C" {
 
 #pragma mark - 影像辨識
 
-- (nullable OCRResult *)recognizeImage:(NSImage *)image
+- (nullable OCRResult *)recognizeImage:(PlatformImage *)image
                                  error:(NSError **)error {
     if (![self isReady]) {
         if (error) {
@@ -232,16 +235,91 @@ extern "C" {
     }
 
     // 呼叫 C API 進行辨識
-    const char *resultJSON = ocr_recognize(_engineHandle,
-                                           pixelData,
-                                           (int)width,
-                                           (int)height,
-                                           4 /* RGBA channels */);
+    const char *resultJSON = NULL;
+    @try {
+        resultJSON = ocr_recognize(_engineHandle,
+                                   pixelData,
+                                   (int)width,
+                                   (int)height,
+                                   4 /* RGBA channels */);
+    } @catch (NSException *exception) {
+        NSLog(@"[OCREngineBridge] ❌ OCR 引擎發生 Objective-C 崩潰: %@", exception);
+        if (error) {
+            *error = [self errorWithCode:1004 message:[NSString stringWithFormat:@"OCR 內部崩潰: %@", exception.reason]];
+        }
+        free(pixelData);
+        return nil;
+    }
     free(pixelData);
 
     if (resultJSON == NULL) {
         if (error) {
-            *error = [self errorWithCode:1003 message:@"OCR 辨識失敗，引擎回傳 NULL"];
+            const char* lastErr = ocr_get_last_error(_engineHandle);
+            NSString *errMsg = lastErr ? [NSString stringWithUTF8String:lastErr] : @"未知錯誤";
+            if (lastErr) ocr_free_string(lastErr);
+            *error = [self errorWithCode:1003 message:[NSString stringWithFormat:@"OCR 辨識失敗: %@", errMsg]];
+        }
+        return nil;
+    }
+
+    NSString *jsonString = [NSString stringWithUTF8String:resultJSON];
+    ocr_free_string((char *)resultJSON);
+
+    OCRResult *result = [self parseResultJSON:jsonString
+                             imageDimensions:CGSizeMake(width, height)
+                                       error:error];
+    return result;
+}
+
+- (nullable OCRResult *)recognizeRegionInImage:(PlatformImage *)image
+                                        inRect:(CGRect)rect
+                                         error:(NSError **)error {
+    if (![self isReady]) {
+        if (error) {
+            *error = [self errorWithCode:1001 message:@"OCR 引擎尚未初始化"];
+        }
+        return nil;
+    }
+
+    // 取得像素資料
+    NSInteger width  = 0;
+    NSInteger height = 0;
+    uint8_t *pixelData = [self pixelDataFromImage:image width:&width height:&height];
+    if (pixelData == NULL) {
+        if (error) {
+            *error = [self errorWithCode:1002 message:@"無法從影像提取像素資料"];
+        }
+        return nil;
+    }
+
+    // 呼叫 C API 進行區域辨識
+    const char *resultJSON = NULL;
+    @try {
+        resultJSON = ocr_recognize_region(_engineHandle,
+                                   pixelData,
+                                   (int)width,
+                                   (int)height,
+                                   4 /* RGBA channels */,
+                                   (int)rect.origin.x,
+                                   (int)rect.origin.y,
+                                   (int)rect.size.width,
+                                   (int)rect.size.height);
+    } @catch (NSException *exception) {
+        NSLog(@"[OCREngineBridge] ❌ OCR 引擎發生 Objective-C 崩潰: %@", exception);
+        if (error) {
+            *error = [self errorWithCode:1004 message:[NSString stringWithFormat:@"OCR 內部崩潰: %@", exception.reason]];
+        }
+        free(pixelData);
+        return nil;
+    }
+    free(pixelData);
+
+    if (resultJSON == NULL) {
+        if (error) {
+            const char* lastErr = ocr_get_last_error(_engineHandle);
+            NSString *errMsg = lastErr ? [NSString stringWithUTF8String:lastErr] : @"未知錯誤";
+            if (lastErr) ocr_free_string(lastErr);
+            *error = [self errorWithCode:1003 message:[NSString stringWithFormat:@"OCR 區域辨識失敗: %@", errMsg]];
         }
         return nil;
     }
@@ -257,7 +335,7 @@ extern "C" {
 
 #pragma mark - 文字移除
 
-- (nullable NSImage *)removeTextFromImage:(NSImage *)image
+- (nullable PlatformImage *)removeTextFromImage:(PlatformImage *)image
                               atLocations:(NSArray<OCRBoundingBox *> *)locations
                                     error:(NSError **)error {
     if (![self isReady]) {
@@ -293,31 +371,45 @@ extern "C" {
     }
 
     // 呼叫 C API
-    OCRImageResult *imgResult = ocr_remove_text(_engineHandle,
-                                                pixelData,
-                                                (int)width,
-                                                (int)height,
-                                                4,
-                                                cBBoxes,
-                                                locationCount);
+    OCRImageResult *imgResult = NULL;
+    @try {
+        imgResult = ocr_remove_text(_engineHandle,
+                                    pixelData,
+                                    (int)width,
+                                    (int)height,
+                                    4,
+                                    cBBoxes,
+                                    locationCount);
+    } @catch (NSException *exception) {
+        NSLog(@"[OCREngineBridge] ❌ OCR 文字移除發生 Objective-C 崩潰: %@", exception);
+        if (error) {
+            *error = [self errorWithCode:1004 message:[NSString stringWithFormat:@"文字移除內部崩潰: %@", exception.reason]];
+        }
+        free(pixelData);
+        free(cBBoxes);
+        return nil;
+    }
     free(pixelData);
     free(cBBoxes);
 
     if (imgResult == NULL) {
         if (error) {
-            *error = [self errorWithCode:1004 message:@"文字移除失敗"];
+            const char* lastErr = ocr_get_last_error(_engineHandle);
+            NSString *errMsg = lastErr ? [NSString stringWithUTF8String:lastErr] : @"未知錯誤";
+            if (lastErr) ocr_free_string(lastErr);
+            *error = [self errorWithCode:1004 message:[NSString stringWithFormat:@"文字移除失敗: %@", errMsg]];
         }
         return nil;
     }
 
-    NSImage *resultImage = [self imageFromPixelData:imgResult->data width:imgResult->width height:imgResult->height];
+    PlatformImage *resultImage = [self imageFromPixelData:imgResult->data width:imgResult->width height:imgResult->height];
     ocr_free_image_result(imgResult);
     return resultImage;
 }
 
 #pragma mark - 文字替換
 
-- (nullable NSImage *)replaceTextInImage:(NSImage *)image
+- (nullable PlatformImage *)replaceTextInImage:(PlatformImage *)image
                               atLocation:(OCRBoundingBox *)location
                              withNewText:(NSString *)newText
                                 fontName:(nullable NSString *)fontName
@@ -358,65 +450,61 @@ extern "C" {
     }
     const char *cFontConfig = fontConfigJson ? [fontConfigJson UTF8String] : NULL;
 
-    OCRImageResult *imgResult = ocr_replace_text(_engineHandle,
-                                                 pixelData,
-                                                 (int)width,
-                                                 (int)height,
-                                                 4,
-                                                 &cBBox,
-                                                 cText,
-                                                 cFontConfig);
+    OCRImageResult *imgResult = NULL;
+    @try {
+        imgResult = ocr_replace_text(_engineHandle,
+                                     pixelData,
+                                     (int)width,
+                                     (int)height,
+                                     4,
+                                     &cBBox,
+                                     cText,
+                                     cFontConfig);
+    } @catch (NSException *exception) {
+        NSLog(@"[OCREngineBridge] ❌ OCR 文字替換發生 Objective-C 崩潰: %@", exception);
+        if (error) {
+            *error = [self errorWithCode:1005 message:[NSString stringWithFormat:@"文字替換內部崩潰: %@", exception.reason]];
+        }
+        free(pixelData);
+        return nil;
+    }
     free(pixelData);
 
     if (imgResult == NULL) {
         if (error) {
-            *error = [self errorWithCode:1005 message:@"文字替換失敗"];
+            const char* lastErr = ocr_get_last_error(_engineHandle);
+            NSString *errMsg = lastErr ? [NSString stringWithUTF8String:lastErr] : @"未知錯誤";
+            if (lastErr) ocr_free_string(lastErr);
+            *error = [self errorWithCode:1005 message:[NSString stringWithFormat:@"文字替換失敗: %@", errMsg]];
         }
         return nil;
     }
 
-    NSImage *resultImage = [self imageFromPixelData:imgResult->data width:imgResult->width height:imgResult->height];
+    PlatformImage *resultImage = [self imageFromPixelData:imgResult->data width:imgResult->width height:imgResult->height];
     ocr_free_image_result(imgResult);
     return resultImage;
 }
 
 #pragma mark - 私有工具方法
 
-/// 從 NSImage 提取 RGBA 像素資料
+/// 從 PlatformImage 提取 RGBA 像素資料
 /// @return 呼叫端負責 free() 的 uint8_t* 緩衝區，失敗回傳 NULL
-- (nullable uint8_t *)pixelDataFromImage:(NSImage *)image
+- (nullable uint8_t *)pixelDataFromImage:(PlatformImage *)image
                                    width:(NSInteger *)outWidth
                                   height:(NSInteger *)outHeight {
-    NSBitmapImageRep *bitmapRep = nil;
+#if TARGET_OS_OSX
+    CGImageRef cgImage = [image CGImageForProposedRect:nil context:nil hints:nil];
+#else
+    CGImageRef cgImage = image.CGImage;
+#endif
 
-    // 嘗試取得既有的 bitmap 表示
-    for (NSImageRep *rep in image.representations) {
-        if ([rep isKindOfClass:[NSBitmapImageRep class]]) {
-            bitmapRep = (NSBitmapImageRep *)rep;
-            break;
-        }
+    if (cgImage == NULL) {
+        NSLog(@"[OCREngineBridge] ❌ 無法取得 CGImage");
+        return NULL;
     }
 
-    // 若無 bitmap 表示，繪製到 CGContext 取得
-    if (bitmapRep == nil) {
-        CGSize size = image.size;
-        NSInteger pixelWidth  = (NSInteger)size.width;
-        NSInteger pixelHeight = (NSInteger)size.height;
-
-        // 使用 tiffRepresentation 轉換
-        NSData *tiffData = [image TIFFRepresentation];
-        if (tiffData) {
-            bitmapRep = [[NSBitmapImageRep alloc] initWithData:tiffData];
-        }
-
-        if (bitmapRep == nil) {
-            NSLog(@"[OCREngineBridge] ❌ 無法建立 BitmapImageRep");
-            return NULL;
-        }
-    }
-
-    NSInteger pixelWidth  = bitmapRep.pixelsWide;
-    NSInteger pixelHeight = bitmapRep.pixelsHigh;
+    NSInteger pixelWidth  = CGImageGetWidth(cgImage);
+    NSInteger pixelHeight = CGImageGetHeight(cgImage);
 
     // 建立 RGBA CGBitmapContext
     NSInteger bytesPerRow = pixelWidth * 4;
@@ -443,7 +531,6 @@ extern "C" {
     }
 
     // 繪製影像到 context
-    CGImageRef cgImage = [bitmapRep CGImage];
     CGContextDrawImage(ctx, CGRectMake(0, 0, pixelWidth, pixelHeight), cgImage);
     CGContextRelease(ctx);
 
@@ -452,8 +539,8 @@ extern "C" {
     return buffer;
 }
 
-/// 從 RGBA 像素資料建立 NSImage
-- (nullable NSImage *)imageFromPixelData:(const uint8_t *)pixels
+/// 從 RGBA 像素資料建立 PlatformImage
+- (nullable PlatformImage *)imageFromPixelData:(const uint8_t *)pixels
                                    width:(NSInteger)width
                                   height:(NSInteger)height {
     NSInteger bytesPerRow = width * 4;
@@ -476,8 +563,12 @@ extern "C" {
         return nil;
     }
 
-    NSImage *result = [[NSImage alloc] initWithCGImage:cgImage
+#if TARGET_OS_OSX
+    PlatformImage *result = [[PlatformImage alloc] initWithCGImage:cgImage
                                                   size:NSMakeSize(width, height)];
+#else
+    PlatformImage *result = [[PlatformImage alloc] initWithCGImage:cgImage];
+#endif
     CGImageRelease(cgImage);
     return result;
 }
@@ -544,14 +635,14 @@ extern "C" {
                 BOOL isBold        = [wordDict[@"is_bold"] boolValue];
 
                 // 解析顏色（如有提供 RGBA）
-                NSColor *color = nil;
+                PlatformColor *color = nil;
                 NSDictionary *colorDict = wordDict[@"color"];
                 if ([colorDict isKindOfClass:[NSDictionary class]]) {
                     CGFloat r = [colorDict[@"r"] doubleValue] / 255.0;
                     CGFloat g = [colorDict[@"g"] doubleValue] / 255.0;
                     CGFloat b = [colorDict[@"b"] doubleValue] / 255.0;
                     CGFloat a = colorDict[@"a"] ? [colorDict[@"a"] doubleValue] / 255.0 : 1.0;
-                    color = [NSColor colorWithRed:r green:g blue:b alpha:a];
+                    color = [PlatformColor colorWithRed:r green:g blue:b alpha:a];
                 }
 
                 OCRWord *word = [[OCRWord alloc] initWithText:wordText
@@ -578,7 +669,7 @@ extern "C" {
         [blocks addObject:block];
     }
 
-    return [[OCRResult alloc] initWithImageDimensions:dimensions textBlocks:blocks];
+    return [[OCRResult alloc] initWithImageDimensions:dimensions textBlocks:blocks rawJson:jsonString];
 }
 
 /// 從 JSON 字典解析 OCRBoundingBox
@@ -634,6 +725,140 @@ extern "C" {
     NSString *result = [NSString stringWithUTF8String:jsonResult];
     ocr_free_string(jsonResult);
     return result;
+}
+
+#pragma mark // ============================================================
+// Export & Formatting API
+// ============================================================
++ (nullable NSString *)exportMarkdownFromJson:(NSString *)jsonStr {
+    if (!jsonStr) return nil;
+    
+    // Resolve dynamic symbols
+    static const char* (*export_md_func)(const char*) = NULL;
+    static void (*free_str_func)(const char*) = NULL;
+    
+    if (!export_md_func || !free_str_func) {
+        // Load dynamically similar to other functions or assume global symbol available if static linked
+        // If the library is statically linked into the app or we use dlsym on main bundle:
+        void* handle = dlopen(NULL, RTLD_LAZY);
+        if (handle) {
+            export_md_func = (const char* (*)(const char*))dlsym(handle, "ocr_export_markdown");
+            free_str_func = (void (*)(const char*))dlsym(handle, "ocr_free_string");
+            dlclose(handle);
+        }
+    }
+    
+    if (export_md_func && free_str_func) {
+        const char *md_c = export_md_func([jsonStr UTF8String]);
+        if (md_c) {
+            NSString *result = [NSString stringWithUTF8String:md_c];
+            free_str_func(md_c);
+            return result;
+        }
+    }
+    return nil;
+}
+
+// ============================================================
+// Settings & Sync API
+// ============================================================
++ (void)initializeSettingsWithFilePath:(NSString *)filePath {
+    if (filePath) {
+        ocr_settings_init([filePath UTF8String]);
+    }
+}
+
++ (BOOL)syncSettingsFromJson:(NSString *)jsonString {
+    if (jsonString) {
+        return ocr_settings_sync_from_json([jsonString UTF8String]) != 0;
+    }
+    return NO;
+}
+
++ (NSString *)getAllSettingsJson {
+    const char *cJson = ocr_settings_get_all_json();
+    if (cJson) {
+        NSString *jsonStr = [NSString stringWithUTF8String:cJson];
+        ocr_free_string(cJson);
+        return jsonStr;
+    }
+    return @"{}";
+}
+
++ (void)setStringSetting:(NSString *)value forKey:(NSString *)key {
+    if (key && value) {
+        ocr_settings_set_string([key UTF8String], [value UTF8String]);
+    }
+}
+
++ (NSString *)stringSettingForKey:(NSString *)key defaultValue:(NSString *)defaultValue {
+    if (key) {
+        const char *cVal = ocr_settings_get_string([key UTF8String], defaultValue ? [defaultValue UTF8String] : "");
+        if (cVal) {
+            NSString *valStr = [NSString stringWithUTF8String:cVal];
+            ocr_free_string(cVal);
+            return valStr;
+        }
+    }
+    return defaultValue ?: @"";
+}
+
++ (void)setIntSetting:(NSInteger)value forKey:(NSString *)key {
+    if (key) {
+        ocr_settings_set_int([key UTF8String], (int)value);
+    }
+}
+
++ (NSInteger)intSettingForKey:(NSString *)key defaultValue:(NSInteger)defaultValue {
+    if (key) {
+        return ocr_settings_get_int([key UTF8String], (int)defaultValue);
+    }
+    return defaultValue;
+}
+
+// ============================================================
+// Document History API
+// ============================================================
++ (void)initializeHistoryWithFilePath:(NSString *)filePath {
+    if (filePath) {
+        ocr_history_init([filePath UTF8String]);
+    }
+}
+
++ (BOOL)saveDocumentToHistoryWithId:(NSString *)docId json:(NSString *)json title:(NSString *)title previewImagePath:(nullable NSString *)previewPath {
+    if (docId && json && title) {
+        return ocr_history_save_document([docId UTF8String], [json UTF8String], [title UTF8String], previewPath ? [previewPath UTF8String] : "") == 0;
+    }
+    return NO;
+}
+
++ (BOOL)deleteDocumentFromHistory:(NSString *)docId {
+    if (docId) {
+        return ocr_history_delete_document([docId UTF8String]) == 0;
+    }
+    return NO;
+}
+
++ (NSString *)getAllDocumentsFromHistory {
+    const char *cJson = ocr_history_get_all_documents();
+    if (cJson) {
+        NSString *jsonStr = [NSString stringWithUTF8String:cJson];
+        ocr_free_string(cJson);
+        return jsonStr;
+    }
+    return @"[]";
+}
+
++ (NSString *)getDocumentDataFromHistory:(NSString *)docId {
+    if (docId) {
+        const char *cJson = ocr_history_get_document_data([docId UTF8String]);
+        if (cJson) {
+            NSString *jsonStr = [NSString stringWithUTF8String:cJson];
+            ocr_free_string(cJson);
+            return jsonStr;
+        }
+    }
+    return @"{}";
 }
 
 @end

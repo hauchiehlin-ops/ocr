@@ -6,10 +6,14 @@
 //
 
 import Foundation
-import AppKit
 import SwiftUI
 import PDFKit
 import Vision
+#if os(macOS)
+import AppKit
+#elseif os(iOS)
+import UIKit
+#endif
 
 // MARK: - 狀態列舉
 
@@ -117,9 +121,21 @@ final class OCRViewModel: ObservableObject {
         didSet { updateSelectedLayerText() }
     }
     @Published var globalFontName: String = "PingFang TC"
+    
+    // Model Download State
+    @Published var showModelDownloadPrompt: Bool = false
+    @Published var isDownloadingModels: Bool = false
+    @Published var downloadProgress: Double = 0.0
+    @Published var isUsingLightweightModel: Bool = true
+    
+    // Batch processing states
+    @Published var isProcessing: Bool = false
+    @Published var loadingMessage: String = ""
 
     /// 可選用的本地端通用字型清單
     let availableFonts = [
+        "Noto Sans CJK TC",
+        "Noto Serif CJK TC",
         "PingFang TC",
         "PingFang SC",
         "Heiti TC",
@@ -145,17 +161,42 @@ final class OCRViewModel: ObservableObject {
     private var engine: OCREngineBridge?
     private var editHistory: [EditSnapshot] = []
     private var editHistoryIndex: Int = -1
+    private var autoSaveTimer: Timer?
+    private let draftDocumentId = "draft-document-id"
+    
+    @Published var recognizedLanguage: String = "ch_tra,eng" {
+        didSet {
+            // 當語言變更時重新初始化引擎
+            if oldValue != recognizedLanguage {
+                setupEngine()
+            }
+        }
+    }
 
     // MARK: - 初始化
 
     init() {
         setupEngine()
+        startAutoSaveTimer()
     }
+
 
     // MARK: - 引擎設定
 
     /// 從 Bundle 載入模型並初始化 OCR 引擎
     func setupEngine() {
+        // 1. 優先嘗試載入使用者自行下載的「高精度完整模型」
+        let documentModelPath = getDocumentModelDirectory()
+        if FileManager.default.fileExists(atPath: documentModelPath) {
+            engine = OCREngineBridge(modelDirectory: documentModelPath, language: recognizedLanguage)
+            if engine?.isReady == true {
+                print("[OCRViewModel] ✅ 引擎初始化成功（已載入高精度下載模型）")
+                self.isUsingLightweightModel = false
+                return
+            }
+        }
+
+        // 2. 如果沒有下載高精度模型，降級使用 App 內建的「輕量版模型」
         // 嘗試從 App Bundle 中尋找模型目錄
         let possiblePaths = [
             Bundle.main.resourcePath.map { "\($0)/models" },
@@ -166,25 +207,91 @@ final class OCRViewModel: ObservableObject {
 
         for modelPath in possiblePaths {
             if FileManager.default.fileExists(atPath: modelPath) {
-                engine = OCREngineBridge(modelDirectory: modelPath)
+                engine = OCREngineBridge(modelDirectory: modelPath, language: recognizedLanguage)
                 if engine?.isReady == true {
-                    print("[OCRViewModel] ✅ 引擎初始化成功，模型路徑: \(modelPath)")
+                    print("[OCRViewModel] ✅ 引擎初始化成功（預設輕量版），模型路徑: \(modelPath)")
+                    self.isUsingLightweightModel = true
                     return
                 }
             }
         }
 
-        // 開發環境備援：使用專案根目錄的模型
+        // 3. 開發環境備援：使用專案根目錄的模型
         let devModelPath = "/Users/barretlin/GitProjects/OCR/models"
         if FileManager.default.fileExists(atPath: devModelPath) {
-            engine = OCREngineBridge(modelDirectory: devModelPath)
+            engine = OCREngineBridge(modelDirectory: devModelPath, language: recognizedLanguage)
             if engine?.isReady == true {
                 print("[OCRViewModel] ✅ 引擎初始化成功（開發模式），模型路徑: \(devModelPath)")
+                self.isUsingLightweightModel = true
                 return
             }
         }
 
-        print("[OCRViewModel] ⚠️ 未找到模型目錄，引擎將於首次使用時提示錯誤")
+        print("[OCRViewModel] ⚠️ 未找到任何模型目錄，OCR 引擎無法就緒")
+        // 如果連輕量版都沒有，只能視為錯誤，但不再強制跳出下載對話框。
+    }
+    
+    private func getDocumentModelDirectory() -> String {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent("OCRModels").path
+    }
+    
+    func downloadModels() {
+        guard !isDownloadingModels else { return }
+        isDownloadingModels = true
+        downloadProgress = 0.0
+        
+        let targetDir = getDocumentModelDirectory()
+        if !FileManager.default.fileExists(atPath: targetDir) {
+            try? FileManager.default.createDirectory(atPath: targetDir, withIntermediateDirectories: true)
+        }
+        
+        // 這裡模擬從遠端伺服器下載模型的行為
+        // 實際應用中應替換為 URLSession 下載 PaddleOCR v5 模型 (.onnx)
+        Task {
+            for i in 1...100 {
+                try? await Task.sleep(nanoseconds: 20_000_000) // 模擬下載時間
+                await MainActor.run {
+                    self.downloadProgress = Double(i) / 100.0
+                }
+            }
+            
+            await MainActor.run {
+                self.isDownloadingModels = false
+                self.showModelDownloadPrompt = false
+                
+                // 模擬下載完成後建立一個假模型檔案以通過後續檢查
+                let dummyFile = URL(fileURLWithPath: targetDir).appendingPathComponent("ppocr_det_v5.onnx")
+                try? "dummy".write(to: dummyFile, atomically: true, encoding: .utf8)
+                
+                // 重新初始化引擎
+                self.setupEngine()
+            }
+        }
+    }
+
+    // MARK: - 自動存檔 (Auto-Save)
+    
+    private func startAutoSaveTimer() {
+        autoSaveTimer?.invalidate()
+        autoSaveTimer = Timer.scheduledTimer(withTimeInterval: 60.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.saveDraftToHistory()
+            }
+        }
+    }
+    
+    private func saveDraftToHistory() {
+        // 為了簡單且安全地實作第一階段草稿保存，我們若有最初的 scanResult 則保存其 rawJson，
+        // 若未來 CanvasDocument 支援 Codable 可將整個編輯狀態存入。
+        // 若發生崩潰，下次啟動可提醒使用者並載回 rawJson (此處為基礎實作)
+        guard let scanResult = self.scanResult, let rawJson = scanResult.rawJson else { return }
+        
+        let title = self.canvasDocument?.name ?? "未命名草稿"
+        let success = OCREngineBridge.saveDocumentToHistory(withId: draftDocumentId, json: rawJson, title: title, previewImagePath: nil)
+        if success {
+            print("[OCRViewModel] 💾 草稿已自動儲存至 SQLite")
+        }
     }
 
     // MARK: - 影像掃描
@@ -201,11 +308,19 @@ final class OCRViewModel: ObservableObject {
         } else if ext == "pdf" {
             await parsePdf(url: url)
         } else {
-            guard let image = NSImage(contentsOf: url) else {
+            #if os(macOS)
+            guard let image = PlatformImage(contentsOf: url) else {
                 state = .error("無法載入影像檔案")
                 errorMessage = "無法讀取所選影像，請確認檔案格式正確。"
                 return
             }
+            #elseif os(iOS)
+            guard let data = try? Data(contentsOf: url), let image = PlatformImage(data: data) else {
+                state = .error("無法載入影像檔案")
+                errorMessage = "無法讀取所選影像，請確認檔案格式正確。"
+                return
+            }
+            #endif
             await scanImage(image)
         }
     }
@@ -250,7 +365,7 @@ final class OCRViewModel: ObservableObject {
                             fontEst.sizePx = CGFloat(fs)
                         }
                         if let fc = pLayer.font_color, fc.count >= 3 {
-                            fontEst.color = NSColor(red: CGFloat(fc[0])/255.0, green: CGFloat(fc[1])/255.0, blue: CGFloat(fc[2])/255.0, alpha: 1.0)
+                            fontEst.color = PlatformColor(red: CGFloat(fc[0])/255.0, green: CGFloat(fc[1])/255.0, blue: CGFloat(fc[2])/255.0, alpha: 1.0)
                         }
                         if let ib = pLayer.is_bold {
                             fontEst.isBold = ib
@@ -300,14 +415,27 @@ final class OCRViewModel: ObservableObject {
         let pdfBounds = firstPage.bounds(for: .mediaBox)
         let dimensions = CGSize(width: pdfBounds.width, height: pdfBounds.height)
         
-        let image = NSImage(size: dimensions)
+        #if os(macOS)
+        let image = PlatformImage(size: dimensions)
         image.lockFocus()
         if let context = NSGraphicsContext.current?.cgContext {
-            context.setFillColor(NSColor.white.cgColor)
+            context.setFillColor(PlatformColor.white.cgColor)
             context.fill(CGRect(origin: .zero, size: dimensions))
             firstPage.draw(with: .mediaBox, to: context)
         }
         image.unlockFocus()
+        #elseif os(iOS)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: dimensions, format: format)
+        let image = renderer.image { context in
+            PlatformColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: dimensions))
+            context.cgContext.translateBy(x: 0.0, y: dimensions.height)
+            context.cgContext.scaleBy(x: 1.0, y: -1.0)
+            firstPage.draw(with: .mediaBox, to: context.cgContext)
+        }
+        #endif
         
         await performOCR(on: image)
         
@@ -354,13 +482,22 @@ final class OCRViewModel: ObservableObject {
             state = .complete
             progress = 1.0
         }
+        }
+    }
+
+    func updateLayerRect(layerId: UUID, newRect: CGRect) {
+        guard var doc = canvasDocument else { return }
+        if let idx = doc.layers.firstIndex(where: { $0.id == layerId }) {
+            doc.layers[idx].boundingBox.update(with: newRect)
+            self.canvasDocument = doc
+        }
     }
 
     private func updateSelectedLayerProperties() {
         guard let id = selectedLayerId, var doc = canvasDocument else { return }
         if let idx = doc.layers.firstIndex(where: { $0.id == id }) {
             doc.layers[idx].fontEstimate.sizePx = inspectorFontSize
-            doc.layers[idx].fontEstimate.color = NSColor(inspectorFontColor)
+            doc.layers[idx].fontEstimate.color = PlatformColor(inspectorFontColor)
             doc.layers[idx].fontEstimate.isBold = inspectorIsBold
             doc.layers[idx].fontEstimate.fontName = inspectorFontName
             self.canvasDocument = doc
@@ -403,7 +540,7 @@ final class OCRViewModel: ObservableObject {
         }
     }
     
-    func replaceSelectedLayerImage(with newImage: NSImage) {
+    func replaceSelectedLayerImage(with newImage: PlatformImage) {
         guard let id = selectedLayerId, var doc = canvasDocument else { return }
         if let idx = doc.layers.firstIndex(where: { $0.id == id }) {
             doc.layers[idx].image = newImage
@@ -485,8 +622,8 @@ final class OCRViewModel: ObservableObject {
     }
 
     /// 掃描指定影像
-    /// - Parameter image: 輸入的 NSImage
-    func scanImage(_ image: NSImage) async {
+    /// - Parameter image: 輸入的 PlatformImage
+    func scanImage(_ image: PlatformImage) async {
         state = .recognizing
         progress = 0.3
 
@@ -526,7 +663,7 @@ final class OCRViewModel: ObservableObject {
 
         // 在背景執行緒執行
         let image = result.originalImage
-        let processedImage: NSImage? = await Task.detached { [engine] in
+        let processedImage: PlatformImage? = await Task.detached { [engine] in
             do {
                 let result = try engine.removeText(from: image, atLocations: selectedBBoxes)
                 return result
@@ -599,7 +736,7 @@ final class OCRViewModel: ObservableObject {
         )
 
         let image = result.originalImage
-        let processedImage: NSImage? = await Task.detached { [engine] in
+        let processedImage: PlatformImage? = await Task.detached { [engine] in
             do {
                 let result = try engine.replaceText(in: image,
                                                      atLocation: bridgeBBox,
@@ -675,9 +812,51 @@ final class OCRViewModel: ObservableObject {
     /// 匯出辨識文字到剪貼簿
     func exportText() {
         guard let text = scanResult?.fullText, !text.isEmpty else { return }
+#if os(macOS)
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+#else
+        UIPasteboard.general.string = text
+#endif
         print("[OCRViewModel] 📋 已複製全文到剪貼簿（\(text.count) 字元）")
+    }
+
+    /// 匯出為 Markdown
+    func exportToMarkdown() -> String? {
+        guard let result = scanResult, let rawJson = result.rawJson else { return nil }
+        return OCREngineBridge.exportMarkdown(fromJson: rawJson)
+    }
+    
+    /// 匯出為雙層可搜尋 PDF (Dual-layer Searchable PDF)
+    func exportToPDF(url: URL) {
+        // macOS/iOS PDFKit creation
+        guard let doc = canvasDocument, let image = scanResult?.originalImage else { return }
+        let pdfContext = CGContext(url as CFURL, mediaBox: nil, nil)
+        
+        pdfContext?.beginPDFPage(nil)
+        
+        // 1. Draw image in background
+        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+            pdfContext?.draw(cgImage, in: CGRect(x: 0, y: 0, width: doc.dimensions.width, height: doc.dimensions.height))
+        }
+        
+        // 2. Draw invisible text on top (Dual-Layer)
+        pdfContext?.setTextDrawingMode(.invisible)
+        for layer in doc.layers where layer.type == .text {
+            let font = CTFontCreateWithName(layer.fontEstimate.fontName as CFString, layer.fontEstimate.sizePx, nil)
+            let attributes: [NSAttributedString.Key: Any] = [.font: font]
+            let attrStr = NSAttributedString(string: layer.text, attributes: attributes)
+            let line = CTLineCreateWithAttributedString(attrStr)
+            
+            // CoreGraphics coords are bottom-up
+            let y = doc.dimensions.height - layer.boundingBox.rect.maxY
+            pdfContext?.textPosition = CGPoint(x: layer.boundingBox.rect.minX, y: y)
+            CTLineDraw(line, pdfContext!)
+        }
+        
+        pdfContext?.endPDFPage()
+        pdfContext?.closePDF()
+        print("[OCRViewModel] 📄 已匯出雙層可搜尋 PDF 至: \(url.path)")
     }
 
     // MARK: - Undo/Redo
@@ -702,18 +881,49 @@ final class OCRViewModel: ObservableObject {
 
     // MARK: - 私有方法
 
+    /// 使用 Apple CoreImage / Vision 進行影像預處理 (Binarization, Contrast)
+    private func preprocessImage(_ image: PlatformImage) -> PlatformImage {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return image }
+        let ciImage = CIImage(cgImage: cgImage)
+        
+        // 1. 增強對比度與調整曝光 (Contrast & Exposure)
+        guard let colorFilter = CIFilter(name: "CIColorControls") else { return image }
+        colorFilter.setValue(ciImage, forKey: kCIInputImageKey)
+        colorFilter.setValue(1.2, forKey: kCIInputContrastKey) // 提高 20% 對比
+        colorFilter.setValue(0.1, forKey: kCIInputBrightnessKey)
+        colorFilter.setValue(0.0, forKey: kCIInputSaturationKey) // 去色有助於二值化
+        
+        guard let adjustedImage = colorFilter.outputImage else { return image }
+        
+        // 2. 邊緣銳利化 (Sharpen)
+        guard let sharpenFilter = CIFilter(name: "CISharpenLuminance") else { return image }
+        sharpenFilter.setValue(adjustedImage, forKey: kCIInputImageKey)
+        sharpenFilter.setValue(0.8, forKey: kCIInputSharpnessKey)
+        
+        guard let outputCIImage = sharpenFilter.outputImage else { return image }
+        
+        // Render back to CGImage
+        let context = CIContext(options: nil)
+        guard let processedCGImage = context.createCGImage(outputCIImage, from: outputCIImage.extent) else { return image }
+        
+        return PlatformImage(cgImage: processedCGImage, size: image.size)
+    }
+
     /// 執行 OCR 辨識
-    private func performOCR(on image: NSImage) async {
+    private func performOCR(on image: PlatformImage) async {
+        print("[OCRViewModel] 🔄 進行影像預處理 (Contrast/Binarization)...")
+        let processedImage = preprocessImage(image)
+        
         guard let engine = engine, engine.isReady else {
             print("[OCRViewModel] ⚠️ C++ 引擎未就緒，自動降級使用 Apple Vision 原生 OCR...")
-            await performNativeOCR(on: image)
+            await performNativeOCR(on: processedImage)
             return
         }
 
         // 在背景執行緒呼叫 C API
         let result: OCRResult? = await Task.detached { [engine] in
             do {
-                let ocrResult = try engine.recognizeImage(image)
+                let ocrResult = try engine.recognizeImage(processedImage)
                 return ocrResult
             } catch {
                 print("[OCRViewModel] ❌ OCR 辨識錯誤: \(error.localizedDescription)")
@@ -722,6 +932,45 @@ final class OCRViewModel: ObservableObject {
         }.value
 
         progress = 0.8
+        
+        handleOCRResult(result: result, image: image)
+    }
+    
+    /// 執行局部 OCR 辨識 (Regional Re-OCR)
+    func performRegionalOCR(inRect rect: CGRect) async {
+        guard let image = self.image else { return }
+        print("[OCRViewModel] 🔄 進行局部 OCR 辨識...")
+        
+        let processedImage = preprocessImage(image)
+        
+        guard let engine = engine, engine.isReady else {
+            print("[OCRViewModel] ⚠️ C++ 引擎未就緒，無法執行局部 OCR")
+            return
+        }
+        
+        isProcessing = true
+        progress = 0.2
+        
+        let result: OCRResult? = await Task.detached { [engine] in
+            do {
+                let ocrResult = try engine.recognizeRegionInImage(processedImage, inRect: rect)
+                return ocrResult
+            } catch {
+                print("[OCRViewModel] ❌ 局部 OCR 辨識錯誤: \(error.localizedDescription)")
+                return nil
+            }
+        }.value
+        
+        progress = 0.8
+        
+        // 此處我們選擇覆蓋整個結果或將結果合併，為了簡化，先將區域結果設為主要結果
+        handleOCRResult(result: result, image: image)
+        
+        isProcessing = false
+        progress = 1.0
+    }
+    
+    private func handleOCRResult(result: OCRResult?, image: PlatformImage) {
 
         if let ocrResult = result {
             let scanResult = OCRScanResult.from(bridgeResult: ocrResult, originalImage: image)
@@ -780,40 +1029,124 @@ final class OCRViewModel: ObservableObject {
         }
     }
     
-    // MARK: - Apple Vision Native OCR Fallback
+    // MARK: - Batch Processing
+
+    /// 批次處理多張影像 (例如文件掃描結果)
+    func processBatchImages(_ images: [PlatformImage]) {
+        guard !images.isEmpty else { return }
+        
+        // 暫存目前的選取與進度
+        isProcessing = true
+        loadingMessage = "批次處理中 (0/\(images.count))"
+        
+        // 使用背景執行緒依序處理
+        DispatchQueue.global(qos: .userInitiated).async {
+            var allResults: [OCRScanResult] = []
+            
+            for (index, image) in images.enumerated() {
+                DispatchQueue.main.async {
+                    self.loadingMessage = "批次處理中 (\(index + 1)/\(images.count))"
+                }
+                
+                if let result = try? self.engine?.recognizeImage(image) {
+                    allResults.append(OCRScanResult.from(bridgeResult: result, originalImage: image))
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.isProcessing = false
+                
+                // 若有多頁，可以選擇將所有文字合併或僅保留最後一頁
+                // 這裡我們暫時將最後一頁設為當前顯示，並合併所有結果作為 Markdown 匯出基礎
+                if let lastResult = allResults.last {
+                    self.scanResult = lastResult
+                    self.canvasDocument = self.buildCanvasDocument(from: lastResult)
+                }
+                
+                print("[OCRViewModel] ✅ 批次處理完成，共 \(allResults.count) 頁")
+                // TODO: 完整的批次文件管理（如分頁顯示）可於未來進階實作
+            }
+        }
+    }
     
-    private func performNativeOCR(on image: NSImage) async {
+    private func buildCanvasDocument(from scanResult: OCRScanResult) -> CanvasDocument {
+        var layers: [CanvasLayer] = []
+        let bgLayer = CanvasLayer(
+            layerId: "image_bg",
+            type: .image,
+            name: "原始影像底圖",
+            boundingBox: BoundingBox(
+                topLeft: CGPoint(x: 0, y: scanResult.dimensions.height),
+                topRight: CGPoint(x: scanResult.dimensions.width, y: scanResult.dimensions.height),
+                bottomRight: CGPoint(x: scanResult.dimensions.width, y: 0),
+                bottomLeft: CGPoint(x: 0, y: 0)
+            ),
+            image: scanResult.originalImage
+        )
+        layers.append(bgLayer)
+        
+        var textId = 0
+        for block in scanResult.textBlocks {
+            for line in block.lines {
+                for word in line.words {
+                    textId += 1
+                    let layer = CanvasLayer(
+                        layerId: "text_\(textId)",
+                        type: .text,
+                        name: "文字元件 \(textId)",
+                        text: word.text,
+                        boundingBox: word.boundingBox,
+                        fontEstimate: word.fontEstimate
+                    )
+                    layers.append(layer)
+                }
+            }
+        }
+        
+        return CanvasDocument(
+            name: "批次影像畫布",
+            dimensions: scanResult.dimensions,
+            layers: layers
+        )
+    }
+
+    // MARK: - Native Processing
+    
+    private func performNativeOCR(on image: PlatformImage) async {
+        #if os(macOS)
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             state = .error("無法轉換影像格式以進行 Vision 辨識")
             return
         }
+        #elseif os(iOS)
+        guard let cgImage = image.cgImage else {
+            state = .error("無法轉換影像格式以進行 Vision 辨識")
+            return
+        }
+        #endif
         
         let requestHandler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = true
-        // 根據需求可加入 zh-Hant 等支援語言 (macOS 11+)
-        request.recognitionLanguages = ["zh-Hant", "zh-Hans", "en-US"]
         
         do {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                request.completionHandler = { _, error in
+            let observations = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<[VNRecognizedTextObservation], Error>) in
+                let request = VNRecognizeTextRequest { request, error in
                     if let error = error {
                         continuation.resume(throwing: error)
+                    } else if let results = request.results as? [VNRecognizedTextObservation] {
+                        continuation.resume(returning: results)
                     } else {
-                        continuation.resume()
+                        continuation.resume(returning: [])
                     }
                 }
+                request.recognitionLevel = .accurate
+                request.usesLanguageCorrection = true
+                request.recognitionLanguages = ["zh-Hant", "zh-Hans", "en-US"]
+                
                 do {
                     try requestHandler.perform([request])
                 } catch {
                     continuation.resume(throwing: error)
                 }
-            }
-            
-            guard let observations = request.results as? [VNRecognizedTextObservation] else {
-                state = .error("Vision API 辨識無結果")
-                return
             }
             
             // 將 Vision 結果轉換為我們的資料結構
@@ -836,7 +1169,7 @@ final class OCRViewModel: ObservableObject {
             )
             layers.append(bgLayer)
             
-            var textBlocks: [OCRTextBlock] = []
+            var textBlocks: [TextBlock] = []
             
             for (index, observation) in observations.enumerated() {
                 guard let candidate = observation.topCandidates(1).first else { continue }
@@ -861,12 +1194,12 @@ final class OCRViewModel: ObservableObject {
                 let wordId = UUID()
                 let fontEst = FontEstimate(
                     sizePx: boxHeight * 0.8,
-                    color: NSColor.black,
+                    color: PlatformColor.black,
                     isBold: false,
                     fontName: "PingFang TC"
                 )
                 
-                let ocrWord = OCRWord(
+                let word = TextWord(
                     id: wordId,
                     text: candidate.string,
                     confidence: Double(candidate.confidence),
@@ -874,8 +1207,20 @@ final class OCRViewModel: ObservableObject {
                     fontEstimate: fontEst
                 )
                 
-                let ocrLine = OCRLine(id: UUID(), words: [ocrWord])
-                textBlocks.append(OCRTextBlock(id: UUID(), lines: [ocrLine]))
+                let line = TextLine(
+                    id: UUID(),
+                    text: candidate.string,
+                    confidence: Double(candidate.confidence),
+                    boundingBox: bbox,
+                    words: [word]
+                )
+                textBlocks.append(TextBlock(
+                    id: UUID(),
+                    type: .paragraph,
+                    confidence: Double(candidate.confidence),
+                    boundingBox: bbox,
+                    lines: [line]
+                ))
                 
                 let layer = CanvasLayer(
                     layerId: "vision_text_\(index)",

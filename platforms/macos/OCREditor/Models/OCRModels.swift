@@ -6,7 +6,9 @@
 //
 
 import Foundation
-import AppKit
+#if os(macOS)
+
+#endif
 
 // MARK: - BoundingBox
 
@@ -16,6 +18,13 @@ struct BoundingBox: Equatable, Codable {
     var topRight: CGPoint
     var bottomRight: CGPoint
     var bottomLeft: CGPoint
+
+    mutating func update(with newRect: CGRect) {
+        self.topLeft = CGPoint(x: newRect.minX, y: newRect.minY)
+        self.topRight = CGPoint(x: newRect.maxX, y: newRect.minY)
+        self.bottomLeft = CGPoint(x: newRect.minX, y: newRect.maxY)
+        self.bottomRight = CGPoint(x: newRect.maxX, y: newRect.maxY)
+    }
 
     /// 軸對齊包圍矩形
     var rect: CGRect {
@@ -42,67 +51,86 @@ struct BoundingBox: Equatable, Codable {
 
 /// 推估字體資訊
 struct FontEstimate: Equatable {
-    var sizePx: CGFloat       ///< 推估字體大小 (px)
-    var color: NSColor        ///< 推估文字顏色
-    var isBold: Bool          ///< 是否粗體
-    var fontName: String      ///< 通用字型名稱
+    var sizePx: CGFloat       ///< 推估字級大小（像素）
+    var color: PlatformColor  ///< 推估文字顏色
+    var isBold: Bool          ///< 是否為粗體
+    var fontName: String      ///< 字型名稱
 
-    init(sizePx: CGFloat, color: NSColor, isBold: Bool, fontName: String = "PingFang TC") {
+    init(sizePx: CGFloat, color: PlatformColor, isBold: Bool, fontName: String = "PingFang TC") {
         self.sizePx = sizePx
         self.color = color
         self.isBold = isBold
         self.fontName = fontName
     }
 
-    /// 轉換為 NSFont (本地端預設字型 Fallback 替換)
-    var nsFont: NSFont {
+    /// 轉換為 PlatformFont (本地端預設字型 Fallback 替換)
+    var nsFont: PlatformFont {
         let size = sizePx > 0 ? sizePx : 14.0
         
+        var finalFontName = "NotoSansTC-Regular" // 預設使用我們打包的 Noto Sans
+        
         if fontName != "System" && !fontName.isEmpty {
-            var finalFontName = fontName
-            if isBold {
-                if fontName == "PingFang TC" {
-                    finalFontName = "PingFangTC-Semibold"
-                } else if fontName == "PingFang SC" {
-                    finalFontName = "PingFangSC-Semibold"
-                } else if fontName == "Heiti TC" {
-                    finalFontName = "STHeitiTC-Medium"
-                } else if fontName == "Songti TC" {
-                    finalFontName = "STSongti-TC-Bold"
-                } else if fontName == "Arial" {
-                    finalFontName = "Arial-BoldMT"
-                } else if fontName == "Helvetica" {
-                    finalFontName = "Helvetica-Bold"
-                } else if fontName == "Times New Roman" {
-                    finalFontName = "TimesNewRomanPS-BoldMT"
-                }
+            let lower = fontName.lowercased()
+            // 判斷是否為襯線字體 (Serif / 明體 / 宋體)
+            if lower.contains("serif") || lower.contains("song") || lower.contains("ming") || lower.contains("times") {
+                finalFontName = isBold ? "NotoSerifTC-Bold" : "NotoSerifTC-Regular"
+                // 註：目前我們只下載了 Regular，所以統一對應到 Regular。若有 Bold 再換。
+                finalFontName = "NotoSerifTC-Regular"
             } else {
-                if fontName == "PingFang TC" {
-                    finalFontName = "PingFangTC-Regular"
-                } else if fontName == "PingFang SC" {
-                    finalFontName = "PingFangSC-Regular"
-                } else if fontName == "Heiti TC" {
-                    finalFontName = "STHeitiTC-Light"
-                } else if fontName == "Songti TC" {
-                    finalFontName = "STSongti-TC-Regular"
-                }
+                // 無襯線字體 (Sans-serif / 黑體 / Arial)
+                finalFontName = isBold ? "NotoSansTC-Bold" : "NotoSansTC-Regular"
+                finalFontName = "NotoSansTC-Regular"
             }
-            if let customFont = NSFont(name: finalFontName, size: size) {
+            
+            // 先嘗試載入系統內建的原字體 (如 PingFang TC 等) 以確保最佳原生體驗
+            var nativeFontName = fontName
+            if isBold {
+                if fontName == "PingFang TC" { nativeFontName = "PingFangTC-Semibold" }
+                else if fontName == "PingFang SC" { nativeFontName = "PingFangSC-Semibold" }
+                else if fontName == "Heiti TC" { nativeFontName = "STHeitiTC-Medium" }
+                else if fontName == "Songti TC" { nativeFontName = "STSongti-TC-Bold" }
+                else if fontName == "Arial" { nativeFontName = "Arial-BoldMT" }
+                else if fontName == "Helvetica" { nativeFontName = "Helvetica-Bold" }
+                else if fontName == "Times New Roman" { nativeFontName = "TimesNewRomanPS-BoldMT" }
+            } else {
+                if fontName == "PingFang TC" { nativeFontName = "PingFangTC-Regular" }
+                else if fontName == "PingFang SC" { nativeFontName = "PingFangSC-Regular" }
+                else if fontName == "Heiti TC" { nativeFontName = "STHeitiTC-Light" }
+                else if fontName == "Songti TC" { nativeFontName = "STSongti-TC-Regular" }
+            }
+            
+            // 1. 嘗試系統原生字體
+            if let customFont = PlatformFont(name: nativeFontName, size: size) {
                 return customFont
             }
         }
         
-        // Fallback to system font
+        // 2. 找不到時，嘗試載入我們打包的字體
+        // 注意：UIAppFonts 必須註冊成功，且名稱對應 (NotoSansCJKtc-Regular 等)
+        // 為了安全，若打包字型名稱讀取失敗，最後 Fallback 回系統預設字體
+        if let bundledFont = PlatformFont(name: finalFontName, size: size) {
+            return bundledFont
+        }
+        
+        // NotoCJK 的實際 PostScript 名稱可能是 NotoSansCJKtc-Regular
+        if let bundledFont = PlatformFont(name: "NotoSansCJKtc-Regular", size: size) {
+            return bundledFont
+        }
+        if let bundledFont = PlatformFont(name: "NotoSerifCJKtc-Regular", size: size) {
+            return bundledFont
+        }
+        
+        // 3. Fallback to system font
         if isBold {
-            return NSFont.boldSystemFont(ofSize: size)
+            return PlatformFont.boldSystemFont(ofSize: size)
         } else {
-            return NSFont.systemFont(ofSize: size)
+            return PlatformFont.systemFont(ofSize: size)
         }
     }
 
     /// 預設值
     static let `default` = FontEstimate(
-        sizePx: 14,
+        sizePx: 14.0,
         color: .black,
         isBold: false,
         fontName: "PingFang TC"
@@ -217,9 +245,10 @@ struct TextBlock: Identifiable, Equatable {
 /// 完整的 OCR 掃描結果
 struct OCRScanResult: Identifiable, Equatable {
     let id: UUID
-    let originalImage: NSImage      ///< 原始影像
+    let originalImage: PlatformImage      ///< 原始影像
     let dimensions: CGSize          ///< 影像尺寸
     var textBlocks: [TextBlock]     ///< 文字區塊陣列
+    var rawJson: String?            ///< 原始 JSON (用於 C++ 匯出)
 
     /// 全文（所有行串接）
     var fullText: String {
@@ -247,14 +276,16 @@ struct OCRScanResult: Identifiable, Equatable {
 
     init(
         id: UUID = UUID(),
-        originalImage: NSImage,
+        originalImage: PlatformImage,
         dimensions: CGSize,
-        textBlocks: [TextBlock] = []
+        textBlocks: [TextBlock] = [],
+        rawJson: String? = nil
     ) {
         self.id = id
         self.originalImage = originalImage
         self.dimensions = dimensions
         self.textBlocks = textBlocks
+        self.rawJson = rawJson
     }
 
     // Equatable — 只比較 id（影像不做深層比較）
@@ -282,7 +313,7 @@ extension OCRScanResult {
     /// - Parameters:
     ///   - bridgeResult: 橋接層辨識結果
     ///   - originalImage: 原始輸入影像
-    static func from(bridgeResult: OCRResult, originalImage: NSImage) -> OCRScanResult {
+    static func from(bridgeResult: OCRResult, originalImage: PlatformImage) -> OCRScanResult {
         let blocks: [TextBlock] = bridgeResult.textBlocks.map { bridgeBlock in
             let lines: [TextLine] = bridgeBlock.lines.map { bridgeLine in
                 let words: [TextWord] = bridgeLine.words.map { bridgeWord in
@@ -320,7 +351,8 @@ extension OCRScanResult {
         return OCRScanResult(
             originalImage: originalImage,
             dimensions: bridgeResult.imageDimensions,
-            textBlocks: blocks
+            textBlocks: blocks,
+            rawJson: bridgeResult.rawJson
         )
     }
 }
@@ -343,7 +375,7 @@ struct CanvasLayer: Identifiable, Equatable {
     var fontEstimate: FontEstimate ///< For text layers
     var isSelected: Bool
     var localImagePath: String?   ///< For image layers
-    var image: NSImage?           ///< Loaded image data
+    var image: PlatformImage?           ///< Loaded image data
 
     init(
         id: UUID = UUID(),
@@ -355,7 +387,7 @@ struct CanvasLayer: Identifiable, Equatable {
         fontEstimate: FontEstimate = .default,
         isSelected: Bool = false,
         localImagePath: String? = nil,
-        image: NSImage? = nil
+        image: PlatformImage? = nil
     ) {
         self.id = id
         self.layerId = layerId

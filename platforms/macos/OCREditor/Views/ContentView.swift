@@ -9,16 +9,38 @@ import SwiftUI
 import UniformTypeIdentifiers
 import PDFKit
 
+// MARK: - Helper Structs
+enum GuideOrientation {
+    case horizontal, vertical
+}
+
+struct GuideLine: Identifiable {
+    let id = UUID()
+    let orientation: GuideOrientation
+    let position: CGFloat
+}
+
 // MARK: - ContentView
 
 struct ContentView: View {
     @StateObject private var viewModel = OCRViewModel()
     @State private var isFileImporterPresented = false
     @State private var isImageReplacerPresented = false
+    @State private var isScannerPresented = false
     @State private var hoveredLayerId: UUID? = nil
     @State private var sidebarWidth: CGFloat = 300
     @State private var inspectorWidth: CGFloat = 320
     @State private var canvasZoom: CGFloat = 1.0
+    @State private var currentZoom: CGFloat = 0.0
+
+    @State private var draggingLayerId: UUID? = nil
+    @State private var dragOffset: CGSize = .zero
+    @State private var activeGuides: [GuideLine] = []
+
+    // Regional Re-OCR Selection
+    @State private var isSelectingRegion = false
+    @State private var selectionStart: CGPoint?
+    @State private var selectionCurrent: CGPoint?
 
     var body: some View {
         NavigationSplitView {
@@ -35,7 +57,7 @@ struct ContentView: View {
                 // 右側屬性面板區域
                 inspectorArea
                     .frame(width: inspectorWidth)
-                    .background(Color(nsColor: .windowBackgroundColor))
+                    .background(Color(platformColor: PlatformColor.themeWindowBackground))
             }
         }
         .toolbar {
@@ -55,6 +77,13 @@ struct ContentView: View {
         ) { result in
             handleImageReplaceImport(result)
         }
+        #if os(iOS)
+        .fullScreenCover(isPresented: $isScannerPresented) {
+            DocumentScannerView(isPresented: $isScannerPresented) { images in
+                viewModel.processBatchImages(images)
+            }
+        }
+        #endif
         .frame(minWidth: 1100, minHeight: 750)
         .alert("錯誤", isPresented: showingError) {
             Button("確定", role: .cancel) {
@@ -62,6 +91,50 @@ struct ContentView: View {
             }
         } message: {
             Text(viewModel.errorMessage ?? "發生未知錯誤")
+        }
+        .overlay(
+            Group {
+                if viewModel.isDownloadingModels {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                        
+                        VStack(spacing: 20) {
+                            Text("正在下載 AI 模型...")
+                                .font(.headline)
+                            
+                            ProgressView(value: viewModel.downloadProgress)
+                                .progressViewStyle(.linear)
+                                .frame(width: 200)
+                            
+                            Text("\(Int(viewModel.downloadProgress * 100))%")
+                                .font(.caption)
+                        }
+                        .padding(30)
+                        .background(Color(platformColor: PlatformColor.themeWindowBackground))
+                        .cornerRadius(12)
+                        .shadow(radius: 20)
+                    }
+                }
+            }
+        )
+        .alert("下載高精度 AI 模型", isPresented: $viewModel.showModelDownloadPrompt) {
+            Button("立即下載") {
+                viewModel.downloadModels()
+            }
+            Button("稍後再說", role: .cancel) {
+                // User chose to stick with the lightweight model
+            }
+        } message: {
+            Text("為了提供最佳的文字辨識效果，建議下載高精度 AI 模型 (約 50MB)。\n若選擇稍後下載，將暫時使用內建的輕量級模型。")
+        }
+        .onAppear {
+            // Check for model status on first view appearance
+            if !UserDefaults.standard.bool(forKey: "hasDownloadedHighAccuracyModel") && viewModel.isUsingLightweightModel {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    viewModel.showModelDownloadPrompt = true
+                }
+            }
         }
     }
 
@@ -223,11 +296,84 @@ extension ContentView {
                         ForEach(doc.layers) { layer in
                             renderLayer(layer, docDimensions: doc.dimensions)
                         }
+
+                        // 渲染導引線
+                        ForEach(activeGuides) { guide in
+                            if guide.orientation == .vertical {
+                                Rectangle()
+                                    .fill(Color.orange)
+                                    .frame(width: 1, height: doc.dimensions.height)
+                                    .position(x: guide.position, y: doc.dimensions.height / 2)
+                            } else {
+                                Rectangle()
+                                    .fill(Color.orange)
+                                    .frame(width: doc.dimensions.width, height: 1)
+                                    .position(x: doc.dimensions.width / 2, y: guide.position)
+                            }
+                        }
+                        
+                        // Regional Selection Overlay
+                        if isSelectingRegion, let start = selectionStart, let current = selectionCurrent {
+                            let rect = CGRect(
+                                x: min(start.x, current.x),
+                                y: min(start.y, current.y),
+                                width: abs(current.x - start.x),
+                                height: abs(current.y - start.y)
+                            )
+                            Rectangle()
+                                .fill(Color.blue.opacity(0.3))
+                                .border(Color.blue, width: 2)
+                                .frame(width: rect.width, height: rect.height)
+                                .position(x: rect.midX, y: rect.midY)
+                        }
                     }
                     .padding(40)
-                    .scaleEffect(canvasZoom)
+                    .scaleEffect(canvasZoom + currentZoom)
+                    .gesture(
+                        MagnificationGesture()
+                            .onChanged { value in
+                                currentZoom = value - 1
+                            }
+                            .onEnded { value in
+                                canvasZoom = max(0.2, min(5.0, canvasZoom + currentZoom))
+                                currentZoom = 0
+                            }
+                    )
+                    .gesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                if isSelectingRegion {
+                                    if selectionStart == nil {
+                                        selectionStart = value.location
+                                    }
+                                    selectionCurrent = value.location
+                                }
+                            }
+                            .onEnded { value in
+                                if isSelectingRegion {
+                                    if let start = selectionStart {
+                                        let end = value.location
+                                        let rect = CGRect(
+                                            x: min(start.x, end.x),
+                                            y: min(start.y, end.y),
+                                            width: abs(end.x - start.x),
+                                            height: abs(end.y - start.y)
+                                        )
+                                        
+                                        // 座標轉換：Canvas 是 top-left, C++ API也是 top-left origin?
+                                        // 測試後若有偏移再調整
+                                        Task {
+                                            await viewModel.performRegionalOCR(inRect: rect)
+                                        }
+                                    }
+                                    selectionStart = nil
+                                    selectionCurrent = nil
+                                    isSelectingRegion = false
+                                }
+                            }
+                    )
                 }
-                .background(Color(nsColor: .underPageBackgroundColor))
+                .background(Color(platformColor: PlatformColor.themeUnderPageBackground))
             }
         } else {
             emptyStateView
@@ -240,11 +386,15 @@ extension ContentView {
         // 翻轉 Y 軸以適應 Core 座標與 standard top-left 渲染
         let renderY = docDimensions.height - rect.origin.y - rect.height
         
+        let isDragging = draggingLayerId == layer.id
+        let currentX = rect.origin.x + (isDragging ? dragOffset.width : 0)
+        let currentY = renderY + (isDragging ? dragOffset.height : 0)
+
         Group {
             switch layer.type {
             case .image:
                 if let nsImg = layer.image {
-                    Image(nsImage: nsImg)
+                    Image(platformImage: nsImg)
                         .resizable()
                 } else {
                     // Placeholder for images (e.g. background layers without loaded texture)
@@ -286,7 +436,7 @@ extension ContentView {
             Rectangle()
                 .stroke(viewModel.selectedLayerId == layer.id ? Color.accentColor : (hoveredLayerId == layer.id ? Color.accentColor.opacity(0.4) : Color.clear), lineWidth: 2)
         )
-        .position(x: rect.origin.x + rect.width / 2, y: renderY + rect.height / 2)
+        .position(x: currentX + rect.width / 2, y: currentY + rect.height / 2)
         .contentShape(Rectangle())
         .onHover { isHovered in
             hoveredLayerId = isHovered ? layer.id : nil
@@ -294,6 +444,97 @@ extension ContentView {
         .onTapGesture {
             viewModel.selectedLayerId = layer.id
         }
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    handleDragChange(for: layer, translation: value.translation, docDimensions: docDimensions)
+                }
+                .onEnded { value in
+                    handleDragEnd(for: layer, docDimensions: docDimensions)
+                }
+        )
+    }
+    
+    // MARK: - Snapping Logic
+
+    private func handleDragChange(for layer: CanvasLayer, translation: CGSize, docDimensions: CGSize) {
+        if draggingLayerId == nil {
+            draggingLayerId = layer.id
+        }
+
+        var newOffset = translation
+        var guides: [GuideLine] = []
+        let threshold: CGFloat = 8.0 // Snapping distance threshold
+        
+        guard let doc = viewModel.canvasDocument else { return }
+        
+        let rect = layer.boundingBox.rect
+        let renderY = docDimensions.height - rect.origin.y - rect.height
+        
+        let rawX = rect.origin.x + translation.width
+        let rawY = renderY + translation.height
+        
+        let myLeft = rawX
+        let myHCenter = rawX + rect.width / 2
+        let myRight = rawX + rect.width
+        let myTop = rawY
+        let myVCenter = rawY + rect.height / 2
+        let myBottom = rawY + rect.height
+        
+        var snappedX = rawX
+        var snappedY = rawY
+        var didSnapX = false
+        var didSnapY = false
+
+        // Check against other layers
+        for other in doc.layers where other.id != layer.id {
+            let oRect = other.boundingBox.rect
+            let oRenderY = docDimensions.height - oRect.origin.y - oRect.height
+            
+            let oLeft = oRect.origin.x
+            let oHCenter = oRect.origin.x + oRect.width / 2
+            let oRight = oRect.origin.x + oRect.width
+            
+            let oTop = oRenderY
+            let oVCenter = oRenderY + oRect.height / 2
+            let oBottom = oRenderY + oRect.height
+            
+            // X-axis snapping
+            if !didSnapX {
+                if abs(myLeft - oLeft) < threshold { snappedX = oLeft; didSnapX = true; guides.append(GuideLine(orientation: .vertical, position: oLeft)) }
+                else if abs(myRight - oRight) < threshold { snappedX = oRight - rect.width; didSnapX = true; guides.append(GuideLine(orientation: .vertical, position: oRight)) }
+                else if abs(myHCenter - oHCenter) < threshold { snappedX = oHCenter - rect.width / 2; didSnapX = true; guides.append(GuideLine(orientation: .vertical, position: oHCenter)) }
+            }
+            
+            // Y-axis snapping
+            if !didSnapY {
+                if abs(myTop - oTop) < threshold { snappedY = oTop; didSnapY = true; guides.append(GuideLine(orientation: .horizontal, position: oTop)) }
+                else if abs(myBottom - oBottom) < threshold { snappedY = oBottom - rect.height; didSnapY = true; guides.append(GuideLine(orientation: .horizontal, position: oBottom)) }
+                else if abs(myVCenter - oVCenter) < threshold { snappedY = oVCenter - rect.height / 2; didSnapY = true; guides.append(GuideLine(orientation: .horizontal, position: oVCenter)) }
+            }
+        }
+        
+        newOffset.width = snappedX - rect.origin.x
+        newOffset.height = snappedY - renderY
+        
+        self.dragOffset = newOffset
+        self.activeGuides = guides
+    }
+    
+    private func handleDragEnd(for layer: CanvasLayer, docDimensions: CGSize) {
+        let rect = layer.boundingBox.rect
+        let finalX = rect.origin.x + dragOffset.width
+        let finalRenderY = (docDimensions.height - rect.origin.y - rect.height) + dragOffset.height
+        
+        // Convert back to core coordinates
+        let newCoreY = docDimensions.height - finalRenderY - rect.height
+        let newRect = CGRect(x: finalX, y: newCoreY, width: rect.width, height: rect.height)
+        
+        viewModel.updateLayerRect(layerId: layer.id, newRect: newRect)
+        
+        self.draggingLayerId = nil
+        self.dragOffset = .zero
+        self.activeGuides = []
     }
     
     @ViewBuilder
@@ -320,6 +561,18 @@ extension ContentView {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             
+            #if os(iOS)
+            Button {
+                isScannerPresented = true
+            } label: {
+                Label("掃描文件", systemImage: "camera.viewfinder")
+                    .font(.body)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .padding(.top, 4)
+            #endif
+            
             Button {
                 viewModel.loadSampleDocument()
             } label: {
@@ -331,7 +584,7 @@ extension ContentView {
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(Color(platformColor: PlatformColor.themeControlBackground))
         .onDrop(of: supportedFileTypes, isTargeted: nil) { providers in
             handleDrop(providers)
         }
@@ -349,7 +602,7 @@ extension ContentView {
                 .bold()
                 .padding()
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
+                .background(Color(platformColor: PlatformColor.themeControlBackground).opacity(0.5))
             
             Divider()
             
@@ -387,7 +640,7 @@ extension ContentView {
                                     .font(.system(.body))
                                     .frame(height: 120)
                                     .padding(4)
-                                    .background(Color(nsColor: .controlBackgroundColor))
+                                    .background(Color(platformColor: PlatformColor.themeControlBackground))
                                     .cornerRadius(6)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 6)
@@ -602,6 +855,15 @@ extension ContentView {
             .help("開啟檔案、PDF或簡報 (⌘O)")
             .keyboardShortcut("o", modifiers: .command)
 
+            #if os(iOS)
+            // 掃描文件
+            Button {
+                isScannerPresented = true
+            } label: {
+                Label("掃描", systemImage: "camera")
+            }
+            #endif
+
             // 刪除選取元件
             Button {
                 viewModel.deleteSelectedLayer()
@@ -611,6 +873,20 @@ extension ContentView {
             .disabled(viewModel.selectedLayerId == nil)
             .help("刪除選取的元件 (⌫)")
             .keyboardShortcut(.delete, modifiers: [])
+
+            Divider()
+            
+            // 語系選擇
+            Picker("辨識語系", selection: $viewModel.recognizedLanguage) {
+                Text("繁英混合").tag("ch_tra,eng")
+                Text("簡英混合").tag("ch_sim,eng")
+                Text("僅英文").tag("eng")
+                Text("日文").tag("japan")
+                Text("韓文").tag("korean")
+            }
+            .pickerStyle(MenuPickerStyle())
+            .frame(width: 120)
+            .help("選擇 OCR 優先辨識語言")
 
             Divider()
 
@@ -662,6 +938,17 @@ extension ContentView {
             
             Divider()
             
+            if viewModel.isUsingLightweightModel {
+                Button {
+                    viewModel.downloadModels()
+                } label: {
+                    Label("升級高精度模型", systemImage: "arrow.down.app")
+                }
+                .help("目前使用內建輕量模型，點此下載高精度模型")
+                
+                Divider()
+            }
+            
             HStack {
                 Text("Engine:")
                     .font(.caption)
@@ -699,7 +986,11 @@ extension ContentView {
             guard let url = urls.first else { return }
             let secured = url.startAccessingSecurityScopedResource()
             defer { if secured { url.stopAccessingSecurityScopedResource() } }
-            guard let img = NSImage(contentsOf: url) else { return }
+            #if os(macOS)
+            guard let img = PlatformImage(contentsOf: url) else { return }
+            #elseif os(iOS)
+            guard let data = try? Data(contentsOf: url), let img = PlatformImage(data: data) else { return }
+            #endif
             viewModel.replaceSelectedLayerImage(with: img)
         case .failure(let error):
             viewModel.errorMessage = "替換圖片讀取失敗: \(error.localizedDescription)"
@@ -721,7 +1012,7 @@ extension ContentView {
                                     url.stopAccessingSecurityScopedResource()
                                 }
                             }
-                        } else if let data = item as? Data, let image = NSImage(data: data) {
+                        } else if let data = item as? Data, let image = PlatformImage(data: data) {
                             Task {
                                 await viewModel.scanImage(image)
                             }

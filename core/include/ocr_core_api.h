@@ -42,9 +42,54 @@
     #define OCR_API
 #endif
 
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+// ============================================================
+// Settings & Sync API
+// ============================================================
+// Initializes the global settings manager with a file path
+OCR_API void ocr_settings_init(const char* file_path);
+
+// Sync settings from JSON string (e.g. pulled from iCloud/Google Drive)
+OCR_API int ocr_settings_sync_from_json(const char* json_str);
+
+// Get the current settings as a JSON string (for backing up to cloud)
+OCR_API const char* ocr_settings_get_all_json(void);
+
+// Set/Get individual string setting
+OCR_API void ocr_settings_set_string(const char* key, const char* value);
+OCR_API const char* ocr_settings_get_string(const char* key, const char* default_val);
+
+// Set/Get individual int setting
+OCR_API void ocr_settings_set_int(const char* key, int value);
+OCR_API int ocr_settings_get_int(const char* key, int default_val);
+
+// ============================================================
+// Document History API (SQLite)
+// ============================================================
+// Initialize the history database at the given file path (e.g. app documents directory)
+OCR_API int ocr_history_init(const char* db_path);
+
+// Save or update a document in history
+// @param doc_id Unique identifier for the document (UUID)
+// @param json_data The OCR result JSON string
+// @param title Optional title for the document
+// @param preview_image_path Optional path to a saved thumbnail
+OCR_API int ocr_history_save_document(const char* doc_id, const char* json_data, const char* title, const char* preview_image_path);
+
+// Delete a document from history
+OCR_API int ocr_history_delete_document(const char* doc_id);
+
+// Get a list of all documents in history (returns a JSON array string)
+// Format: [{"id": "...", "title": "...", "timestamp": 123456789, "preview": "..."}, ...]
+OCR_API const char* ocr_history_get_all_documents(void);
+
+// Get the OCR result JSON data for a specific document
+OCR_API const char* ocr_history_get_document_data(const char* doc_id);
 
 /* ============================================================
  * Opaque Handle Types
@@ -211,6 +256,38 @@ OCR_API void ocr_engine_destroy(OCRHandle* handle);
 OCR_API const char* ocr_recognize(OCRHandle* handle,
                                    const uint8_t* image_data,
                                    int width, int height, int channels);
+
+/**
+ * @brief Performs OCR on a specific region of an image.
+ * 
+ * @param handle  Engine handle.
+ * @param image_data Raw pixel data.
+ * @param width   Image width in pixels.
+ * @param height  Image height in pixels.
+ * @param channels Number of color channels (e.g., 3 for RGB, 4 for RGBA).
+ * @param x       Top-left X coordinate of the region.
+ * @param y       Top-left Y coordinate of the region.
+ * @param w       Width of the region.
+ * @param h       Height of the region.
+ * @return JSON string of the Positional Text Tree for this region.
+ *         Caller MUST free this string via ocr_free_string().
+ */
+OCR_API const char* ocr_recognize_region(OCRHandle* handle,
+                                          const uint8_t* image_data,
+                                          int width, int height, int channels,
+                                          int x, int y, int w, int h);
+
+/* ============================================================
+ * Export & Formatting
+ * ============================================================ */
+
+/**
+ * @brief Export the OCR JSON result to a structured Markdown string.
+ *
+ * @param json_str The Positional Text Tree JSON string returned by ocr_recognize.
+ * @return Markdown string. Caller MUST free via ocr_free_string().
+ */
+OCR_API const char* ocr_export_markdown(const char* json_str);
 
 /* ============================================================
  * Text Removal (AI Inpainting)
