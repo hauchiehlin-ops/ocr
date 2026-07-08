@@ -850,8 +850,8 @@ namespace OCREditor.Interop
 
         public static bool LoadProjectArchive(string inputPath, out string imagePath, out string jsonState)
         {
-            imagePath = null;
-            jsonState = null;
+            imagePath = string.Empty;
+            jsonState = string.Empty;
             try
             {
                 IntPtr imgPtr = IntPtr.Zero;
@@ -861,8 +861,8 @@ namespace OCREditor.Interop
                 if (result == 1 && imgPtr != IntPtr.Zero && jsonPtr != IntPtr.Zero)
                 {
                     try {
-                        imagePath = Marshal.PtrToStringUTF8(imgPtr);
-                        jsonState = Marshal.PtrToStringUTF8(jsonPtr);
+                        imagePath = Marshal.PtrToStringUTF8(imgPtr) ?? string.Empty;
+                        jsonState = Marshal.PtrToStringUTF8(jsonPtr) ?? string.Empty;
                         return true;
                     } finally {
                         NativeMethods.ocr_free_string(imgPtr);

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using ProgressBar = System.Windows.Controls.ProgressBar;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -1062,6 +1063,7 @@ namespace OCREditor
 
         private System.Windows.Media.Color GetAverageCornerColor(int cx, int cy, int imgW, int imgH)
         {
+            if (_originalBitmap == null) return System.Windows.Media.Colors.Transparent;
             int sumR = 0, sumG = 0, sumB = 0, count = 0;
             for (int dy = -2; dy <= 2; dy++)
             {
