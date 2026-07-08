@@ -956,7 +956,7 @@ final class OCRViewModel: ObservableObject {
         
         let result: OCRResult? = await Task.detached { [engine] in
             do {
-                let ocrResult = try engine.recognizeRegionInImage(processedImage, inRect: rect)
+                let ocrResult = try engine.recognizeRegion(inImage: processedImage, rect: rect)
                 return ocrResult
             } catch {
                 print("[OCRViewModel] ❌ 局部 OCR 辨識錯誤: \(error.localizedDescription)")

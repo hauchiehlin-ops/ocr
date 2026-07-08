@@ -147,7 +147,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// @return OCRResult 或 nil
 - (nullable OCRResult *)recognizeRegionInImage:(PlatformImage *)image
                                         inRect:(CGRect)rect
-                                         error:(NSError **)error;
+                                         error:(NSError **)error
+    NS_SWIFT_NAME(recognizeRegion(inImage:rect:));
 
 /// 移除影像中指定位置的文字（修復背景）
 /// @param image     輸入影像
