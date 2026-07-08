@@ -75,7 +75,7 @@ enum EditMode: String, CaseIterable, Identifiable {
 
 /// 保存掃描結果狀態的快照
 private struct EditSnapshot {
-    let textBlocks: [TextBlock]
+    let layers: [CanvasLayer]
     let description: String    ///< 操作描述（用於 Undo 選單）
 }
 
@@ -121,6 +121,11 @@ final class OCRViewModel: ObservableObject {
         didSet { updateSelectedLayerText() }
     }
     @Published var globalFontName: String = "PingFang TC"
+    
+    // Font Settings
+    @AppStorage("forceComputerFontAfterOCR") var forceComputerFontAfterOCR: Bool = false
+    @AppStorage("primaryOCRFont") var primaryOCRFont: String = "PingFang TC"
+    @AppStorage("secondaryOCRFont") var secondaryOCRFont: String = "Century Gothic"
     
     // Model Download State
     @Published var showModelDownloadPrompt: Bool = false
@@ -498,6 +503,8 @@ final class OCRViewModel: ObservableObject {
     func updateLayerRect(layerId: UUID, newRect: CGRect) {
         guard var doc = canvasDocument else { return }
         if let idx = doc.layers.firstIndex(where: { $0.id == layerId }) {
+            // Note: If this is called continuously during drag, we shouldn't save snapshot every frame.
+            // We'll rely on the dragEnd to save snapshot if needed, or just save before drag starts.
             doc.layers[idx].boundingBox.update(with: newRect)
             self.canvasDocument = doc
         }
@@ -568,6 +575,46 @@ final class OCRViewModel: ObservableObject {
         }
     }
     
+    /// 執行整個畫布文字的翻譯
+    @MainActor
+    func translateDocument() async {
+        guard let doc = canvasDocument else { return }
+        saveSnapshot(description: "整份文件 LLM 翻譯")
+        isProcessing = true
+        loadingMessage = "正在翻譯整份文件..."
+        defer { isProcessing = false }
+        
+        var updatedDoc = doc
+        for idx in 0..<updatedDoc.layers.count {
+            if updatedDoc.layers[idx].type == .text {
+                let originalText = updatedDoc.layers[idx].text
+                var translated: String? = nil
+                
+                if let engine = engine, engine.isReady {
+                    translated = await Task.detached { [engine] in
+                        do {
+                            let result: String? = try engine.translateText(withLLM: originalText, toLanguage: "Traditional Chinese")
+                            return result
+                        } catch {
+                            return nil
+                        }
+                    }.value
+                }
+                
+                if translated == nil {
+                    // Mock
+                    translated = "[Translated] " + originalText
+                }
+                
+                if let finalTranslated = translated {
+                    updatedDoc.layers[idx].text = finalTranslated
+                }
+            }
+        }
+        
+        self.canvasDocument = updatedDoc
+    }
+    
     /// 執行選取圖層的文字修正 (端側離線 LLM)
     func fixSelectedLayerText() async {
         guard let id = selectedLayerId, var doc = canvasDocument else { return }
@@ -596,6 +643,24 @@ final class OCRViewModel: ObservableObject {
                 }
             }
         }
+    }
+    
+    /// 套用預設字體至全部文字圖層
+    func applyDefaultFontToAll() {
+        guard var doc = canvasDocument else { return }
+        
+        for i in 0..<doc.layers.count {
+            if doc.layers[i].type == .text {
+                let text = doc.layers[i].text
+                let isEnglishOrNumber = text.range(of: "^[a-zA-Z0-9\\s[:punct:]]+$", options: .regularExpression) != nil
+                let selectedFont = isEnglishOrNumber ? self.secondaryOCRFont : self.primaryOCRFont
+                
+                doc.layers[i].fontEstimate.fontName = selectedFont
+            }
+        }
+        
+        self.canvasDocument = doc
+        saveSnapshot(description: "套用預設字體至全部")
     }
     
     /// 執行選取圖層的實體擷取 (端側離線 LLM)
@@ -633,6 +698,7 @@ final class OCRViewModel: ObservableObject {
     func replaceSelectedLayerImage(with newImage: PlatformImage) {
         guard let id = selectedLayerId, var doc = canvasDocument else { return }
         if let idx = doc.layers.firstIndex(where: { $0.id == id }) {
+            saveSnapshot(description: "替換圖層圖片")
             doc.layers[idx].image = newImage
             doc.layers[idx].type = .image
             self.canvasDocument = doc
@@ -641,9 +707,121 @@ final class OCRViewModel: ObservableObject {
 
     func deleteSelectedLayer() {
         guard let id = selectedLayerId, var doc = canvasDocument else { return }
+        
+        saveSnapshot(description: "刪除圖層")
+        
+        // Trigger inpainting on the background layer if the deleted layer is text
+        if let deletedLayer = doc.layers.first(where: { $0.id == id }), deletedLayer.type == .text {
+            Task {
+                await applyInpainting(for: deletedLayer)
+            }
+        }
+        
         doc.layers.removeAll { $0.id == id }
         selectedLayerId = nil
         self.canvasDocument = doc
+    }
+    
+    private func applyInpainting(for layer: CanvasLayer) async {
+        guard var doc = canvasDocument, let bgIdx = doc.layers.firstIndex(where: { $0.layerId == "image_bg" || $0.layerId == "pdf_bg_page1" || $0.layerId == "image_bg_vision" }), let bgImage = doc.layers[bgIdx].image else { return }
+        
+        if let engine = engine, engine.isReady {
+            let rect = layer.boundingBox.rect
+            let bridgeBBox = OCRBoundingBox(
+                topLeft: CGPoint(x: rect.minX, y: rect.minY),
+                topRight: CGPoint(x: rect.maxX, y: rect.minY),
+                bottomRight: CGPoint(x: rect.maxX, y: rect.maxY),
+                bottomLeft: CGPoint(x: rect.minX, y: rect.maxY)
+            )
+            
+            let processedImage: PlatformImage? = await Task.detached { [engine] in
+                do {
+                    return try engine.removeText(from: bgImage, atLocations: [bridgeBBox])
+                } catch {
+                    print("[OCRViewModel] ❌ Inpainting error: \\(error.localizedDescription)")
+                    return nil
+                }
+            }.value
+            
+            if let newBg = processedImage {
+                await MainActor.run {
+                    var currentDoc = self.canvasDocument!
+                    if let curBgIdx = currentDoc.layers.firstIndex(where: { $0.id == doc.layers[bgIdx].id }) {
+                        currentDoc.layers[curBgIdx].image = newBg
+                        self.canvasDocument = currentDoc
+                    }
+                }
+            }
+        }
+    }
+
+    func insertTextLayer() {
+        guard var doc = canvasDocument else { return }
+        saveSnapshot(description: "新增文字區塊")
+        
+        let newId = "text_manual_\\(UUID().uuidString.prefix(8))"
+        // Place in center of screen (approx)
+        let cx = doc.dimensions.width / 2 - 50
+        let cy = doc.dimensions.height / 2 - 15
+        let layer = CanvasLayer(
+            layerId: newId,
+            type: .text,
+            name: "新增文字",
+            text: "新文字",
+            boundingBox: BoundingBox(
+                topLeft: CGPoint(x: cx, y: cy),
+                topRight: CGPoint(x: cx + 100, y: cy),
+                bottomRight: CGPoint(x: cx + 100, y: cy + 30),
+                bottomLeft: CGPoint(x: cx, y: cy + 30)
+            ),
+            fontEstimate: FontEstimate(sizePx: 24, color: PlatformColor.black, isBold: false, fontName: globalFontName)
+        )
+        
+        doc.layers.append(layer)
+        self.canvasDocument = doc
+        self.selectedLayerId = layer.id
+    }
+
+    /// 實作自訂字典的繁體中文校正替換規則 (Rule-based Translate)
+    func applyRuleBasedCorrection() {
+        guard var doc = canvasDocument else { return }
+        saveSnapshot(description: "自訂字典校正")
+        
+        // Example custom dictionary mapping simplified/incorrect chars to Traditional Chinese
+        let customDictionary: [String: String] = [
+            "裏": "裡",
+            "綫": "線",
+            "网": "網",
+            "络": "絡",
+            "系统": "系統",
+            "应用": "應用",
+            "软件": "軟體",
+            "硬件": "硬體",
+            "支持": "支援"
+        ]
+        
+        var hasChanges = false
+        for idx in doc.layers.indices {
+            if doc.layers[idx].type == .text {
+                var newText = doc.layers[idx].text
+                for (key, value) in customDictionary {
+                    if newText.contains(key) {
+                        newText = newText.replacingOccurrences(of: key, with: value)
+                        hasChanges = true
+                    }
+                }
+                doc.layers[idx].text = newText
+            }
+        }
+        
+        if hasChanges {
+            self.canvasDocument = doc
+            print("[OCRViewModel] ✅ 已套用規則校正")
+        } else {
+            // Revert snapshot if no changes
+            _ = editHistory.popLast()
+            editHistoryIndex -= 1
+        }
     }
 
     /// 一次性替換全檔所有文字區塊字型
@@ -913,10 +1091,71 @@ final class OCRViewModel: ObservableObject {
 
     /// 匯出為 Markdown
     func exportToMarkdown() -> String? {
-        guard let result = scanResult, let rawJson = result.rawJson else { return nil }
-        return OCREngineBridge.exportMarkdown(fromJson: rawJson)
+        if let result = scanResult, let rawJson = result.rawJson {
+            return OCREngineBridge.exportMarkdown(fromJson: rawJson)
+        } else if let doc = canvasDocument {
+            var md = ""
+            for layer in doc.layers where layer.type == .text {
+                md += layer.text + "\n\n"
+            }
+            return md.isEmpty ? nil : md
+        }
+        return nil
     }
     
+    /// 匯出為 CSV
+    func exportToCSV(url: URL) {
+        guard let doc = canvasDocument else { return }
+        var csvString = "Layer ID,Type,Text,X,Y,Width,Height\n"
+        for layer in doc.layers {
+            let typeStr = layer.type.rawValue
+            let text = layer.text.replacingOccurrences(of: "\"", with: "\"\"")
+            let rect = layer.boundingBox.rect
+            csvString += "\\(layer.layerId),\\(typeStr),\"\\(text)\",\\(rect.minX),\\(rect.minY),\\(rect.width),\\(rect.height)\n"
+        }
+        do {
+            try csvString.write(to: url, atomically: true, encoding: .utf8)
+            print("[OCRViewModel] 📄 已匯出 CSV 至: \\(url.path)")
+        } catch {
+            print("[OCRViewModel] ❌ CSV 匯出失敗: \\(error.localizedDescription)")
+        }
+    }
+
+    /// 匯出為 .ocrproj (JSON)
+    func exportToProject(url: URL) {
+        guard let doc = canvasDocument else { return }
+        // Simple manual JSON construction to avoid PlatformImage codable issues
+        var layersArray: [[String: Any]] = []
+        for layer in doc.layers {
+            let rect = layer.boundingBox.rect
+            layersArray.append([
+                "id": layer.id.uuidString,
+                "layerId": layer.layerId,
+                "type": layer.type.rawValue,
+                "text": layer.text,
+                "x": rect.minX,
+                "y": rect.minY,
+                "width": rect.width,
+                "height": rect.height
+            ])
+        }
+        
+        let projectDict: [String: Any] = [
+            "name": doc.name,
+            "width": doc.dimensions.width,
+            "height": doc.dimensions.height,
+            "layers": layersArray
+        ]
+        
+        do {
+            let data = try JSONSerialization.data(withJSONObject: projectDict, options: .prettyPrinted)
+            try data.write(to: url)
+            print("[OCRViewModel] 📄 已匯出專案檔 至: \(url.path)")
+        } catch {
+            print("[OCRViewModel] ❌ 專案檔匯出失敗: \(error.localizedDescription)")
+        }
+    }
+
     /// 匯出為雙層可搜尋 PDF (Dual-layer Searchable PDF)
     func exportToPDF(url: URL) {
         // macOS/iOS PDFKit creation
@@ -926,7 +1165,12 @@ final class OCRViewModel: ObservableObject {
         pdfContext?.beginPDFPage(nil)
         
         // 1. Draw image in background
-        if let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+        #if os(macOS)
+        let cgImageOpt = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #else
+        let cgImageOpt = image.cgImage
+        #endif
+        if let cgImage = cgImageOpt {
             pdfContext?.draw(cgImage, in: CGRect(x: 0, y: 0, width: doc.dimensions.width, height: doc.dimensions.height))
         }
         
@@ -973,7 +1217,11 @@ final class OCRViewModel: ObservableObject {
 
     /// 使用 Apple CoreImage / Vision 進行影像預處理 (Binarization, Contrast)
     private func preprocessImage(_ image: PlatformImage) -> PlatformImage {
+        #if os(macOS)
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return image }
+        #else
+        guard let cgImage = image.cgImage else { return image }
+        #endif
         let ciImage = CIImage(cgImage: cgImage)
         
         // 1. 增強對比度與調整曝光 (Contrast & Exposure)
@@ -996,7 +1244,11 @@ final class OCRViewModel: ObservableObject {
         let context = CIContext(options: nil)
         guard let processedCGImage = context.createCGImage(outputCIImage, from: outputCIImage.extent) else { return image }
         
+        #if os(macOS)
         return PlatformImage(cgImage: processedCGImage, size: image.size)
+        #else
+        return PlatformImage(cgImage: processedCGImage)
+        #endif
     }
 
     /// 執行 OCR 辨識
@@ -1111,7 +1363,7 @@ final class OCRViewModel: ObservableObject {
             )
 
             // 初始化編輯歷史
-            editHistory = [EditSnapshot(textBlocks: scanResult.textBlocks, description: "初始辨識")]
+            editHistory = [EditSnapshot(layers: layers, description: "初始辨識")]
             editHistoryIndex = 0
 
             state = .complete
@@ -1263,8 +1515,6 @@ final class OCRViewModel: ObservableObject {
             )
             layers.append(bgLayer)
             
-            var textBlocks: [TextBlock] = []
-            
             for (index, observation) in observations.enumerated() {
                 guard let candidate = observation.topCandidates(1).first else { continue }
                 
@@ -1285,36 +1535,18 @@ final class OCRViewModel: ObservableObject {
                     bottomLeft: CGPoint(x: tlx, y: tly + boxHeight)
                 )
                 
-                let wordId = UUID()
+                var fontName = "PingFang TC"
+                if self.forceComputerFontAfterOCR {
+                    let isEnglishOrNumber = candidate.string.range(of: "^[a-zA-Z0-9\\s[:punct:]]+$", options: .regularExpression) != nil
+                    fontName = isEnglishOrNumber ? self.secondaryOCRFont : self.primaryOCRFont
+                }
+                
                 let fontEst = FontEstimate(
                     sizePx: boxHeight * 0.8,
                     color: PlatformColor.black,
                     isBold: false,
-                    fontName: "PingFang TC"
+                    fontName: fontName
                 )
-                
-                let word = TextWord(
-                    id: wordId,
-                    text: candidate.string,
-                    confidence: Double(candidate.confidence),
-                    boundingBox: bbox,
-                    fontEstimate: fontEst
-                )
-                
-                let line = TextLine(
-                    id: UUID(),
-                    text: candidate.string,
-                    confidence: Double(candidate.confidence),
-                    boundingBox: bbox,
-                    words: [word]
-                )
-                textBlocks.append(TextBlock(
-                    id: UUID(),
-                    type: .paragraph,
-                    confidence: Double(candidate.confidence),
-                    boundingBox: bbox,
-                    lines: [line]
-                ))
                 
                 let layer = CanvasLayer(
                     layerId: "vision_text_\(index)",
@@ -1327,19 +1559,13 @@ final class OCRViewModel: ObservableObject {
                 layers.append(layer)
             }
             
-            self.scanResult = OCRScanResult(
-                originalImage: image,
-                dimensions: dimensions,
-                textBlocks: textBlocks
-            )
-            
             self.canvasDocument = CanvasDocument(
                 name: "自訂影像畫布 (Vision Fallback)",
                 dimensions: dimensions,
                 layers: layers
             )
             
-            editHistory = [EditSnapshot(textBlocks: textBlocks, description: "初始辨識 (Apple Vision)")]
+            editHistory = [EditSnapshot(layers: layers, description: "初始辨識 (Apple Vision)")]
             editHistoryIndex = 0
             
             state = .complete
@@ -1354,30 +1580,24 @@ final class OCRViewModel: ObservableObject {
 
     /// 保存編輯快照
     private func saveSnapshot(description: String) {
-        guard let result = scanResult else { return }
+        guard let doc = canvasDocument else { return }
 
         // 截斷 redo 歷史
         if editHistoryIndex < editHistory.count - 1 {
             editHistory = Array(editHistory.prefix(editHistoryIndex + 1))
         }
 
-        let snapshot = EditSnapshot(textBlocks: result.textBlocks, description: description)
+        let snapshot = EditSnapshot(layers: doc.layers, description: description)
         editHistory.append(snapshot)
         editHistoryIndex = editHistory.count - 1
     }
 
     /// 套用快照
     private func applySnapshot(_ snapshot: EditSnapshot) {
-        guard var result = scanResult else { return }
-        result = OCRScanResult(
-            id: result.id,
-            originalImage: result.originalImage,
-            dimensions: result.dimensions,
-            textBlocks: snapshot.textBlocks
-        )
-        scanResult = result
-        selectedWordIds.removeAll()
-        updateWordSelectionState()
+        guard var doc = canvasDocument else { return }
+        doc.layers = snapshot.layers
+        canvasDocument = doc
+        selectedLayerId = nil
     }
 
     /// 同步模型中的 isSelected 狀態

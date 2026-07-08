@@ -1,0 +1,43 @@
+/* 
+  Localizable.strings
+  English
+*/
+
+"app_name" = "Offline Document Layer Editor";
+"open_file" = "Open File";
+"open_file_help" = "Open Image, PDF or Presentation (⌘O)";
+"scan_document" = "Scan Document";
+"delete_element" = "Delete Element";
+"delete_element_help" = "Delete Selected Element (⌫)";
+"insert_text" = "Insert Text";
+"insert_text_help" = "Insert New Text Block (⌘T)";
+"ocr_language" = "OCR Language";
+"lang_cht_eng" = "Traditional Chinese + English";
+"lang_chs_eng" = "Simplified Chinese + English";
+"lang_eng" = "English Only";
+"lang_jp" = "Japanese";
+"lang_kr" = "Korean";
+"undo" = "Undo";
+"redo" = "Redo";
+"zoom" = "Zoom:";
+"upgrade_model" = "Upgrade to High Precision Model";
+"export" = "Export";
+"export_csv" = "Export as CSV";
+"export_markdown" = "Export as Markdown";
+"export_pdf" = "Export as Searchable PDF";
+"export_project" = "Export Project (.ocrproj)";
+"translate_correct" = "Translate & Correct";
+"llm_translate" = "LLM Smart Translate (Local)";
+"rule_correct" = "Custom Dictionary Correction (Rule-based)";
+"layer_properties" = "Layer Properties";
+"text_content" = "Text Content";
+"fix_text" = "Fix Text";
+"extract_entities" = "Extract Entities";
+"translate" = "Translate";
+"font_size" = "Font Size:";
+"bold" = "Bold";
+"italic" = "Italic";
+"font_family" = "Font Family:";
+"text_color" = "Text Color:";
+"default_colors" = "Default Colors";
+"replace_image" = "Replace Image";

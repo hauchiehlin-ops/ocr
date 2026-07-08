@@ -662,15 +662,4 @@ OCR_API int ocr_project_load(const char* input_path, char** out_image_path, char
     return 0;
 }
 
-// ============================================================
-// Platform-Specific Unity Build Inclusions
-// ============================================================
-#ifdef __APPLE__
-// These source files are included directly here to avoid needing to manually 
-// add them to the Xcode project (which lacks folder sync for older pbxproj).
-// This is a standard unity-build technique for cross-platform C++.
-#include "SettingsManager.cpp"
-#include "editor/DocumentExporter.cpp"
-#include "editor/ProjectArchive.cpp"
-#include "history/DocumentHistoryManager.cpp"
-#endif
+// Removed unity build includes as we use xcodegen now.

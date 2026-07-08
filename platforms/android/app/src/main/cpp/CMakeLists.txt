@@ -10,6 +10,7 @@ include_directories(${CORE_DIR}/src)
 include_directories(${CORE_DIR}/third_party/sqlite)
 
 file(GLOB_RECURSE CORE_SRCS "${CORE_DIR}/src/*.cpp")
+set(MINIZ_SRC "${CORE_DIR}/src/vendor/miniz/miniz.c")
 set(SQLITE_SRC "${CORE_DIR}/third_party/sqlite/sqlite3.c")
 
 add_library(
@@ -18,6 +19,7 @@ add_library(
         OCREngineBridge.cpp
         ${CORE_SRCS}
         ${SQLITE_SRC}
+        ${MINIZ_SRC}
 )
 
 find_library(

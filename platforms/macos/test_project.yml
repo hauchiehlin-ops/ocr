@@ -1,0 +1,10 @@
+name: TestApp
+targets:
+  TestApp:
+    type: application
+    platform: [macOS, iOS]
+    deploymentTarget:
+      macOS: "14.0"
+      iOS: "16.0"
+    sources:
+      - OCREditor

@@ -52,17 +52,38 @@ struct ContentView: View {
                 canvasArea
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
+                #if os(macOS)
                 Divider()
                 
                 // 右側屬性面板區域
                 inspectorArea
                     .frame(width: inspectorWidth)
                     .background(Color(platformColor: PlatformColor.themeWindowBackground))
+                #endif
             }
         }
         .toolbar {
             toolbarContent
         }
+        #if os(iOS)
+        .sheet(isPresented: Binding(
+            get: { viewModel.selectedLayerId != nil },
+            set: { if !$0 { viewModel.selectedLayerId = nil } }
+        )) {
+            NavigationStack {
+                inspectorArea
+                    .background(Color(platformColor: PlatformColor.themeWindowBackground))
+                    .navigationTitle("屬性")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("關閉") { viewModel.selectedLayerId = nil }
+                        }
+                    }
+            }
+            .presentationDetents([.medium, .large])
+        }
+        #endif
         .fileImporter(
             isPresented: $isFileImporterPresented,
             allowedContentTypes: supportedFileTypes,
@@ -896,6 +917,59 @@ extension ContentView {
             }
             .help("開啟檔案、PDF或簡報 (⌘O)")
             .keyboardShortcut("o", modifiers: .command)
+            
+            #if os(macOS)
+            // 匯出選單
+            Menu {
+                Button("匯出為 CSV") {
+                    let panel = NSSavePanel()
+                    panel.allowedContentTypes = [.commaSeparatedText]
+                    panel.nameFieldStringValue = "ExportedData.csv"
+                    if panel.runModal() == .OK, let url = panel.url {
+                        viewModel.exportToCSV(url: url)
+                    }
+                }
+                Button("匯出為 Markdown") {
+                    if let md = viewModel.exportToMarkdown() {
+                        let panel = NSSavePanel()
+                        panel.allowedContentTypes = [.plainText]
+                        panel.nameFieldStringValue = "ExportedData.md"
+                        if panel.runModal() == .OK, let url = panel.url {
+                            try? md.write(to: url, atomically: true, encoding: .utf8)
+                        }
+                    }
+                }
+                Button("匯出為可搜尋 PDF") {
+                    let panel = NSSavePanel()
+                    panel.allowedContentTypes = [.pdf]
+                    panel.nameFieldStringValue = "ExportedDocument.pdf"
+                    if panel.runModal() == .OK, let url = panel.url {
+                        viewModel.exportToPDF(url: url)
+                    }
+                }
+                Button("匯出為專案檔 (.ocrproj)") {
+                    let panel = NSSavePanel()
+                    // Just use json extension for simplicity if custom type is not defined
+                    panel.allowedContentTypes = [.json]
+                    panel.nameFieldStringValue = "Project.ocrproj"
+                    if panel.runModal() == .OK, let url = panel.url {
+                        viewModel.exportToProject(url: url)
+                    }
+                }
+            } label: {
+                Label("匯出", systemImage: "square.and.arrow.up")
+            }
+            .help("匯出檔案")
+            #else
+            // iOS 匯出選單 (Share Sheet)
+            Menu {
+                Button("匯出為文字") {
+                    viewModel.exportText() // which puts it in clipboard
+                }
+            } label: {
+                Label("匯出", systemImage: "square.and.arrow.up")
+            }
+            #endif
 
             #if os(iOS)
             // 掃描文件
@@ -906,6 +980,15 @@ extension ContentView {
             }
             #endif
 
+            // 新增文字元件
+            Button {
+                viewModel.insertTextLayer()
+            } label: {
+                Label("新增文字", systemImage: "text.cursor")
+            }
+            .help("新增文字區塊 (⌘T)")
+            .keyboardShortcut("t", modifiers: .command)
+            
             // 刪除選取元件
             Button {
                 viewModel.deleteSelectedLayer()
@@ -929,6 +1012,44 @@ extension ContentView {
             .pickerStyle(MenuPickerStyle())
             .frame(width: 120)
             .help("選擇 OCR 優先辨識語言")
+            
+            // 翻譯與校正
+            Menu {
+                Button("LLM 智慧翻譯 (本機)") {
+                    Task { await viewModel.translateDocument() }
+                }
+                Button("自訂字典校正 (Rule-based)") {
+                    viewModel.applyRuleBasedCorrection()
+                }
+            } label: {
+                Label("翻譯校正", systemImage: "textformat.abc.dottedunderline")
+            }
+            .help("翻譯與自動校正文字")
+
+            Menu {
+                Toggle("OCR後強制套用電腦字型", isOn: $viewModel.forceComputerFontAfterOCR)
+                
+                Picker("主要字型 (中日韓)", selection: $viewModel.primaryOCRFont) {
+                    ForEach(["PingFang TC", "Heiti TC", "Hiragino Sans GB", "Noto Sans CJK TC"], id: \.self) { font in
+                        Text(font).tag(font)
+                    }
+                }
+                
+                Picker("次要字型 (英數)", selection: $viewModel.secondaryOCRFont) {
+                    ForEach(["Century Gothic", "Helvetica", "Arial", "Times New Roman"], id: \.self) { font in
+                        Text(font).tag(font)
+                    }
+                }
+                
+                Divider()
+                
+                Button("🔤 套用預設字體至全部") {
+                    viewModel.applyDefaultFontToAll()
+                }
+            } label: {
+                Label("字體設定", systemImage: "textformat")
+            }
+            .help("設定文字方塊的預設字體")
 
             Divider()
 

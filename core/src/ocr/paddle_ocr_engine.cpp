@@ -76,7 +76,7 @@ struct PaddleOCREngine::Impl {
         if (!all_exist) {
             // Models not found — engine will run in Mock mode
             is_mock = true;
-            is_ready = true;
+            is_ready = false;
             return;
         }
 

@@ -209,7 +209,7 @@
 }
 
 - (BOOL)isReady {
-    return (_engineHandle != NULL);
+    return (_engineHandle != NULL) && (ocr_is_ready(_engineHandle) != 0);
 }
 
 #pragma mark - 影像辨識

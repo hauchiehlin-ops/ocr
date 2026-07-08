@@ -29,6 +29,34 @@ object OCREngineBridge {
     external fun recognizeRegion(bitmap: Bitmap, x: Int, y: Int, w: Int, h: Int): String
     
     // ============================================================
+    // Inpainting & Image Processing API
+    // ============================================================
+    
+    /**
+     * 從圖片中移除文字 (Inpainting)
+     * @param bitmap 圖片 (必須是 ARGB_8888 格式)
+     * @param x 區域左上角 X
+     * @param y 區域左上角 Y
+     * @param w 區域寬度
+     * @param h 區域高度
+     * @return 處理後的新 Bitmap，如果失敗則回傳 null
+     */
+    external fun removeText(bitmap: Bitmap, x: Int, y: Int, w: Int, h: Int): Bitmap?
+
+    /**
+     * 替換圖片中的文字
+     * @param bitmap 圖片 (必須是 ARGB_8888 格式)
+     * @param x 區域左上角 X
+     * @param y 區域左上角 Y
+     * @param w 區域寬度
+     * @param h 區域高度
+     * @param newText 新的文字內容
+     * @param fontConfigJson 字體設定 JSON (可選)
+     * @return 處理後的新 Bitmap，如果失敗則回傳 null
+     */
+    external fun replaceText(bitmap: Bitmap, x: Int, y: Int, w: Int, h: Int, newText: String, fontConfigJson: String?): Bitmap?
+
+    // ============================================================
     // Export & Formatting API
     // ============================================================
     external fun exportMarkdownFromJson(jsonString: String): String

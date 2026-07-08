@@ -1,0 +1,43 @@
+/* 
+  Localizable.strings
+  Traditional Chinese
+*/
+
+"app_name" = "離線文件圖層編輯器";
+"open_file" = "開啟新檔案";
+"open_file_help" = "開啟檔案、PDF或簡報 (⌘O)";
+"scan_document" = "掃描文件";
+"delete_element" = "刪除元件";
+"delete_element_help" = "刪除選取的元件 (⌫)";
+"insert_text" = "新增文字";
+"insert_text_help" = "新增文字區塊 (⌘T)";
+"ocr_language" = "辨識語系";
+"lang_cht_eng" = "繁英混合";
+"lang_chs_eng" = "簡英混合";
+"lang_eng" = "僅英文";
+"lang_jp" = "日文";
+"lang_kr" = "韓文";
+"undo" = "還原";
+"redo" = "重做";
+"zoom" = "縮放:";
+"upgrade_model" = "升級高精度模型";
+"export" = "匯出";
+"export_csv" = "匯出為 CSV";
+"export_markdown" = "匯出為 Markdown";
+"export_pdf" = "匯出為可搜尋 PDF";
+"export_project" = "匯出為專案檔 (.ocrproj)";
+"translate_correct" = "翻譯校正";
+"llm_translate" = "LLM 智慧翻譯 (本機)";
+"rule_correct" = "自訂字典校正 (Rule-based)";
+"layer_properties" = "圖層屬性";
+"text_content" = "文字內容";
+"fix_text" = "修復文字";
+"extract_entities" = "提取實體";
+"translate" = "翻譯";
+"font_size" = "大小:";
+"bold" = "粗體";
+"italic" = "斜體";
+"font_family" = "字型:";
+"text_color" = "顏色:";
+"default_colors" = "預設色塊";
+"replace_image" = "替換圖片";

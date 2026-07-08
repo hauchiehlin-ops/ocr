@@ -108,6 +108,112 @@ Java_com_hauchiehlin_ocreditor_OCREngineBridge_recognizeRegion(JNIEnv *env, jobj
 }
 
 // ============================================================
+// Inpainting & Image Processing API
+// ============================================================
+
+static jobject createBitmapFromResult(JNIEnv *env, OCRImageResult* result) {
+    if (!result) return nullptr;
+    
+    jclass bitmapClass = env->FindClass("android/graphics/Bitmap");
+    jmethodID createBitmapMethodID = env->GetStaticMethodID(bitmapClass, "createBitmap", "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
+    
+    jclass configClass = env->FindClass("android/graphics/Bitmap$Config");
+    jfieldID argb8888FieldID = env->GetStaticFieldID(configClass, "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
+    jobject argb8888Obj = env->GetStaticObjectField(configClass, argb8888FieldID);
+    
+    jobject newBitmap = env->CallStaticObjectMethod(bitmapClass, createBitmapMethodID, result->width, result->height, argb8888Obj);
+    if (!newBitmap) {
+        LOGE("Failed to create result Bitmap.");
+        return nullptr;
+    }
+    
+    void *newPixels;
+    if (AndroidBitmap_lockPixels(env, newBitmap, &newPixels) < 0) {
+        LOGE("Failed to lock new bitmap pixels.");
+        return nullptr;
+    }
+    
+    memcpy(newPixels, result->data, result->data_size);
+    AndroidBitmap_unlockPixels(env, newBitmap);
+    
+    return newBitmap;
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_removeText(JNIEnv *env, jobject /* this */, jobject bitmap, jint x, jint y, jint w, jint h) {
+    if (!g_ocrEngine) {
+        LOGE("Engine not initialized.");
+        return nullptr;
+    }
+
+    AndroidBitmapInfo info;
+    if (AndroidBitmap_getInfo(env, bitmap, &info) < 0 || info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
+        LOGE("Failed to get bitmap info or format not RGBA_8888.");
+        return nullptr;
+    }
+
+    void *pixels;
+    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) < 0) {
+        LOGE("Failed to lock bitmap pixels.");
+        return nullptr;
+    }
+
+    OCRBBox box;
+    box.top_left[0] = x;           box.top_left[1] = y;
+    box.top_right[0] = x + w;      box.top_right[1] = y;
+    box.bottom_right[0] = x + w;   box.bottom_right[1] = y + h;
+    box.bottom_left[0] = x;        box.bottom_left[1] = y + h;
+
+    OCRImageResult* result = ocr_remove_text(g_ocrEngine, static_cast<const uint8_t*>(pixels), info.width, info.height, 4, &box, 1);
+    
+    AndroidBitmap_unlockPixels(env, bitmap);
+    
+    jobject newBitmap = createBitmapFromResult(env, result);
+    if (result) ocr_free_image_result(result);
+    return newBitmap;
+}
+
+extern "C" JNIEXPORT jobject JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_replaceText(JNIEnv *env, jobject /* this */, jobject bitmap, jint x, jint y, jint w, jint h, jstring newText, jstring fontConfigJson) {
+    if (!g_ocrEngine || !newText) {
+        LOGE("Engine not initialized or text is null.");
+        return nullptr;
+    }
+
+    AndroidBitmapInfo info;
+    if (AndroidBitmap_getInfo(env, bitmap, &info) < 0 || info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
+        LOGE("Failed to get bitmap info or format not RGBA_8888.");
+        return nullptr;
+    }
+
+    void *pixels;
+    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) < 0) {
+        LOGE("Failed to lock bitmap pixels.");
+        return nullptr;
+    }
+
+    OCRBBox box;
+    box.top_left[0] = x;           box.top_left[1] = y;
+    box.top_right[0] = x + w;      box.top_right[1] = y;
+    box.bottom_right[0] = x + w;   box.bottom_right[1] = y + h;
+    box.bottom_left[0] = x;        box.bottom_left[1] = y + h;
+
+    const char* cNewText = env->GetStringUTFChars(newText, nullptr);
+    const char* cFontConfig = fontConfigJson ? env->GetStringUTFChars(fontConfigJson, nullptr) : nullptr;
+
+    OCRImageResult* result = ocr_replace_text(g_ocrEngine, static_cast<const uint8_t*>(pixels), info.width, info.height, 4, &box, cNewText, cFontConfig);
+    
+    env->ReleaseStringUTFChars(newText, cNewText);
+    if (fontConfigJson) env->ReleaseStringUTFChars(fontConfigJson, cFontConfig);
+    
+    AndroidBitmap_unlockPixels(env, bitmap);
+    
+    jobject newBitmap = createBitmapFromResult(env, result);
+    if (result) ocr_free_image_result(result);
+    return newBitmap;
+}
+
+// ============================================================
 // Export & Formatting API
 // ============================================================
 extern "C" JNIEXPORT jstring JNICALL

@@ -35,7 +35,8 @@ data class OCRLayer(
     val isItalic: Boolean = false,
     val fontColor: Int = android.graphics.Color.BLACK,
     val fontFamily: String = "PingFang TC",
-    val isRemoved: Boolean = false
+    val isRemoved: Boolean = false,
+    val isEdited: Boolean = false
 )
 
 sealed class OCRState {
@@ -72,6 +73,11 @@ class OCRViewModel : ViewModel() {
 
     private val _selectedLayerId = MutableStateFlow<java.util.UUID?>(null)
     val selectedLayerId: StateFlow<java.util.UUID?> = _selectedLayerId.asStateFlow()
+
+    // Font Settings
+    val forceComputerFontAfterOCR = MutableStateFlow(false)
+    val primaryOCRFont = MutableStateFlow("Noto Sans CJK")
+    val secondaryOCRFont = MutableStateFlow("Century Gothic")
 
     private val _isUsingLightweightModel = MutableStateFlow(true)
     val isUsingLightweightModel: StateFlow<Boolean> = _isUsingLightweightModel.asStateFlow()
@@ -420,11 +426,18 @@ class OCRViewModel : ViewModel() {
                 
                 val text = if (blockObj.has("text")) blockObj.getString("text") else ""
                 
+                var fontName = "Noto Sans CJK"
+                if (forceComputerFontAfterOCR.value) {
+                    val isEnglishOrNumber = text.matches(Regex("^[a-zA-Z0-9\\s\\p{Punct}]+$"))
+                    fontName = if (isEnglishOrNumber) secondaryOCRFont.value else primaryOCRFont.value
+                }
+                
                 layers.add(OCRLayer(
                     originalText = text,
                     currentText = text,
                     boundingBox = boundingBox,
-                    fontSize = boundingBox.height.toFloat() * 0.8f
+                    fontSize = boundingBox.height.toFloat() * 0.8f,
+                    fontFamily = fontName
                 ))
             }
         } catch (e: Exception) {
@@ -432,6 +445,24 @@ class OCRViewModel : ViewModel() {
         }
         return layers
     }
+
+    fun applyDefaultFontToAllRegions() {
+        val currentState = _ocrState.value
+        if (currentState is OCRState.Success) {
+            val updatedLayers = currentState.layers.map { layer ->
+                val isEnglishOrNumber = layer.currentText.matches(Regex("^[a-zA-Z0-9\\s\\p{Punct}]+$"))
+                val fontName = if (isEnglishOrNumber) secondaryOCRFont.value else primaryOCRFont.value
+                layer.copy(fontFamily = fontName)
+            }
+            
+            undoStack.add(updatedLayers)
+            redoStack.clear()
+            updateUndoRedoStates()
+            
+            _ocrState.value = currentState.copy(layers = updatedLayers)
+        }
+    }
+    
     private fun parseOCRResult(jsonString: String): List<TextBlock> {
         val blocks = mutableListOf<TextBlock>()
         try {

@@ -10,9 +10,7 @@
 #include <vector>
 #include "../vendor/miniz/miniz.h"
 
-// miniz.c is included in ocr_core_api.cpp unity build if needed, or we just include it here
-// Actually, since we're using a unity build, we'll just include miniz.c here for simplicity.
-#include "../vendor/miniz/miniz.c"
+// miniz.c is compiled directly via xcodegen.
 
 bool ProjectArchive::saveProject(const std::string& imagePath, const std::string& jsonState, const std::string& outputPath) {
     mz_zip_archive zip_archive;
