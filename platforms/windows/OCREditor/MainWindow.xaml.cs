@@ -2292,6 +2292,15 @@ namespace OCREditor
             {
                 try
                 {
+                    var bitmapSource = SourceImage.Source as BitmapSource;
+                    if (bitmapSource == null) return;
+                    
+                    int pixelWidth = bitmapSource.PixelWidth;
+                    int pixelHeight = bitmapSource.PixelHeight;
+                    
+                    double dpiX = bitmapSource.DpiX > 0 ? bitmapSource.DpiX : 96.0;
+                    double dpiY = bitmapSource.DpiY > 0 ? bitmapSource.DpiY : 96.0;
+
                     var tempSelected = _selectedRegion;
                     double originalZoom = CanvasScale != null ? CanvasScale.ScaleX : 1.0;
                     
@@ -2310,7 +2319,7 @@ namespace OCREditor
                     CanvasGrid.Arrange(new System.Windows.Rect(0, 0, _imgWidth, _imgHeight));
                     CanvasGrid.UpdateLayout();
                     
-                    var rtb = new RenderTargetBitmap((int)_imgWidth, (int)_imgHeight, 96, 96, PixelFormats.Pbgra32);
+                    var rtb = new RenderTargetBitmap(pixelWidth, pixelHeight, dpiX, dpiY, PixelFormats.Pbgra32);
                     rtb.Render(CanvasGrid);
                     
                     _isSaving = false;

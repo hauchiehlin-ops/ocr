@@ -148,13 +148,15 @@
             <!-- CENTER CANVAS AREA -->
             <ui:Card Grid.Column="1" Padding="0" Margin="0">
                 <ScrollViewer x:Name="MainScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                    <Grid x:Name="CanvasGrid" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
-                        <Grid.LayoutTransform>
-                            <ScaleTransform x:Name="CanvasScale" ScaleX="1" ScaleY="1"/>
-                        </Grid.LayoutTransform>
-                        <Image x:Name="SourceImage" Stretch="None" SizeChanged="SourceImage_SizeChanged"/>
-                        <Canvas x:Name="OverlayCanvas" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top" MouseLeftButtonDown="OverlayCanvas_MouseLeftButtonDown"/>
-                    </Grid>
+                    <Border Margin="20" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid x:Name="CanvasGrid">
+                            <Grid.LayoutTransform>
+                                <ScaleTransform x:Name="CanvasScale" ScaleX="1" ScaleY="1"/>
+                            </Grid.LayoutTransform>
+                            <Image x:Name="SourceImage" Stretch="None" SizeChanged="SourceImage_SizeChanged"/>
+                            <Canvas x:Name="OverlayCanvas" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top" MouseLeftButtonDown="OverlayCanvas_MouseLeftButtonDown"/>
+                        </Grid>
+                    </Border>
                 </ScrollViewer>
             </ui:Card>
 
