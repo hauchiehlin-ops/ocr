@@ -729,95 +729,95 @@ extension ContentView {
                                     }
                                 }
                                 
+                                Text("AI Operations (Local LLM)")
+                                    .font(.subheadline)
+                                    .bold()
+                                    .padding(.top, 10)
+                                    
+                                HStack {
+                                    Button {
+                                        Task { await viewModel.fixSelectedLayerText() }
+                                    } label: {
+                                        if viewModel.isProcessing {
+                                            ProgressView().controlSize(.small)
+                                        } else {
+                                            Text("Fix Text")
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .buttonStyle(.bordered)
+                                    .disabled(viewModel.isProcessing || viewModel.isTranslating)
+                                    
+                                    Button {
+                                        Task { await viewModel.extractEntitiesFromSelectedLayer() }
+                                    } label: {
+                                        if viewModel.isProcessing {
+                                            ProgressView().controlSize(.small)
+                                        } else {
+                                            Text("Extract Entities")
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .buttonStyle(.bordered)
+                                    .disabled(viewModel.isProcessing || viewModel.isTranslating)
+                                }
+                                
+                                Button {
+                                    Task { await viewModel.translateSelectedLayer() }
+                                } label: {
+                                    if viewModel.isTranslating {
+                                        ProgressView().controlSize(.small)
+                                    } else {
+                                        Text("Translate to ZH")
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .buttonStyle(.bordered)
+                                .disabled(viewModel.isTranslating || viewModel.isProcessing)
+                                
                                 Text("Operations")
                                     .font(.subheadline)
                                     .bold()
                                     .padding(.top, 10)
+                                    
+                                HStack {
+                                    Toggle(isOn: $isSelectingRegion) {
+                                        Text("Regional Re-OCR")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .toggleStyle(.button)
+                                    .buttonStyle(.bordered)
+                                    
+                                    Button {
+                                        viewModel.deleteSelectedLayer()
+                                    } label: {
+                                        Text("Remove Text")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
                             }
                         }
                         
-                        // 3. 元件替換與刪除動作
-                        VStack(spacing: 12) {
-                            if layer.type == .text {
-                                Button {
-                                    Task {
-                                        await viewModel.translateSelectedLayer()
-                                    }
-                                } label: {
-                                    HStack {
-                                        if viewModel.isTranslating {
-                                            ProgressView()
-                                                .controlSize(.small)
-                                                .padding(.trailing, 4)
-                                        } else {
-                                            Image(systemName: "globe")
-                                        }
-                                        Text("Translate with LLM")
-                                    }
+                        if layer.type == .image || layer.type == .vector {
+                            Text("Operations")
+                                .font(.subheadline)
+                                .bold()
+                                .padding(.top, 10)
+                            
+                            Button {
+                                isImageReplacerPresented = true
+                            } label: {
+                                Label("替換圖片/圖標元件", systemImage: "arrow.triangle.2.circlepath")
                                     .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.large)
-                                .disabled(viewModel.isTranslating || viewModel.isProcessing)
-
-                                Button {
-                                    Task {
-                                        await viewModel.fixSelectedLayerText()
-                                    }
-                                } label: {
-                                    HStack {
-                                        if viewModel.isProcessing {
-                                            ProgressView()
-                                                .controlSize(.small)
-                                                .padding(.trailing, 4)
-                                        } else {
-                                            Image(systemName: "wand.and.stars")
-                                        }
-                                        Text("Fix Text with LLM")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.large)
-                                .disabled(viewModel.isProcessing || viewModel.isTranslating)
-                                
-                                Button {
-                                    Task {
-                                        await viewModel.extractEntitiesFromSelectedLayer()
-                                    }
-                                } label: {
-                                    HStack {
-                                        if viewModel.isProcessing {
-                                            ProgressView()
-                                                .controlSize(.small)
-                                                .padding(.trailing, 4)
-                                        } else {
-                                            Image(systemName: "doc.text.magnifyingglass")
-                                        }
-                                        Text("Extract Entities")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.large)
-                                .disabled(viewModel.isProcessing || viewModel.isTranslating)
                             }
-
-                            if layer.type == .image || layer.type == .vector {
-                                Button {
-                                    isImageReplacerPresented = true
-                                } label: {
-                                    Label("替換圖片/圖標元件", systemImage: "arrow.triangle.2.circlepath")
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .buttonStyle(.bordered)
-                                .controlSize(.large)
-                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.large)
                             
                             Button {
                                 viewModel.deleteSelectedLayer()
                             } label: {
-                                Label("Remove Text Region", systemImage: "trash")
+                                Label("Remove Region", systemImage: "trash")
                                     .frame(maxWidth: .infinity)
                                     .foregroundColor(.white)
                             }

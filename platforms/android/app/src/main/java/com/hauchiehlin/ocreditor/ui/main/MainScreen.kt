@@ -169,7 +169,12 @@ fun MainScreen(
                             layer = selectedLayer,
                             onUpdate = { viewModel.updateLayer(selectedLayer.id, it) },
                             onTranslate = { viewModel.translateWithLLM(selectedLayer.id, it) },
-                            onFix = { viewModel.fixTextWithLLM(selectedLayer.id, it) }
+                            onFix = { viewModel.fixTextWithLLM(selectedLayer.id, it) },
+                            onExtract = { viewModel.extractEntitiesWithLLM(selectedLayer.id, it) },
+                            onDelete = {
+                                viewModel.updateLayer(selectedLayer.id, selectedLayer.copy(isRemoved = true))
+                                viewModel.selectLayer(null)
+                            }
                         )
                     }
                 }
@@ -264,7 +269,9 @@ fun PropertyPanel(
     layer: OCRLayer,
     onUpdate: (OCRLayer) -> Unit,
     onTranslate: (String) -> Unit,
-    onFix: (String) -> Unit
+    onFix: (String) -> Unit,
+    onExtract: (String) -> Unit,
+    onDelete: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -272,32 +279,65 @@ fun PropertyPanel(
             .padding(16.dp)
             .padding(bottom = 32.dp)
     ) {
-        Text("Properties", style = MaterialTheme.typography.titleLarge)
+        Text("Text Formatting Panel", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(16.dp))
         
+        Text("Edit Content", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         OutlinedTextField(
             value = layer.currentText,
             onValueChange = { onUpdate(layer.copy(currentText = it, isEdited = true)) },
-            label = { Text("Text Content") },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(100.dp)
         )
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        Button(
-            onClick = { onTranslate(layer.currentText) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Translate (LLM)")
+        Text("AI Operations (Local LLM)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { onFix(layer.currentText) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Fix Text")
+            }
+            Button(
+                onClick = { onExtract(layer.currentText) },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Extract Entities")
+            }
         }
         
         Spacer(modifier = Modifier.height(8.dp))
         
         Button(
-            onClick = { onFix(layer.currentText) },
+            onClick = { onTranslate(layer.currentText) },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Fix Typo (LLM)")
+            Text("Translate to ZH")
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text("Operations", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Placeholder for Regional Re-OCR since it applies globally, but placed here for UI alignment
+            OutlinedButton(
+                onClick = { /* TODO: Regional Re-OCR */ },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Regional Re-OCR")
+            }
+            
+            OutlinedButton(
+                onClick = { onDelete() },
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Remove Text", color = Color.Red)
+            }
         }
     }
 }
