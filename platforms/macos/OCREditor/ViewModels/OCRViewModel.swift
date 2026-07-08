@@ -937,7 +937,11 @@ final class OCRViewModel: ObservableObject {
     
     /// 執行局部 OCR 辨識 (Regional Re-OCR)
     func performRegionalOCR(inRect rect: CGRect) async {
-        guard let image = self.image else { return }
+        // 從 canvasDocument 的背景圖層取得原始圖片
+        guard let image = canvasDocument?.layers.first(where: { $0.type == .image })?.image else {
+            print("[OCRViewModel] ⚠️ 找不到背景圖片，無法執行局部 OCR")
+            return
+        }
         print("[OCRViewModel] 🔄 進行局部 OCR 辨識...")
         
         let processedImage = preprocessImage(image)
