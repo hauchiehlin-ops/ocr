@@ -24,6 +24,10 @@
 #include "license/license_validator.h"
 #endif
 
+#ifdef OCR_ENABLE_LLM
+#include "llm/LocalLLMEngine.h"
+#endif
+
 #include "SettingsManager.h"
 #include <string>
 #include <memory>
@@ -52,6 +56,10 @@ struct OCRHandle {
 
 #ifdef OCR_ENABLE_LICENSE
     std::unique_ptr<ocr::LicenseValidator>  license_validator;
+#endif
+
+#ifdef OCR_ENABLE_LLM
+    std::unique_ptr<ocr::LocalLLMEngine>    llm_engine;
 #endif
 
     std::string last_error;
@@ -121,6 +129,11 @@ OCR_API OCRHandle* ocr_engine_create(const char* model_dir,
 #ifdef OCR_ENABLE_LICENSE
         // Initialize license validator
         handle->license_validator = std::make_unique<ocr::LicenseValidator>();
+#endif
+
+#ifdef OCR_ENABLE_LLM
+        // Initialize Local LLM Engine
+        handle->llm_engine = std::make_unique<ocr::LocalLLMEngine>();
 #endif
 
         handle->is_ready = true;
@@ -244,6 +257,24 @@ OCR_API const char* ocr_export_markdown(const char* json_str) {
         strcpy(result, md.c_str());
     }
     return result;
+}
+
+OCR_API const char* ocr_export_csv(const char* json_str) {
+    if (!json_str) return nullptr;
+    std::string csv = ocr::DocumentExporter::exportToCSV(json_str);
+    
+    if (csv.empty()) return nullptr;
+    
+    char* result = (char*)malloc(csv.length() + 1);
+    if (result) {
+        strcpy(result, csv.c_str());
+    }
+    return result;
+}
+
+OCR_API int ocr_export_pdf(const char* image_path, const char* json_str, const char* output_path) {
+    if (!image_path || !json_str || !output_path) return 0;
+    return ocr::DocumentExporter::exportToSearchablePDF(image_path, json_str, output_path) ? 1 : 0;
 }
 
 // ============================================================
@@ -558,6 +589,80 @@ OCR_API int ocr_canvas_replace_layer_image(OCRHandle* handle,
 }
 
 // ============================================================
+// Local LLM API
+// ============================================================
+
+OCR_API int ocr_llm_load_model(OCRHandle* handle, const char* model_path) {
+#ifdef OCR_ENABLE_LLM
+    if (!handle || !handle->llm_engine || !model_path) return 0;
+    return handle->llm_engine->loadModel(model_path) ? 1 : 0;
+#else
+    (void)handle; (void)model_path;
+    return 0;
+#endif
+}
+
+OCR_API const char* ocr_llm_fix_text(OCRHandle* handle, const char* text) {
+#ifdef OCR_ENABLE_LLM
+    if (!handle || !handle->llm_engine || !text) return nullptr;
+    std::string result = handle->llm_engine->fixOcrText(text);
+    return result.empty() ? nullptr : duplicate_string(result);
+#else
+    (void)handle; (void)text;
+    return nullptr;
+#endif
+}
+
+OCR_API const char* ocr_llm_translate(OCRHandle* handle, const char* text, const char* target_lang) {
+#ifdef OCR_ENABLE_LLM
+    if (!handle || !handle->llm_engine || !text || !target_lang) return nullptr;
+    std::string result = handle->llm_engine->translate(text, target_lang);
+    return result.empty() ? nullptr : duplicate_string(result);
+#else
+    (void)handle; (void)text; (void)target_lang;
+    return nullptr;
+#endif
+}
+
+OCR_API const char* ocr_llm_extract_entities(OCRHandle* handle, const char* text) {
+#ifdef OCR_ENABLE_LLM
+    if (!handle || !handle->llm_engine || !text) return nullptr;
+    std::string result = handle->llm_engine->extractEntities(text);
+    return result.empty() ? nullptr : duplicate_string(result);
+#else
+    (void)handle; (void)text;
+    return nullptr;
+#endif
+}
+
+// ============================================================
+// Project Archive API (.ocrproj)
+// ============================================================
+#include "editor/ProjectArchive.h"
+
+OCR_API int ocr_project_save(const char* image_path, const char* json_state, const char* output_path) {
+    if (!image_path || !json_state || !output_path) return 0;
+    ProjectArchive archive;
+    return archive.saveProject(image_path, json_state, output_path) ? 1 : 0;
+}
+
+OCR_API int ocr_project_load(const char* input_path, char** out_image_path, char** out_json_state) {
+    if (!input_path || !out_image_path || !out_json_state) return 0;
+    
+    *out_image_path = nullptr;
+    *out_json_state = nullptr;
+    
+    ProjectArchive archive;
+    std::string imgPath, jsonState;
+    if (archive.loadProject(input_path, imgPath, jsonState)) {
+        *out_image_path = duplicate_string(imgPath);
+        *out_json_state = duplicate_string(jsonState);
+        return 1;
+    }
+    return 0;
+}
+
+// ============================================================
 // Platform-Specific Unity Build Inclusions
 // ============================================================
 #ifdef __APPLE__
@@ -566,5 +671,6 @@ OCR_API int ocr_canvas_replace_layer_image(OCRHandle* handle,
 // This is a standard unity-build technique for cross-platform C++.
 #include "SettingsManager.cpp"
 #include "editor/DocumentExporter.cpp"
+#include "editor/ProjectArchive.cpp"
 #include "history/DocumentHistoryManager.cpp"
 #endif

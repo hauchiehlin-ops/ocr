@@ -29,6 +29,9 @@
                         <MenuItem Header="{DynamicResource FileMenu}">
                             <MenuItem Header="{DynamicResource LoadImage}" Click="OpenImage_Click"/>
                             <MenuItem Header="{DynamicResource SaveImage}" Click="SaveImage_Click"/>
+                            <Separator/>
+                            <MenuItem Header="Export to CSV" Click="ExportCSV_Click"/>
+                            <MenuItem Header="Export to Searchable PDF" Click="ExportPDF_Click"/>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource EditMenu}">
                             <MenuItem x:Name="MenuInsertText" Header="{DynamicResource InsertText}" IsCheckable="True"/>
@@ -200,6 +203,17 @@
                                 </WrapPanel>
                             </StackPanel>
                         </Border>
+
+                        <TextBlock Text="AI Operations (Local LLM)" FontWeight="SemiBold" Opacity="0.7" Margin="0,20,0,5"/>
+                        <StackPanel Orientation="Vertical" Margin="0,0,0,10">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,5">
+                                <ui:Button Content="Fix Text" Click="FixTextWithLLM_Click" Appearance="Secondary" Width="145" Margin="0,0,10,0"/>
+                                <ui:Button Content="Extract Entities" Click="ExtractEntitiesWithLLM_Click" Appearance="Secondary" Width="145"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:Button Content="Translate to ZH" Click="TranslateWithLLM_Click" Appearance="Secondary" Width="145" Margin="0,0,10,0"/>
+                            </StackPanel>
+                        </StackPanel>
 
                         <TextBlock Text="Operations" FontWeight="SemiBold" Opacity="0.7" Margin="0,20,0,5"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">

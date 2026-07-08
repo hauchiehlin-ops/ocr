@@ -106,6 +106,7 @@ set(OCR_CORE_SOURCES
     src/editor/text_layer.cpp
     src/editor/text_renderer.cpp
     src/editor/compositor.cpp
+    src/editor/ProjectArchive.cpp
 
     # Core API
     src/ocr_core_api.cpp
@@ -118,6 +119,14 @@ set(OCR_CORE_SOURCES
     third_party/sqlite/sqlite3.c
     src/history/DocumentHistoryManager.cpp
 )
+
+# Optional: Local LLM Support
+if(OCR_ENABLE_LLM)
+    list(APPEND OCR_CORE_SOURCES
+        src/llm/LocalLLMEngine.cpp
+    )
+    add_definitions(-DOCR_ENABLE_LLM=1)
+endif()
 
 # Optional: Inpainting module
 if(OCR_ENABLE_INPAINT)

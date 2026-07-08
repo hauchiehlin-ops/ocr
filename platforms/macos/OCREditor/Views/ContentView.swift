@@ -731,13 +731,55 @@ extension ContentView {
                                         } else {
                                             Image(systemName: "globe")
                                         }
-                                        Text("Translate to Current Language")
+                                        Text("Translate with LLM")
                                     }
                                     .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(.bordered)
                                 .controlSize(.large)
-                                .disabled(viewModel.isTranslating)
+                                .disabled(viewModel.isTranslating || viewModel.isProcessing)
+
+                                Button {
+                                    Task {
+                                        await viewModel.fixSelectedLayerText()
+                                    }
+                                } label: {
+                                    HStack {
+                                        if viewModel.isProcessing {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                                .padding(.trailing, 4)
+                                        } else {
+                                            Image(systemName: "wand.and.stars")
+                                        }
+                                        Text("Fix Text with LLM")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.large)
+                                .disabled(viewModel.isProcessing || viewModel.isTranslating)
+                                
+                                Button {
+                                    Task {
+                                        await viewModel.extractEntitiesFromSelectedLayer()
+                                    }
+                                } label: {
+                                    HStack {
+                                        if viewModel.isProcessing {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                                .padding(.trailing, 4)
+                                        } else {
+                                            Image(systemName: "doc.text.magnifyingglass")
+                                        }
+                                        Text("Extract Entities")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.large)
+                                .disabled(viewModel.isProcessing || viewModel.isTranslating)
                             }
 
                             if layer.type == .image || layer.type == .vector {

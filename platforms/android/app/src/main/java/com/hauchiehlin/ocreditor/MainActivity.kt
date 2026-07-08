@@ -190,6 +190,13 @@ fun MainScreen(viewModel: OCRViewModel) {
                         layer = selectedLayer,
                         onUpdate = { viewModel.updateLayer(id, it) },
                         onClose = { viewModel.selectLayer(null) },
+                        onAction = { action ->
+                            when (action) {
+                                "FIX" -> viewModel.fixTextWithLLM(id, selectedLayer.currentText)
+                                "EXTRACT" -> viewModel.extractEntitiesWithLLM(id, selectedLayer.currentText)
+                                "TRANSLATE" -> viewModel.translateWithLLM(id, selectedLayer.currentText)
+                            }
+                        },
                         modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp)
                     )
                 }
@@ -224,15 +231,36 @@ fun MainScreen(viewModel: OCRViewModel) {
             onDismissRequest = { showBottomSheet = false },
             sheetState = sheetState
         ) {
-            InspectorContent(layers = successState.layers, viewModel = viewModel)
+            InspectorContent(layers = successState.layers, viewModel = viewModel, selectedBitmap = selectedBitmap)
         }
     }
 }
 
 @Composable
-fun InspectorContent(layers: List<OCRLayer>, viewModel: OCRViewModel) {
+fun InspectorContent(layers: List<OCRLayer>, viewModel: OCRViewModel, selectedBitmap: Bitmap?) {
     val context = LocalContext.current
     val fullText = layers.joinToString("\n") { it.currentText }
+    
+    val exportCsvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        uri?.let {
+            val csvData = viewModel.exportToCSV() ?: ""
+            context.contentResolver.openOutputStream(it)?.use { out ->
+                out.write(csvData.toByteArray(Charsets.UTF_8))
+            }
+        }
+    }
+    
+    val exportPdfLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        uri?.let {
+            selectedBitmap?.let { bitmap ->
+                viewModel.exportToPDF(context, it, bitmap)
+            }
+        }
+    }
     
     Column(
         modifier = Modifier
@@ -256,9 +284,27 @@ fun InspectorContent(layers: List<OCRLayer>, viewModel: OCRViewModel) {
                 val clip = android.content.ClipData.newPlainText("OCR Result", fullText)
                 clipboard.setPrimaryClip(clip)
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
         ) {
             Text("Copy All Text to Clipboard")
+        }
+        Button(
+            onClick = { exportCsvLauncher.launch("export.csv") },
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        ) {
+            Text("Export to CSV")
+        }
+        Button(
+            onClick = { 
+                if (selectedBitmap != null) {
+                    exportPdfLauncher.launch("export_searchable.pdf") 
+                } else {
+                    android.widget.Toast.makeText(context, "No image to export.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Export to Searchable PDF")
         }
     }
 }
@@ -560,7 +606,7 @@ fun BottomBar(
 }
 
 @Composable
-fun LayerEditPanel(layer: OCRLayer, onUpdate: (OCRLayer) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun LayerEditPanel(layer: OCRLayer, onUpdate: (OCRLayer) -> Unit, onClose: () -> Unit, onAction: (String) -> Unit = {}, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier.fillMaxWidth(0.9f),
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -614,6 +660,21 @@ fun LayerEditPanel(layer: OCRLayer, onUpdate: (OCRLayer) -> Unit, onClose: () ->
                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             ) {
                 Text("Remove Text (Inpaint)")
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("AI Operations", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Spacer(modifier = Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { onAction("FIX") }, modifier = Modifier.weight(1f)) {
+                    Text("Fix Text")
+                }
+                Button(onClick = { onAction("EXTRACT") }, modifier = Modifier.weight(1f)) {
+                    Text("Extract")
+                }
+                Button(onClick = { onAction("TRANSLATE") }, modifier = Modifier.weight(1f)) {
+                    Text("Translate")
+                }
             }
         }
     }

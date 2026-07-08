@@ -223,6 +223,13 @@ final class OCRViewModel: ObservableObject {
             if engine?.isReady == true {
                 print("[OCRViewModel] ✅ 引擎初始化成功（開發模式），模型路徑: \(devModelPath)")
                 self.isUsingLightweightModel = true
+                // Load LLM if exists
+                let llmPath = (devModelPath as NSString).appendingPathComponent("llm_lightweight.gguf")
+                if FileManager.default.fileExists(atPath: llmPath) {
+                    if engine?.loadLLMModel(llmPath) == true {
+                        print("[OCRViewModel] ✅ LLM 模型載入成功")
+                    }
+                }
                 return
             }
         }
@@ -263,6 +270,10 @@ final class OCRViewModel: ObservableObject {
                 // 模擬下載完成後建立一個假模型檔案以通過後續檢查
                 let dummyFile = URL(fileURLWithPath: targetDir).appendingPathComponent("ppocr_det_v5.onnx")
                 try? "dummy".write(to: dummyFile, atomically: true, encoding: .utf8)
+                
+                // 模擬下載 LLM 輕量模型
+                let dummyLLM = URL(fileURLWithPath: targetDir).appendingPathComponent("llm_lightweight.gguf")
+                try? "dummy_llm".write(to: dummyLLM, atomically: true, encoding: .utf8)
                 
                 // 重新初始化引擎
                 self.setupEngine()
@@ -523,19 +534,89 @@ final class OCRViewModel: ObservableObject {
             isTranslating = true
             defer { isTranslating = false }
             
-            // 模擬本地端離線簡繁/中英翻譯對照
-            let translated: String
-            if originalText == "離線文件圖層編輯器" {
-                translated = "Offline Document Layer Editor"
-            } else if originalText == "支援圖層分離、富文字格式與元件替換之完整畫布工作流" {
-                translated = "Full canvas workflow supporting layer separation, rich text formatting, and component replacement"
-            } else {
-                translated = "[Translated] " + originalText
+            // 使用本機 LLM 進行翻譯，如果失敗則使用簡單模擬
+            var translated: String? = nil
+            if let engine = engine, engine.isReady {
+                // Background thread for LLM
+                translated = await Task.detached { [engine] in
+                    do {
+                        var error: NSError?
+                        let result = engine.translateTextWithLLM(originalText, toLanguage: "Traditional Chinese", error: &error)
+                        return result
+                    } catch {
+                        return nil
+                    }
+                }.value
             }
             
-            doc.layers[idx].text = translated
-            self.inspectorText = translated
-            self.canvasDocument = doc
+            if translated == nil {
+                // Fallback Simulation
+                if originalText == "離線文件圖層編輯器" {
+                    translated = "Offline Document Layer Editor"
+                } else if originalText == "支援圖層分離、富文字格式與元件替換之完整畫布工作流" {
+                    translated = "Full canvas workflow supporting layer separation, rich text formatting, and component replacement"
+                } else {
+                    translated = "[Translated] " + originalText
+                }
+            }
+            
+            if let finalTranslated = translated {
+                doc.layers[idx].text = finalTranslated
+                self.inspectorText = finalTranslated
+                self.canvasDocument = doc
+            }
+        }
+    }
+    
+    /// 執行選取圖層的文字修正 (端側離線 LLM)
+    func fixSelectedLayerText() async {
+        guard let id = selectedLayerId, var doc = canvasDocument else { return }
+        if let idx = doc.layers.firstIndex(where: { $0.id == id }) {
+            let originalText = doc.layers[idx].text
+            guard !originalText.isEmpty else { return }
+            
+            isProcessing = true
+            defer { isProcessing = false }
+            
+            if let engine = engine, engine.isReady {
+                let fixed = await Task.detached { [engine] in
+                    var error: NSError?
+                    return engine.fixTextWithLLM(originalText, error: &error)
+                }.value
+                
+                if let finalFixed = fixed, !finalFixed.isEmpty {
+                    doc.layers[idx].text = finalFixed
+                    self.inspectorText = finalFixed
+                    self.canvasDocument = doc
+                }
+            }
+        }
+    }
+    
+    /// 執行選取圖層的實體擷取 (端側離線 LLM)
+    func extractEntitiesFromSelectedLayer() async {
+        guard let id = selectedLayerId, var doc = canvasDocument else { return }
+        if let idx = doc.layers.firstIndex(where: { $0.id == id }) {
+            let originalText = doc.layers[idx].text
+            guard !originalText.isEmpty else { return }
+            
+            isProcessing = true
+            defer { isProcessing = false }
+            
+            if let engine = engine, engine.isReady {
+                let entities = await Task.detached { [engine] in
+                    var error: NSError?
+                    return engine.extractEntitiesWithLLM(originalText, error: &error)
+                }.value
+                
+                if let finalEntities = entities, !finalEntities.isEmpty {
+                    // Prepend extracted entities to the text block
+                    let newText = "【實體擷取結果】\n\(finalEntities)\n\n【原始文字】\n\(originalText)"
+                    doc.layers[idx].text = newText
+                    self.inspectorText = newText
+                    self.canvasDocument = doc
+                }
+            }
         }
     }
     

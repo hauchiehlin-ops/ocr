@@ -32,6 +32,8 @@ object OCREngineBridge {
     // Export & Formatting API
     // ============================================================
     external fun exportMarkdownFromJson(jsonString: String): String
+    external fun exportCSVFromJson(jsonString: String): String?
+    external fun exportPDF(imagePath: String, jsonState: String, outputPath: String): Boolean
 
     // ============================================================
     // History API
@@ -52,4 +54,18 @@ object OCREngineBridge {
     
     external fun setIntSetting(key: String, value: Int)
     external fun getIntSetting(key: String, defaultValue: Int): Int
+
+    // ============================================================
+    // LLM API
+    // ============================================================
+    external fun loadLLMModel(modelPath: String): Boolean
+    external fun fixTextWithLLM(text: String): String?
+    external fun translateWithLLM(text: String, targetLang: String): String?
+    external fun extractEntitiesWithLLM(text: String): String?
+
+    // ============================================================
+    // Project Archive API (.ocrproj)
+    // ============================================================
+    external fun saveProjectArchive(imagePath: String, jsonState: String, outputPath: String): Boolean
+    external fun loadProjectArchive(inputPath: String): Array<String>? // Returns [imagePath, jsonState]
 }

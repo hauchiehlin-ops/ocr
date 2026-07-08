@@ -728,6 +728,99 @@
 }
 
 #pragma mark // ============================================================
+// Local LLM API
+// ============================================================
+
+- (BOOL)loadLLMModel:(NSString *)modelPath {
+    if (_engineHandle == NULL || modelPath == nil) return NO;
+    const char *path = [modelPath fileSystemRepresentation];
+    return ocr_llm_load_model(_engineHandle, path) != 0;
+}
+
+- (nullable NSString *)fixTextWithLLM:(NSString *)text error:(NSError **)error {
+    if (_engineHandle == NULL) {
+        if (error) *error = [self errorWithCode:100 message:@"引擎尚未初始化"];
+        return nil;
+    }
+    if (!text) return nil;
+
+    const char *result_c = ocr_llm_fix_text(_engineHandle, [text UTF8String]);
+    if (result_c == NULL) {
+        if (error) *error = [self errorWithCode:300 message:@"LLM 文字修復失敗"];
+        return nil;
+    }
+
+    NSString *result = [NSString stringWithUTF8String:result_c];
+    ocr_free_string(result_c);
+    return result;
+}
+
+- (nullable NSString *)translateTextWithLLM:(NSString *)text toLanguage:(NSString *)targetLang error:(NSError **)error {
+    if (_engineHandle == NULL) {
+        if (error) *error = [self errorWithCode:100 message:@"引擎尚未初始化"];
+        return nil;
+    }
+    if (!text || !targetLang) return nil;
+
+    const char *result_c = ocr_llm_translate(_engineHandle, [text UTF8String], [targetLang UTF8String]);
+    if (result_c == NULL) {
+        if (error) *error = [self errorWithCode:301 message:@"LLM 翻譯失敗"];
+        return nil;
+    }
+
+    NSString *result = [NSString stringWithUTF8String:result_c];
+    ocr_free_string(result_c);
+    return result;
+}
+
+- (nullable NSString *)extractEntitiesWithLLM:(NSString *)text error:(NSError **)error {
+    if (_engineHandle == NULL) {
+        if (error) *error = [self errorWithCode:100 message:@"引擎尚未初始化"];
+        return nil;
+    }
+    if (!text) return nil;
+
+    const char *result_c = ocr_llm_extract_entities(_engineHandle, [text UTF8String]);
+    if (result_c == NULL) {
+        if (error) *error = [self errorWithCode:302 message:@"LLM 實體萃取失敗"];
+        return nil;
+    }
+
+    NSString *result = [NSString stringWithUTF8String:result_c];
+    ocr_free_string(result_c);
+    return result;
+}
+
+// ============================================================
+// Project Archive API (.ocrproj)
+// ============================================================
++ (BOOL)saveProjectArchiveWithImagePath:(NSString *)imagePath
+                              jsonState:(NSString *)jsonState
+                             outputPath:(NSString *)outputPath {
+    if (!imagePath || !jsonState || !outputPath) return NO;
+    int result = ocr_project_save([imagePath UTF8String], [jsonState UTF8String], [outputPath UTF8String]);
+    return result == 1;
+}
+
++ (BOOL)loadProjectArchiveFromPath:(NSString *)inputPath
+                      outImagePath:(NSString * _Nullable * _Nonnull)outImagePath
+                      outJsonState:(NSString * _Nullable * _Nonnull)outJsonState {
+    if (!inputPath) return NO;
+    char* imgPath = NULL;
+    char* jsonState = NULL;
+    int result = ocr_project_load([inputPath UTF8String], &imgPath, &jsonState);
+    
+    if (result == 1 && imgPath && jsonState) {
+        *outImagePath = [NSString stringWithUTF8String:imgPath];
+        *outJsonState = [NSString stringWithUTF8String:jsonState];
+        ocr_free_string(imgPath);
+        ocr_free_string(jsonState);
+        return YES;
+    }
+    return NO;
+}
+
+#pragma mark // ============================================================
 // Export & Formatting API
 // ============================================================
 + (nullable NSString *)exportMarkdownFromJson:(NSString *)jsonStr {

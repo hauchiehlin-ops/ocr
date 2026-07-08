@@ -223,6 +223,16 @@ namespace OCREditor
                 {
                     _ocrEngine = new OCREngineInterop(modelsPath, language);
                     StatusLabel.Text = $"OCR C++ Core Engine initialized (Lang: {language}).";
+                    
+                    // Try to load LLM model
+                    string llmPath = Path.Combine(modelsPath, "llm_lightweight.gguf");
+                    if (File.Exists(llmPath))
+                    {
+                        if (_ocrEngine.LoadLLMModel(llmPath))
+                        {
+                            StatusLabel.Text += " Local LLM Loaded.";
+                        }
+                    }
                 }
                 else
                 {
@@ -1901,12 +1911,6 @@ namespace OCREditor
                 }
                 else
                 {
-                    StatusLabel.Text = "Regional OCR complete. No text found.";
-                }
-            }
-            catch (Exception ex)
-            {
-                StatusLabel.Text = $"Regional OCR failed: {ex.Message}";
             }
             finally
             {
@@ -1938,6 +1942,155 @@ namespace OCREditor
                 System.Windows.MessageBox.Show("Please select a text layer first.", "Inpainting", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
+
+        // -- LLM Action Handlers --------------------------------------------
+
+        private async void FixTextWithLLM_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null || _ocrEngine == null || !_ocrEngine.IsReady)
+            {
+                StatusLabel.Text = "Please select a text layer and ensure LLM is ready.";
+                return;
+            }
+
+            string originalText = _selectedRegion.CurrentText;
+            if (string.IsNullOrWhiteSpace(originalText)) return;
+
+            StatusLabel.Text = "Fixing text with LLM...";
+            ProgressBar.Visibility = Visibility.Visible;
+            ProgressBar.IsIndeterminate = true;
+
+            try
+            {
+                string? fixedText = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    return _ocrEngine.FixTextWithLLM(originalText);
+                });
+
+                if (!string.IsNullOrEmpty(fixedText))
+                {
+                    SaveHistoryState();
+                    _selectedRegion.CurrentText = fixedText;
+                    _selectedRegion.IsEdited = true;
+                    _isUpdatingUiFromSelection = true;
+                    OcrTextBox.Text = fixedText;
+                    _isUpdatingUiFromSelection = false;
+                    RenderRegions();
+                    StatusLabel.Text = "Text fixed with LLM.";
+                }
+                else
+                {
+                    StatusLabel.Text = "LLM fix returned empty or failed.";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusLabel.Text = $"LLM Error: {ex.Message}";
+            }
+            finally
+            {
+                ProgressBar.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void ExtractEntitiesWithLLM_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null || _ocrEngine == null || !_ocrEngine.IsReady)
+            {
+                StatusLabel.Text = "Please select a text layer and ensure LLM is ready.";
+                return;
+            }
+
+            string originalText = _selectedRegion.CurrentText;
+            if (string.IsNullOrWhiteSpace(originalText)) return;
+
+            StatusLabel.Text = "Extracting entities with LLM...";
+            ProgressBar.Visibility = Visibility.Visible;
+            ProgressBar.IsIndeterminate = true;
+
+            try
+            {
+                string? entitiesText = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    return _ocrEngine.ExtractEntitiesWithLLM(originalText);
+                });
+
+                if (!string.IsNullOrEmpty(entitiesText))
+                {
+                    SaveHistoryState();
+                    string combined = $"【Entities】\n{entitiesText}\n\n【Original】\n{originalText}";
+                    _selectedRegion.CurrentText = combined;
+                    _selectedRegion.IsEdited = true;
+                    _isUpdatingUiFromSelection = true;
+                    OcrTextBox.Text = combined;
+                    _isUpdatingUiFromSelection = false;
+                    RenderRegions();
+                    StatusLabel.Text = "Entities extracted.";
+                }
+                else
+                {
+                    StatusLabel.Text = "LLM extraction returned empty or failed.";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusLabel.Text = $"LLM Error: {ex.Message}";
+            }
+            finally
+            {
+                ProgressBar.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private async void TranslateWithLLM_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedRegion == null || _ocrEngine == null || !_ocrEngine.IsReady)
+            {
+                StatusLabel.Text = "Please select a text layer and ensure LLM is ready.";
+                return;
+            }
+
+            string originalText = _selectedRegion.CurrentText;
+            if (string.IsNullOrWhiteSpace(originalText)) return;
+
+            StatusLabel.Text = "Translating text with LLM...";
+            ProgressBar.Visibility = Visibility.Visible;
+            ProgressBar.IsIndeterminate = true;
+
+            try
+            {
+                string? translatedText = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    return _ocrEngine.TranslateWithLLM(originalText, "Traditional Chinese");
+                });
+
+                if (!string.IsNullOrEmpty(translatedText))
+                {
+                    SaveHistoryState();
+                    _selectedRegion.CurrentText = translatedText;
+                    _selectedRegion.IsEdited = true;
+                    _isUpdatingUiFromSelection = true;
+                    OcrTextBox.Text = translatedText;
+                    _isUpdatingUiFromSelection = false;
+                    RenderRegions();
+                    StatusLabel.Text = "Text translated.";
+                }
+                else
+                {
+                    StatusLabel.Text = "LLM translation returned empty or failed.";
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusLabel.Text = $"LLM Error: {ex.Message}";
+            }
+            finally
+            {
+                ProgressBar.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // -------------------------------------------------------------------
 
         private void Translate_Click(object sender, RoutedEventArgs e)
         {
@@ -2185,6 +2338,85 @@ namespace OCREditor
                 catch (Exception ex)
                 {
                     System.Windows.MessageBox.Show($"Failed to save image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void ExportCSV_Click(object sender, RoutedEventArgs e)
+        {
+            if (_regions.Count == 0 || _ocrEngine == null)
+            {
+                System.Windows.MessageBox.Show("No data to export.", "Export", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "CSV File|*.csv",
+                FileName = string.IsNullOrEmpty(_currentImagePath) ? "export.csv" : Path.GetFileNameWithoutExtension(_currentImagePath) + "_export.csv"
+            };
+
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = false };
+                    string jsonState = System.Text.Json.JsonSerializer.Serialize(_regions, options);
+                    
+                    string? csvData = OCREngineInterop.ExportToCSV(jsonState);
+                    if (csvData != null)
+                    {
+                        File.WriteAllText(saveFileDialog.FileName, csvData, System.Text.Encoding.UTF8);
+                        StatusLabel.Text = $"Exported to CSV: {Path.GetFileName(saveFileDialog.FileName)}";
+                        System.Windows.MessageBox.Show("Data exported to CSV successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        System.Windows.MessageBox.Show("Failed to generate CSV data.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Failed to export CSV: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+
+        private void ExportPDF_Click(object sender, RoutedEventArgs e)
+        {
+            if (_regions.Count == 0 || _ocrEngine == null || _currentImagePath == null)
+            {
+                System.Windows.MessageBox.Show("No image or data to export to PDF.", "Export", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var saveFileDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "PDF File|*.pdf",
+                FileName = Path.GetFileNameWithoutExtension(_currentImagePath) + "_searchable.pdf"
+            };
+
+            if (saveFileDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = false };
+                    string jsonState = System.Text.Json.JsonSerializer.Serialize(_regions, options);
+                    
+                    bool success = OCREngineInterop.ExportToPDF(_currentImagePath, jsonState, saveFileDialog.FileName);
+                    if (success)
+                    {
+                        StatusLabel.Text = $"Exported to Searchable PDF: {Path.GetFileName(saveFileDialog.FileName)}";
+                        System.Windows.MessageBox.Show("Data exported to Searchable PDF successfully!", "Success", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        System.Windows.MessageBox.Show("Failed to generate PDF file.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Failed to export PDF: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }

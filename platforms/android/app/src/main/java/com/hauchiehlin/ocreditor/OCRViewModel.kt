@@ -127,6 +127,9 @@ class OCRViewModel : ViewModel() {
             if (downloadedFile.exists() && try { OCREngineBridge.initEngine(downloadedModelPath, configJson) } catch (e: Exception) { false }) {
                 engineInitialized = true
                 _isUsingLightweightModel.value = false
+                
+                val llmPath = java.io.File(downloadedModelPath, "llm_lightweight.gguf")
+                if (llmPath.exists()) OCREngineBridge.loadLLMModel(llmPath.absolutePath)
                 return@launch
             }
 
@@ -135,6 +138,9 @@ class OCRViewModel : ViewModel() {
             if (lightweightFile.exists() && try { OCREngineBridge.initEngine(lightweightModelPath, configJson) } catch (e: Exception) { false }) {
                 engineInitialized = true
                 _isUsingLightweightModel.value = true
+                
+                val llmPath = java.io.File(lightweightModelPath, "llm_lightweight.gguf")
+                if (llmPath.exists()) OCREngineBridge.loadLLMModel(llmPath.absolutePath)
                 return@launch
             }
 
@@ -237,6 +243,14 @@ class OCRViewModel : ViewModel() {
         return null
     }
 
+    fun exportToCSV(): String? {
+        val state = _ocrState.value
+        if (state is OCRState.Success) {
+            return OCREngineBridge.exportCSVFromJson(state.rawJson)
+        }
+        return null
+    }
+
     fun exportToPDF(context: android.content.Context, uri: android.net.Uri, originalBitmap: android.graphics.Bitmap) {
         val state = _ocrState.value
         if (state !is OCRState.Success) return
@@ -283,6 +297,63 @@ class OCRViewModel : ViewModel() {
             }
         }
     }
+
+    // ============================================================
+    // LLM Operations
+    // ============================================================
+
+    fun fixTextWithLLM(layerId: java.util.UUID, originalText: String) {
+        if (originalText.isBlank()) return
+        val currentState = _ocrState.value
+        if (currentState !is OCRState.Success) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val fixedText = OCREngineBridge.fixTextWithLLM(originalText)
+            if (!fixedText.isNullOrEmpty()) {
+                val layerToUpdate = currentState.layers.find { it.id == layerId }
+                if (layerToUpdate != null) {
+                    val updatedLayer = layerToUpdate.copy(currentText = fixedText, isEdited = true)
+                    updateLayer(layerId, updatedLayer)
+                }
+            }
+        }
+    }
+
+    fun translateWithLLM(layerId: java.util.UUID, originalText: String, targetLang: String = "Traditional Chinese") {
+        if (originalText.isBlank()) return
+        val currentState = _ocrState.value
+        if (currentState !is OCRState.Success) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val translatedText = OCREngineBridge.translateWithLLM(originalText, targetLang)
+            if (!translatedText.isNullOrEmpty()) {
+                val layerToUpdate = currentState.layers.find { it.id == layerId }
+                if (layerToUpdate != null) {
+                    val updatedLayer = layerToUpdate.copy(currentText = translatedText, isEdited = true)
+                    updateLayer(layerId, updatedLayer)
+                }
+            }
+        }
+    }
+
+    fun extractEntitiesWithLLM(layerId: java.util.UUID, originalText: String) {
+        if (originalText.isBlank()) return
+        val currentState = _ocrState.value
+        if (currentState !is OCRState.Success) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val entitiesText = OCREngineBridge.extractEntitiesWithLLM(originalText)
+            if (!entitiesText.isNullOrEmpty()) {
+                val layerToUpdate = currentState.layers.find { it.id == layerId }
+                if (layerToUpdate != null) {
+                    val combined = "【Entities】\n$entitiesText\n\n【Original】\n$originalText"
+                    val updatedLayer = layerToUpdate.copy(currentText = combined, isEdited = true)
+                    updateLayer(layerId, updatedLayer)
+                }
+            }
+        }
+    }
+
     fun selectLayer(id: java.util.UUID?) {
         _selectedLayerId.value = id
     }

@@ -126,6 +126,39 @@ Java_com_hauchiehlin_ocreditor_OCREngineBridge_exportMarkdownFromJson(JNIEnv *en
     return env->NewStringUTF("");
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_exportCSVFromJson(JNIEnv *env, jobject /* this */, jstring jsonString) {
+    if (jsonString) {
+        const char *json = env->GetStringUTFChars(jsonString, nullptr);
+        const char *cCsv = ocr_export_csv(json);
+        env->ReleaseStringUTFChars(jsonString, json);
+        
+        if (cCsv) {
+            jstring result = env->NewStringUTF(cCsv);
+            ocr_free_string(cCsv);
+            return result;
+        }
+    }
+    return nullptr;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_exportPDF(JNIEnv *env, jobject /* this */, jstring imagePath, jstring jsonState, jstring outputPath) {
+    if (!imagePath || !jsonState || !outputPath) return JNI_FALSE;
+    
+    const char *cImagePath = env->GetStringUTFChars(imagePath, nullptr);
+    const char *cJsonState = env->GetStringUTFChars(jsonState, nullptr);
+    const char *cOutputPath = env->GetStringUTFChars(outputPath, nullptr);
+    
+    int result = ocr_export_pdf(cImagePath, cJsonState, cOutputPath);
+    
+    env->ReleaseStringUTFChars(imagePath, cImagePath);
+    env->ReleaseStringUTFChars(jsonState, cJsonState);
+    env->ReleaseStringUTFChars(outputPath, cOutputPath);
+    
+    return result != 0 ? JNI_TRUE : JNI_FALSE;
+}
+
 // ============================================================
 // History API
 // ============================================================
@@ -253,4 +286,112 @@ Java_com_hauchiehlin_ocreditor_OCREngineBridge_getIntSetting(JNIEnv *env, jobjec
         return result;
     }
     return defaultValue;
+}
+
+// ============================================================
+// LLM API
+// ============================================================
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_loadLLMModel(JNIEnv *env, jobject /* this */, jstring modelPath) {
+    if (!g_ocrEngine) return JNI_FALSE;
+    if (modelPath) {
+        const char *path = env->GetStringUTFChars(modelPath, nullptr);
+        int result = ocr_llm_load_model(g_ocrEngine, path);
+        env->ReleaseStringUTFChars(modelPath, path);
+        return result != 0 ? JNI_TRUE : JNI_FALSE;
+    }
+    return JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_fixTextWithLLM(JNIEnv *env, jobject /* this */, jstring text) {
+    if (!g_ocrEngine || !text) return nullptr;
+    const char *cText = env->GetStringUTFChars(text, nullptr);
+    const char *cResult = ocr_llm_fix_text(g_ocrEngine, cText);
+    env->ReleaseStringUTFChars(text, cText);
+    
+    if (cResult) {
+        jstring result = env->NewStringUTF(cResult);
+        ocr_free_string(cResult);
+        return result;
+    }
+    return nullptr;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_translateWithLLM(JNIEnv *env, jobject /* this */, jstring text, jstring targetLang) {
+    if (!g_ocrEngine || !text || !targetLang) return nullptr;
+    const char *cText = env->GetStringUTFChars(text, nullptr);
+    const char *cLang = env->GetStringUTFChars(targetLang, nullptr);
+    const char *cResult = ocr_llm_translate(g_ocrEngine, cText, cLang);
+    env->ReleaseStringUTFChars(text, cText);
+    env->ReleaseStringUTFChars(targetLang, cLang);
+    
+    if (cResult) {
+        jstring result = env->NewStringUTF(cResult);
+        ocr_free_string(cResult);
+        return result;
+    }
+    return nullptr;
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_extractEntitiesWithLLM(JNIEnv *env, jobject /* this */, jstring text) {
+    if (!g_ocrEngine || !text) return nullptr;
+    const char *cText = env->GetStringUTFChars(text, nullptr);
+    const char *cResult = ocr_llm_extract_entities(g_ocrEngine, cText);
+    env->ReleaseStringUTFChars(text, cText);
+    
+    if (cResult) {
+        jstring result = env->NewStringUTF(cResult);
+        ocr_free_string(cResult);
+        return result;
+    }
+    return nullptr;
+}
+
+// ============================================================
+// Project Archive API (.ocrproj)
+// ============================================================
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_saveProjectArchive(JNIEnv *env, jobject /* this */, jstring imagePath, jstring jsonState, jstring outputPath) {
+    if (!imagePath || !jsonState || !outputPath) return JNI_FALSE;
+    
+    const char *cImagePath = env->GetStringUTFChars(imagePath, nullptr);
+    const char *cJsonState = env->GetStringUTFChars(jsonState, nullptr);
+    const char *cOutputPath = env->GetStringUTFChars(outputPath, nullptr);
+    
+    int result = ocr_project_save(cImagePath, cJsonState, cOutputPath);
+    
+    env->ReleaseStringUTFChars(imagePath, cImagePath);
+    env->ReleaseStringUTFChars(jsonState, cJsonState);
+    env->ReleaseStringUTFChars(outputPath, cOutputPath);
+    
+    return result != 0 ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jobjectArray JNICALL
+Java_com_hauchiehlin_ocreditor_OCREngineBridge_loadProjectArchive(JNIEnv *env, jobject /* this */, jstring inputPath) {
+    if (!inputPath) return nullptr;
+    
+    const char *cInputPath = env->GetStringUTFChars(inputPath, nullptr);
+    char *outImagePath = nullptr;
+    char *outJsonState = nullptr;
+    
+    int result = ocr_project_load(cInputPath, &outImagePath, &outJsonState);
+    env->ReleaseStringUTFChars(inputPath, cInputPath);
+    
+    if (result != 0 && outImagePath && outJsonState) {
+        jobjectArray ret = env->NewObjectArray(2, env->FindClass("java/lang/String"), env->NewStringUTF(""));
+        env->SetObjectArrayElement(ret, 0, env->NewStringUTF(outImagePath));
+        env->SetObjectArrayElement(ret, 1, env->NewStringUTF(outJsonState));
+        
+        ocr_free_string(outImagePath);
+        ocr_free_string(outJsonState);
+        return ret;
+    }
+    
+    return nullptr;
 }

@@ -180,6 +180,56 @@ NS_ASSUME_NONNULL_BEGIN
                                error:(NSError **)error;
 
 // ============================================================
+// Project Archive API (.ocrproj)
+// ============================================================
+
+/// 儲存 OCR 專案 (.ocrproj)
+/// @param imagePath 圖片路徑
+/// @param jsonState JSON 狀態字串
+/// @param outputPath 輸出的 .ocrproj 路徑
+/// @return 成功回傳 YES，失敗回傳 NO
++ (BOOL)saveProjectArchiveWithImagePath:(NSString *)imagePath
+                              jsonState:(NSString *)jsonState
+                             outputPath:(NSString *)outputPath;
+
+/// 讀取 OCR 專案 (.ocrproj)
+/// @param inputPath 輸入的 .ocrproj 路徑
+/// @param outImagePath 解析出的圖片路徑 (out)
+/// @param outJsonState 解析出的 JSON 狀態字串 (out)
+/// @return 成功回傳 YES，失敗回傳 NO
++ (BOOL)loadProjectArchiveFromPath:(NSString *)inputPath
+                      outImagePath:(NSString * _Nullable * _Nonnull)outImagePath
+                      outJsonState:(NSString * _Nullable * _Nonnull)outJsonState;
+
+// ============================================================
+// Local LLM API
+// ============================================================
+
+/// Load a GGUF model for Local LLM features
+/// @param modelPath Path to the GGUF model file
+/// @return YES on success, NO on failure
+- (BOOL)loadLLMModel:(NSString *)modelPath;
+
+/// Fix broken OCR text using Local LLM
+/// @param text The broken OCR text
+/// @param error  失敗時回傳錯誤
+/// @return Corrected text or nil
+- (nullable NSString *)fixTextWithLLM:(NSString *)text error:(NSError **)error;
+
+/// Translate text using Local LLM
+/// @param text The source text
+/// @param targetLang Target language (e.g. "English", "Traditional Chinese")
+/// @param error  失敗時回傳錯誤
+/// @return Translated text or nil
+- (nullable NSString *)translateTextWithLLM:(NSString *)text toLanguage:(NSString *)targetLang error:(NSError **)error;
+
+/// Extract entities to JSON using Local LLM
+/// @param text The source text
+/// @param error  失敗時回傳錯誤
+/// @return Extracted entities as JSON string or nil
+- (nullable NSString *)extractEntitiesWithLLM:(NSString *)text error:(NSError **)error;
+
+// ============================================================
 // Export & Formatting API
 // ============================================================
 /// Export the OCR JSON result to a structured Markdown string.

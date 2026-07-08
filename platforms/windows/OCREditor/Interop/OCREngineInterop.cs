@@ -143,6 +143,32 @@ namespace OCREditor.Interop
             IntPtr engine,
             [MarshalAs(UnmanagedType.LPStr)] string pptxPath);
 
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_export_csv", CharSet = CharSet.Ansi)]
+        internal static extern IntPtr ocr_export_csv(
+            [MarshalAs(UnmanagedType.LPStr)] string jsonState);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_export_pdf", CharSet = CharSet.Ansi)]
+        internal static extern int ocr_export_pdf(
+            [MarshalAs(UnmanagedType.LPStr)] string imagePath,
+            [MarshalAs(UnmanagedType.LPStr)] string jsonState,
+            [MarshalAs(UnmanagedType.LPStr)] string outputPath);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_project_save", CharSet = CharSet.Ansi)]
+        internal static extern int ocr_project_save(
+            [MarshalAs(UnmanagedType.LPStr)] string imagePath,
+            [MarshalAs(UnmanagedType.LPStr)] string jsonState,
+            [MarshalAs(UnmanagedType.LPStr)] string outputPath);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_project_load", CharSet = CharSet.Ansi)]
+        internal static extern int ocr_project_load(
+            [MarshalAs(UnmanagedType.LPStr)] string inputPath,
+            out IntPtr outImagePath,
+            out IntPtr outJsonState);
+
         /// <summary>
         /// Replace the image content of a specific image layer.
         /// </summary>
@@ -165,6 +191,32 @@ namespace OCREditor.Interop
             [MarshalAs(UnmanagedType.LPStr)] string jsonData,
             [MarshalAs(UnmanagedType.LPStr)] string title,
             [MarshalAs(UnmanagedType.LPStr)] string previewImagePath);
+            
+        // LLM APIs
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_llm_load_model", CharSet = CharSet.Ansi)]
+        internal static extern int ocr_llm_load_model(
+            IntPtr engine,
+            [MarshalAs(UnmanagedType.LPStr)] string modelPath);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_llm_fix_text", CharSet = CharSet.Ansi)]
+        internal static extern IntPtr ocr_llm_fix_text(
+            IntPtr engine,
+            [MarshalAs(UnmanagedType.LPStr)] string text);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_llm_translate", CharSet = CharSet.Ansi)]
+        internal static extern IntPtr ocr_llm_translate(
+            IntPtr engine,
+            [MarshalAs(UnmanagedType.LPStr)] string text,
+            [MarshalAs(UnmanagedType.LPStr)] string targetLang);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl,
+                   EntryPoint = "ocr_llm_extract_entities", CharSet = CharSet.Ansi)]
+        internal static extern IntPtr ocr_llm_extract_entities(
+            IntPtr engine,
+            [MarshalAs(UnmanagedType.LPStr)] string text);
      }
 
     // -----------------------------------------------------------------------
@@ -743,6 +795,141 @@ namespace OCREditor.Interop
                 }
             }
             return result;
+        }
+
+        // -- Project Archive API --------------------------------------------
+
+        public static bool SaveProjectArchive(string imagePath, string jsonState, string outputPath)
+        {
+            try
+            {
+                int result = NativeMethods.ocr_project_save(imagePath, jsonState, outputPath);
+                return result == 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OCREngineInterop] Failed to save project archive: {ex.Message}");
+                return false;
+            }
+        }
+
+        // -- Export & Formatting API ----------------------------------------
+
+        public static string? ExportToCSV(string jsonState)
+        {
+            try
+            {
+                IntPtr ptr = NativeMethods.ocr_export_csv(jsonState);
+                if (ptr != IntPtr.Zero)
+                {
+                    string? result = Marshal.PtrToStringUTF8(ptr);
+                    NativeMethods.ocr_free_string(ptr);
+                    return result;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OCREngineInterop] Failed to export CSV: {ex.Message}");
+            }
+            return null;
+        }
+
+        public static bool ExportToPDF(string imagePath, string jsonState, string outputPath)
+        {
+            try
+            {
+                int result = NativeMethods.ocr_export_pdf(imagePath, jsonState, outputPath);
+                return result == 1;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OCREngineInterop] Failed to export PDF: {ex.Message}");
+                return false;
+            }
+        }
+
+        public static bool LoadProjectArchive(string inputPath, out string imagePath, out string jsonState)
+        {
+            imagePath = null;
+            jsonState = null;
+            try
+            {
+                IntPtr imgPtr = IntPtr.Zero;
+                IntPtr jsonPtr = IntPtr.Zero;
+                
+                int result = NativeMethods.ocr_project_load(inputPath, out imgPtr, out jsonPtr);
+                if (result == 1 && imgPtr != IntPtr.Zero && jsonPtr != IntPtr.Zero)
+                {
+                    try {
+                        imagePath = Marshal.PtrToStringUTF8(imgPtr);
+                        jsonState = Marshal.PtrToStringUTF8(jsonPtr);
+                        return true;
+                    } finally {
+                        NativeMethods.ocr_free_string(imgPtr);
+                        NativeMethods.ocr_free_string(jsonPtr);
+                    }
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[OCREngineInterop] Failed to load project archive: {ex.Message}");
+                return false;
+            }
+        }
+
+        // -- LLM APIs -------------------------------------------------------
+        
+        public bool LoadLLMModel(string modelPath)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrEmpty(modelPath)) return false;
+            return NativeMethods.ocr_llm_load_model(_engineHandle, modelPath) != 0;
+        }
+
+        public string? FixTextWithLLM(string text)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrEmpty(text)) return null;
+            
+            IntPtr ptr = NativeMethods.ocr_llm_fix_text(_engineHandle, text);
+            if (ptr == IntPtr.Zero) return null;
+            
+            try {
+                return Marshal.PtrToStringUTF8(ptr);
+            } finally {
+                NativeMethods.ocr_free_string(ptr);
+            }
+        }
+
+        public string? TranslateWithLLM(string text, string targetLanguage)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(targetLanguage)) return null;
+            
+            IntPtr ptr = NativeMethods.ocr_llm_translate(_engineHandle, text, targetLanguage);
+            if (ptr == IntPtr.Zero) return null;
+            
+            try {
+                return Marshal.PtrToStringUTF8(ptr);
+            } finally {
+                NativeMethods.ocr_free_string(ptr);
+            }
+        }
+
+        public string? ExtractEntitiesWithLLM(string text)
+        {
+            ThrowIfDisposed();
+            if (string.IsNullOrEmpty(text)) return null;
+            
+            IntPtr ptr = NativeMethods.ocr_llm_extract_entities(_engineHandle, text);
+            if (ptr == IntPtr.Zero) return null;
+            
+            try {
+                return Marshal.PtrToStringUTF8(ptr);
+            } finally {
+                NativeMethods.ocr_free_string(ptr);
+            }
         }
 
         // -- IDisposable implementation -------------------------------------

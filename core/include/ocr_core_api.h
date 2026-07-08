@@ -282,12 +282,30 @@ OCR_API const char* ocr_recognize_region(OCRHandle* handle,
  * ============================================================ */
 
 /**
- * @brief Export the OCR JSON result to a structured Markdown string.
- *
- * @param json_str The Positional Text Tree JSON string returned by ocr_recognize.
- * @return Markdown string. Caller MUST free via ocr_free_string().
+ * 匯出辨識結果為 Markdown
+ * 
+ * @param json_str ocr_recognize 回傳的 JSON 字串
+ * @return Markdown 格式的字串 (需使用 ocr_free_string 釋放)，失敗回傳 NULL
  */
-OCR_API const char* ocr_export_markdown(const char* json_str);
+OCR_EXPORT const char* ocr_export_markdown(const char* json_str);
+
+/**
+ * 匯出辨識結果為 CSV (表格結構)
+ * 
+ * @param json_str ocr_recognize 回傳的 JSON 字串
+ * @return CSV 格式的字串 (需使用 ocr_free_string 釋放)，失敗回傳 NULL
+ */
+OCR_EXPORT const char* ocr_export_csv(const char* json_str);
+
+/**
+ * 匯出雙層可搜尋 PDF
+ * 
+ * @param image_path 圖片檔案路徑
+ * @param json_str ocr_recognize 回傳的 JSON 字串
+ * @param output_path 輸出的 PDF 檔案路徑
+ * @return 成功回傳 1，失敗回傳 0
+ */
+OCR_EXPORT int ocr_export_pdf(const char* image_path, const char* json_str, const char* output_path);
 
 /* ============================================================
  * Text Removal (AI Inpainting)
@@ -381,6 +399,43 @@ OCR_API void ocr_free_string(const char* str);
 OCR_API void ocr_free_image_result(OCRImageResult* result);
 
 /* ============================================================
+ * Local LLM API
+ * ============================================================ */
+
+/**
+ * @brief Initialize the Local LLM engine and load a model.
+ * @param handle Engine handle.
+ * @param model_path Path to the GGUF model file.
+ * @return 1 on success, 0 on failure.
+ */
+OCR_API int ocr_llm_load_model(OCRHandle* handle, const char* model_path);
+
+/**
+ * @brief Fix OCR text using the local LLM.
+ * @param handle Engine handle.
+ * @param text The broken OCR text.
+ * @return Corrected text. Caller MUST free via ocr_free_string().
+ */
+OCR_API const char* ocr_llm_fix_text(OCRHandle* handle, const char* text);
+
+/**
+ * @brief Translate text using the local LLM.
+ * @param handle Engine handle.
+ * @param text The source text.
+ * @param target_lang The target language.
+ * @return Translated text. Caller MUST free via ocr_free_string().
+ */
+OCR_API const char* ocr_llm_translate(OCRHandle* handle, const char* text, const char* target_lang);
+
+/**
+ * @brief Extract entities to JSON using the local LLM.
+ * @param handle Engine handle.
+ * @param text The source document text.
+ * @return JSON string of extracted entities. Caller MUST free via ocr_free_string().
+ */
+OCR_API const char* ocr_llm_extract_entities(OCRHandle* handle, const char* text);
+
+/* ============================================================
  * Document Canvas and Multi-Layer Support
  * ============================================================ */
 
@@ -409,6 +464,28 @@ OCR_API int ocr_canvas_replace_layer_image(OCRHandle* handle,
                                            const char* layer_id,
                                            const uint8_t* new_pixels,
                                            int width, int height);
+
+/* ============================================================
+ * Project Archive API (.ocrproj)
+ * ============================================================ */
+
+/**
+ * @brief Save the current OCR project to an .ocrproj file.
+ * @param image_path Path to the current working image.
+ * @param json_state The complete JSON state of all layers.
+ * @param output_path The destination .ocrproj file path.
+ * @return 1 on success, 0 on failure.
+ */
+OCR_API int ocr_project_save(const char* image_path, const char* json_state, const char* output_path);
+
+/**
+ * @brief Load an OCR project from an .ocrproj file.
+ * @param input_path The source .ocrproj file path.
+ * @param out_image_path Will be set to a temporary extracted image path. Caller MUST free via ocr_free_string.
+ * @param out_json_state Will be set to the extracted JSON state. Caller MUST free via ocr_free_string.
+ * @return 1 on success, 0 on failure.
+ */
+OCR_API int ocr_project_load(const char* input_path, char** out_image_path, char** out_json_state);
 
 /* ============================================================
  * Utility Functions
