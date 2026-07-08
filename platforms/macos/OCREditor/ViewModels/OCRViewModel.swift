@@ -540,10 +540,10 @@ final class OCRViewModel: ObservableObject {
                 // Background thread for LLM
                 translated = await Task.detached { [engine] in
                     do {
-                        var error: NSError?
-                        let result = engine.translateTextWithLLM(originalText, toLanguage: "Traditional Chinese", error: &error)
+                        let result: String? = try engine.translateText(withLLM: originalText, toLanguage: "Traditional Chinese")
                         return result
                     } catch {
+                        print("Translation error: \(error)")
                         return nil
                     }
                 }.value
@@ -580,8 +580,13 @@ final class OCRViewModel: ObservableObject {
             
             if let engine = engine, engine.isReady {
                 let fixed = await Task.detached { [engine] in
-                    var error: NSError?
-                    return engine.fixTextWithLLM(originalText, error: &error)
+                    do {
+                        let res: String? = try engine.fixText(withLLM: originalText)
+                        return res
+                    } catch {
+                        print("Fix text error: \(error)")
+                        return nil
+                    }
                 }.value
                 
                 if let finalFixed = fixed, !finalFixed.isEmpty {
@@ -605,8 +610,13 @@ final class OCRViewModel: ObservableObject {
             
             if let engine = engine, engine.isReady {
                 let entities = await Task.detached { [engine] in
-                    var error: NSError?
-                    return engine.extractEntitiesWithLLM(originalText, error: &error)
+                    do {
+                        let res: String? = try engine.extractEntities(withLLM: originalText)
+                        return res
+                    } catch {
+                        print("Extract entities error: \(error)")
+                        return nil
+                    }
                 }.value
                 
                 if let finalEntities = entities, !finalEntities.isEmpty {

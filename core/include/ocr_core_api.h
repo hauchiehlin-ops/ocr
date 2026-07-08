@@ -287,7 +287,7 @@ OCR_API const char* ocr_recognize_region(OCRHandle* handle,
  * @param json_str ocr_recognize 回傳的 JSON 字串
  * @return Markdown 格式的字串 (需使用 ocr_free_string 釋放)，失敗回傳 NULL
  */
-OCR_EXPORT const char* ocr_export_markdown(const char* json_str);
+OCR_API const char* ocr_export_markdown(const char* json_str);
 
 /**
  * 匯出辨識結果為 CSV (表格結構)
@@ -295,7 +295,7 @@ OCR_EXPORT const char* ocr_export_markdown(const char* json_str);
  * @param json_str ocr_recognize 回傳的 JSON 字串
  * @return CSV 格式的字串 (需使用 ocr_free_string 釋放)，失敗回傳 NULL
  */
-OCR_EXPORT const char* ocr_export_csv(const char* json_str);
+OCR_API const char* ocr_export_csv(const char* json_str);
 
 /**
  * 匯出雙層可搜尋 PDF
@@ -305,7 +305,7 @@ OCR_EXPORT const char* ocr_export_csv(const char* json_str);
  * @param output_path 輸出的 PDF 檔案路徑
  * @return 成功回傳 1，失敗回傳 0
  */
-OCR_EXPORT int ocr_export_pdf(const char* image_path, const char* json_str, const char* output_path);
+OCR_API int ocr_export_pdf(const char* image_path, const char* json_str, const char* output_path);
 
 /* ============================================================
  * Text Removal (AI Inpainting)
