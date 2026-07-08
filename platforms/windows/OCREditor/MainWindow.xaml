@@ -28,6 +28,7 @@
                     <Menu Grid.Column="0" Background="Transparent" VerticalAlignment="Center" Margin="10,0,0,0">
                         <MenuItem Header="{DynamicResource FileMenu}">
                             <MenuItem Header="{DynamicResource LoadImage}" Click="OpenImage_Click"/>
+                            <MenuItem Header="Close Image" Click="CloseImage_Click"/>
                             <MenuItem Header="{DynamicResource SaveImage}" Click="SaveImage_Click"/>
                             <Separator/>
                             <MenuItem Header="Export to CSV" Click="ExportCSV_Click"/>

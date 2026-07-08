@@ -75,6 +75,11 @@ fun MainScreen(
                     TextButton(onClick = { imagePicker.launch("image/*") }) {
                         Text("Add")
                     }
+                    if (ocrState is OCRState.Success) {
+                        TextButton(onClick = { viewModel.closeImage() }) {
+                            Text("Close")
+                        }
+                    }
                     TextButton(onClick = { viewModel.undo() }, enabled = canUndo) {
                         Text("Undo")
                     }

@@ -918,6 +918,16 @@ extension ContentView {
             .help("開啟檔案、PDF或簡報 (⌘O)")
             .keyboardShortcut("o", modifiers: .command)
             
+            // 關閉檔案
+            Button {
+                viewModel.closeDocument()
+            } label: {
+                Label("關閉檔案", systemImage: "xmark.circle")
+            }
+            .help("關閉目前檔案 (⌘W)")
+            .keyboardShortcut("w", modifiers: .command)
+            .disabled(viewModel.canvasDocument == nil)
+            
             #if os(macOS)
             // 匯出選單
             Menu {

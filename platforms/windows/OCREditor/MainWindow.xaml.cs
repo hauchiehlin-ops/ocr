@@ -476,6 +476,32 @@ namespace OCREditor
 
         #endregion
 
+        private void CloseImage_Click(object sender, RoutedEventArgs e)
+        {
+            _currentImagePath = null;
+            _regions.Clear();
+            _undoStack.Clear();
+            _redoStack.Clear();
+            SourceImage.Source = null;
+            if (_originalBitmapStream != null)
+            {
+                _originalBitmapStream.Dispose();
+                _originalBitmapStream = null;
+            }
+            if (_originalBitmap != null)
+            {
+                _originalBitmap.Dispose();
+                _originalBitmap = null;
+            }
+            LayerListBox.ItemsSource = null;
+            OverlayCanvas.Children.Clear();
+            StatusLabel.Text = "No Image Loaded";
+            DpiIndicator.Text = "Image DPI: --";
+            MenuUndo.IsEnabled = false;
+            MenuRedo.IsEnabled = false;
+            OcrTextBox.Text = "";
+        }
+
         private async void OpenImage_Click(object sender, RoutedEventArgs e)
         {
             var openFileDialog = new Microsoft.Win32.OpenFileDialog
@@ -1911,6 +1937,8 @@ namespace OCREditor
                 }
                 else
                 {
+                    StatusLabel.Text = "No text found in region.";
+                }
             }
             finally
             {

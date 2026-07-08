@@ -241,6 +241,10 @@ class OCRViewModel : ViewModel() {
         }
     }
 
+    fun closeImage() {
+        _ocrState.value = OCRState.Idle
+    }
+
     fun exportToMarkdown(): String? {
         val state = _ocrState.value
         if (state is OCRState.Success) {

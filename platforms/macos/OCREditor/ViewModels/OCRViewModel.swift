@@ -310,6 +310,20 @@ final class OCRViewModel: ObservableObject {
         }
     }
 
+    // MARK: - 關閉檔案
+    
+    func closeDocument() {
+        self.canvasDocument = nil
+        self.scanResult = nil
+        self.state = .idle
+        self.progress = 0.0
+        
+        self.editHistory.removeAll()
+        self.editHistoryIndex = -1
+        
+        self.selectedLayerId = nil
+    }
+
     // MARK: - 影像掃描
 
     /// 從檔案 URL 掃描影像/簡報/PDF
@@ -723,7 +737,7 @@ final class OCRViewModel: ObservableObject {
     }
     
     private func applyInpainting(for layer: CanvasLayer) async {
-        guard var doc = canvasDocument, let bgIdx = doc.layers.firstIndex(where: { $0.layerId == "image_bg" || $0.layerId == "pdf_bg_page1" || $0.layerId == "image_bg_vision" }), let bgImage = doc.layers[bgIdx].image else { return }
+        guard let doc = canvasDocument, let bgIdx = doc.layers.firstIndex(where: { $0.layerId == "image_bg" || $0.layerId == "pdf_bg_page1" || $0.layerId == "image_bg_vision" }), let bgImage = doc.layers[bgIdx].image else { return }
         
         if let engine = engine, engine.isReady {
             let rect = layer.boundingBox.rect
