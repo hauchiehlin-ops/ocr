@@ -45,8 +45,11 @@ option(OCR_BUILD_TESTS     "Build unit tests"               OFF)
 option(OCR_ENABLE_GPU      "Enable GPU acceleration"        OFF)
 option(OCR_ENABLE_INPAINT  "Enable LaMa Inpainting module" ON)
 option(OCR_ENABLE_LICENSE  "Enable license validation"      ON)
+option(OCR_ENABLE_LLM      "Enable Local LLM via llama.cpp" ON)
 
 # ---- Third-Party Dependencies ----
+include(FetchContent)
+
 # OpenCV — Image preprocessing
 find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
 if(NOT OpenCV_FOUND)
@@ -63,6 +66,26 @@ if(EXISTS "${ONNXRUNTIME_DIR}/include/onnxruntime_cxx_api.h")
 else()
     message(WARNING "ONNX Runtime not found at ${ONNXRUNTIME_DIR}. "
                     "Please download and extract to third_party/onnxruntime/")
+endif()
+
+# llama.cpp — Local LLM engine
+if(OCR_ENABLE_LLM)
+    message(STATUS "Fetching llama.cpp for Local LLM Support...")
+    # Disable llama.cpp's internal tests and executables to speed up build
+    set(LLAMA_BUILD_TESTS OFF CACHE BOOL "Disable llama.cpp tests" FORCE)
+    set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "Disable llama.cpp examples" FORCE)
+    set(LLAMA_BUILD_SERVER OFF CACHE BOOL "Disable llama.cpp server" FORCE)
+    
+    if(OCR_PLATFORM STREQUAL "MACOS" OR OCR_PLATFORM STREQUAL "IOS")
+        set(LLAMA_METAL ON CACHE BOOL "Enable Metal for llama.cpp" FORCE)
+    endif()
+
+    FetchContent_Declare(
+        llama_cpp
+        GIT_REPOSITORY https://github.com/ggerganov/llama.cpp.git
+        GIT_TAG        master
+    )
+    FetchContent_MakeAvailable(llama_cpp)
 endif()
 
 # ---- Source Files ----
@@ -143,6 +166,11 @@ endif()
 if(EXISTS "${ONNXRUNTIME_DIR}/lib")
     target_link_directories(ocr_core PRIVATE "${ONNXRUNTIME_DIR}/lib")
     target_link_libraries(ocr_core PRIVATE onnxruntime)
+endif()
+
+# llama.cpp
+if(OCR_ENABLE_LLM)
+    target_link_libraries(ocr_core PRIVATE llama ggml)
 endif()
 
 # Platform-specific libraries
