@@ -23,10 +23,14 @@ struct GuideLine: Identifiable {
 // MARK: - ContentView
 
 struct ContentView: View {
+#if os(iOS)
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+#endif
     @StateObject private var viewModel = OCRViewModel()
     @State private var isFileImporterPresented = false
     @State private var isImageReplacerPresented = false
     @State private var isScannerPresented = false
+    @State private var isSidebarPresented = false
     @State private var hoveredLayerId: UUID? = nil
     @State private var sidebarWidth: CGFloat = 300
     @State private var inspectorWidth: CGFloat = 320
@@ -43,6 +47,54 @@ struct ContentView: View {
     @State private var selectionCurrent: CGPoint?
 
     var body: some View {
+        Group {
+#if os(iOS)
+        if horizontalSizeClass == .compact {
+            // iPhone 佈局：以畫布為主，側邊欄改為 Bottom Sheet 或 Toolbar 按鈕
+            NavigationStack {
+                canvasArea
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button {
+                                isSidebarPresented = true
+                            } label: {
+                                Image(systemName: "sidebar.left")
+                            }
+                        }
+                        toolbarContent
+                    }
+                    .sheet(isPresented: $isSidebarPresented) {
+                        NavigationStack {
+                            sidebarContent
+                                .navigationTitle("圖層與狀態")
+                                .navigationBarTitleDisplayMode(.inline)
+                                .toolbar {
+                                    ToolbarItem(placement: .cancellationAction) {
+                                        Button("完成") { isSidebarPresented = false }
+                                    }
+                                }
+                        }
+                        .presentationDetents([.medium, .large])
+                    }
+            }
+        } else {
+            // iPad 佈局：三欄式 NavigationSplitView
+            NavigationSplitView {
+                sidebarContent
+                    .navigationSplitViewColumnWidth(min: 250, ideal: sidebarWidth, max: 350)
+            } detail: {
+                HStack(spacing: 0) {
+                    canvasArea
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .toolbar {
+                toolbarContent
+            }
+        }
+#else
+        // macOS 佈局：三欄式 NavigationSplitView
         NavigationSplitView {
             sidebarContent
                 .navigationSplitViewColumnWidth(min: 250, ideal: sidebarWidth, max: 350)
@@ -52,18 +104,18 @@ struct ContentView: View {
                 canvasArea
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                #if os(macOS)
                 Divider()
                 
                 // 右側屬性面板區域
                 inspectorArea
                     .frame(width: inspectorWidth)
                     .background(Color(platformColor: PlatformColor.themeWindowBackground))
-                #endif
             }
         }
         .toolbar {
             toolbarContent
+        }
+#endif
         }
         #if os(iOS)
         .sheet(isPresented: Binding(
