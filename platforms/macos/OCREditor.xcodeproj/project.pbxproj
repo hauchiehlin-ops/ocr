@@ -28,6 +28,8 @@
 		58AFAAEB5AC6A657AD95881F /* blender.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A54A2503B58862981C028B1F /* blender.cpp */; };
 		59A8AB62E0FD8D9761D62F62 /* context_corrector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1524CD6E52EA09E428D2595C /* context_corrector.cpp */; };
 		59F0CA0B27C169F94CAB4373 /* PlatformAliases.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB16C363CA6BE23226C738F5 /* PlatformAliases.swift */; };
+		A1B2C3D4E5F60002A2B3C4D5 /* SettingsSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001A2B3C4D5 /* SettingsSyncManager.swift */; };
+		A1B2C3D4E5F60003A2B3C4D5 /* SettingsSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60001A2B3C4D5 /* SettingsSyncManager.swift */; };
 		5E4D4CB734D47355951D14E6 /* denoise.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 39180BABA2540B341ABE9A4A /* denoise.cpp */; };
 		60C2E59DECCF0DA87717D1FC /* license_validator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 9E9A4857CBB6887CCC4C6139 /* license_validator.cpp */; };
 		6288425F0558B8F61F2C9D50 /* device_fingerprint.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 699B30B132FD7B8E94A919A9 /* device_fingerprint.cpp */; };
@@ -103,6 +105,7 @@
 		D4C38B177DC09832236A18AC /* compositor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compositor.h; sourceTree = "<group>"; };
 		D59CD3FC396C220862251F66 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = ../../models; sourceTree = SOURCE_ROOT; };
 		DB16C363CA6BE23226C738F5 /* PlatformAliases.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlatformAliases.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60001A2B3C4D5 /* SettingsSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsSyncManager.swift; sourceTree = "<group>"; };
 		DDA88952D348408799F1D7CE /* preprocessor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = preprocessor.h; sourceTree = "<group>"; };
 		EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCREditorApp.swift; sourceTree = "<group>"; };
 		F1301C2926CB33D08AF4D1B4 /* OCRViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRViewModel.swift; sourceTree = "<group>"; };
@@ -202,6 +205,7 @@
 				4C019A5E2E4D1AC6350138D0 /* OCREditor.entitlements */,
 				EBDA26AFA8E48148BFE51559 /* OCREditorApp.swift */,
 				DB16C363CA6BE23226C738F5 /* PlatformAliases.swift */,
+				A1B2C3D4E5F60001A2B3C4D5 /* SettingsSyncManager.swift */,
 				D498F716141AF49059F82085 /* Bridge */,
 				55D18FE8DA29C89D013A1522 /* Models */,
 				4E4EF77280E77975C6B73778 /* ViewModels */,
@@ -399,6 +403,7 @@
 				7E30AED9B41938852DA1ED65 /* OCRModels.swift in Sources */,
 				E4D593CD95305B8C067FA795 /* OCRViewModel.swift in Sources */,
 				59F0CA0B27C169F94CAB4373 /* PlatformAliases.swift in Sources */,
+				A1B2C3D4E5F60002A2B3C4D5 /* SettingsSyncManager.swift in Sources */,
 				A0FC5C215F18C62023B0CDCE /* binarize.cpp in Sources */,
 				58AFAAEB5AC6A657AD95881F /* blender.cpp in Sources */,
 				660656C3AA0A25E38C90E9C7 /* compositor.cpp in Sources */,
@@ -430,6 +435,7 @@
 				50D3640E6BBB76AF82D9F0CC /* OCRModels.swift in Sources */,
 				894EABF04B4D39C780751253 /* OCRViewModel.swift in Sources */,
 				7E5A39968E36174345B1F9AF /* PlatformAliases.swift in Sources */,
+				A1B2C3D4E5F60003A2B3C4D5 /* SettingsSyncManager.swift in Sources */,
 				07DE3182E36D34FAA3455B64 /* binarize.cpp in Sources */,
 				9BC28475A193D08F3941B936 /* blender.cpp in Sources */,
 				90F792CFC868074AAE4827D1 /* compositor.cpp in Sources */,

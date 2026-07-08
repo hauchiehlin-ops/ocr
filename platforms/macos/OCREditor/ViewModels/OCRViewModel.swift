@@ -482,7 +482,6 @@ final class OCRViewModel: ObservableObject {
             state = .complete
             progress = 1.0
         }
-        }
     }
 
     func updateLayerRect(layerId: UUID, newRect: CGRect) {
