@@ -258,6 +258,12 @@ namespace OCREditor
                 else if (langTag == "ko") mappedLanguage = "korean";
 
                 InitializeEngine(mappedLanguage);
+                
+                if (_currentImagePath != null && File.Exists(_currentImagePath))
+                {
+                    // Re-run OCR automatically when language is changed
+                    _ = RunOCRAsync();
+                }
             }
         }
 
@@ -1768,14 +1774,6 @@ namespace OCREditor
             RenderRegions();
         }
 
-        private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (_currentImagePath != null && File.Exists(_currentImagePath))
-            {
-                // Re-run OCR automatically when language is changed
-                _ = RunOCRAsync();
-            }
-        }
 
         private void UiLanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
