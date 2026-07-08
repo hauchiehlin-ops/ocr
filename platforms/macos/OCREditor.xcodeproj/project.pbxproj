@@ -92,6 +92,7 @@
 		CA416F1E4032877337E56B5D /* compositor.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = compositor.cpp; sourceTree = "<group>"; };
 		CAFF2123B37A2CFBB63ABAB5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CBC08891DBC68951C7712900 /* binarize.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = binarize.cpp; sourceTree = "<group>"; };
+		CD8BDFF23EEFB5F910D2A7F4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D47171328DD5B318D354EFDF /* mask_generator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mask_generator.h; sourceTree = "<group>"; };
 		D4C38B177DC09832236A18AC /* compositor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = compositor.h; sourceTree = "<group>"; };
 		D59CD3FC396C220862251F66 /* models */ = {isa = PBXFileReference; lastKnownFileType = folder; name = models; path = ../../models; sourceTree = SOURCE_ROOT; };
@@ -204,6 +205,7 @@
 			isa = PBXGroup;
 			children = (
 				CAFF2123B37A2CFBB63ABAB5 /* Assets.xcassets */,
+				CD8BDFF23EEFB5F910D2A7F4 /* Info.plist */,
 				625AD458503669C03C36A348 /* LocalizationManager.swift */,
 				A56897659442CFC72BB8C388 /* OCREditor-Bridging-Header.h */,
 				4C019A5E2E4D1AC6350138D0 /* OCREditor.entitlements */,
@@ -527,8 +529,8 @@
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = "OCR_ENABLE_GPU=1";
-				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				INFOPLIST_FILE = OCREditor/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -614,8 +616,8 @@
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = "OCR_ENABLE_GPU=1";
-				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				INFOPLIST_FILE = OCREditor/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
