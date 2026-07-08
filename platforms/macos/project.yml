@@ -25,6 +25,16 @@ targets:
         - "NotoSansTC-Regular.otf"
         - "NotoSerifTC-Regular.otf"
       ATSApplicationFontsPath: "."
+      UILaunchScreen: {}
+      UISupportedInterfaceOrientations:
+        - UIInterfaceOrientationPortrait
+        - UIInterfaceOrientationLandscapeLeft
+        - UIInterfaceOrientationLandscapeRight
+      UISupportedInterfaceOrientations~ipad:
+        - UIInterfaceOrientationPortrait
+        - UIInterfaceOrientationPortraitUpsideDown
+        - UIInterfaceOrientationLandscapeLeft
+        - UIInterfaceOrientationLandscapeRight
     settings:
       PRODUCT_BUNDLE_IDENTIFIER: com.hauchiehlin.ocreditor
       CODE_SIGN_STYLE: Automatic
