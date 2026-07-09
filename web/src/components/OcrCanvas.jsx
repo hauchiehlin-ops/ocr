@@ -143,6 +143,8 @@ const OcrCanvas = forwardRef(({
   forcePresetFont = true,
   ocrEngine = 'local',
   geminiApiKey = '',
+  geminiModel = 'gemini-2.0-flash',
+  geminiApiUrl = 'https://generativelanguage.googleapis.com',
   t = (key) => key
 }, ref) => {
   const containerRef = useRef(null);
@@ -604,7 +606,7 @@ const OcrCanvas = forwardRef(({
         }
         
         const cropDataUrl = cropCanvas.toDataURL();
-        const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey, onWorkerStatusChange);
+        const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey, onWorkerStatusChange, geminiModel, geminiApiUrl);
 
         if (textResult) {
           const linesCount = textResult.split('\n').filter(l => l.trim() !== '').length || 1;
@@ -1091,7 +1093,7 @@ const OcrCanvas = forwardRef(({
             throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
           }
           
-          const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 3);
+          const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 3, geminiModel, geminiApiUrl);
           const canvasWidth = canvas.width;
           const canvasHeight = canvas.height;
 

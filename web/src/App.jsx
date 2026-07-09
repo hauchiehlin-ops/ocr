@@ -28,6 +28,8 @@ function App() {
   // OCR Engine (local Tesseract vs cloud Gemini)
   const [ocrEngine, setOcrEngine] = useState(() => localStorage.getItem('ocr_engine') || 'local');
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.0-flash');
+  const [geminiApiUrl, setGeminiApiUrl] = useState(() => localStorage.getItem('gemini_api_url') || 'https://generativelanguage.googleapis.com');
 
   const handleOcrEngineChange = (engine) => {
     setOcrEngine(engine);
@@ -37,6 +39,16 @@ function App() {
   const handleGeminiApiKeyChange = (key) => {
     setGeminiApiKey(key);
     localStorage.setItem('gemini_api_key', key);
+  };
+
+  const handleGeminiModelChange = (model) => {
+    setGeminiModel(model);
+    localStorage.setItem('gemini_model', model);
+  };
+
+  const handleGeminiApiUrlChange = (url) => {
+    setGeminiApiUrl(url);
+    localStorage.setItem('gemini_api_url', url);
   };
 
   // Preset Fonts
@@ -346,6 +358,8 @@ function App() {
             forcePresetFont={forcePresetFont}
             ocrEngine={ocrEngine}
             geminiApiKey={geminiApiKey}
+            geminiModel={geminiModel}
+            geminiApiUrl={geminiApiUrl}
             t={t}
           />
 
@@ -525,11 +539,53 @@ function App() {
                     width: '100%'
                   }}
                 />
+
+                <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+                  {uiLanguage === '繁體中文' ? '雲端模型:' : 'Cloud Model:'}
+                </span>
+                <select
+                  value={geminiModel}
+                  onChange={(e) => handleGeminiModelChange(e.target.value)}
+                  style={{
+                    background: '#2D2D2D',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '4px',
+                    padding: '6px 8px',
+                    fontSize: '12px',
+                    width: '100%',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (預設)</option>
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (推薦相容)</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (高精確度)</option>
+                </select>
+
+                <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+                  {uiLanguage === '繁體中文' ? '自訂 API 節點 (選填):' : 'Custom Base URL (Optional):'}
+                </span>
+                <input 
+                  type="text"
+                  value={geminiApiUrl}
+                  onChange={(e) => handleGeminiApiUrlChange(e.target.value)}
+                  placeholder="https://generativelanguage.googleapis.com"
+                  style={{
+                    background: '#111111',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '4px',
+                    padding: '6px 8px',
+                    fontSize: '12px',
+                    width: '100%'
+                  }}
+                />
+
                 <a 
                   href="https://aistudio.google.com/" 
                   target="_blank" 
                   rel="noreferrer"
-                  style={{ fontSize: '11px', color: '#60CDFF', textDecoration: 'underline', marginTop: '2px', display: 'inline-block' }}
+                  style={{ fontSize: '11px', color: '#60CDFF', textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}
                 >
                   {t('getKeyLink')}
                 </a>

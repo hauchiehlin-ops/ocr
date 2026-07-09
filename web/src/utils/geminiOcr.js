@@ -1,5 +1,5 @@
 /**
- * Gemini OCR Utility — Tiled + Queued + Auto-Retry
+ * Gemini OCR Utility — Tiled + Queued + Auto-Retry + Model Cascade + Custom API Endpoints
  *
  * Strategies to survive the Free Tier quotas (15 RPM / 1 500 RPD):
  *   1. Sequential FIFO queue — only one Gemini call is in-flight at a time.
@@ -9,6 +9,9 @@
  *   4. Full-image OCR is split into horizontal tiles (default 3).
  *      Each tile becomes an independent queued request, so a transient
  *      429 only blocks that tile — completed tiles are never lost.
+ *   5. Model Cascade Fallback: If 2.0-flash returns a quota error, automatically fallback
+ *      to 1.5-flash or 1.5-pro to bypass regional constraints (like EU/UK limit: 0).
+ *   6. Custom API Endpoints: Allow custom proxy base URLs to bypass geography-based blocks.
  */
 
 // ---------------------------------------------------------------------------
@@ -108,38 +111,62 @@ function loadImage(dataUrl) {
   });
 }
 
-/** Fire a single Gemini generateContent request and return the raw text. */
-async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false) {
-  const url =
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-
-  const body = {
-    contents: [{ parts: [
-      { text: prompt },
-      { inlineData: { mimeType, data: base64Data } }
-    ]}],
-  };
-  if (jsonMode) {
-    body.generationConfig = { responseMimeType: 'application/json' };
+/** Fire a single Gemini generateContent request with model cascade and custom endpoint base URL. */
+async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
+  // Build a cascade list of models to try if the primary model is blocked or limited
+  const modelsToTry = [modelName];
+  if (modelName === 'gemini-2.0-flash') {
+    modelsToTry.push('gemini-1.5-flash');
+    modelsToTry.push('gemini-1.5-pro');
+  } else if (modelName === 'gemini-1.5-flash') {
+    modelsToTry.push('gemini-2.0-flash');
+    modelsToTry.push('gemini-1.5-pro');
   }
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let lastError;
+  const baseApiUrl = apiUrl.replace(/\/+$/, ''); // Strip trailing slashes
 
-  if (!res.ok) {
-    const errText = await res.text();
-    let parsed;
-    try { parsed = JSON.parse(errText); } catch { parsed = null; }
-    throw new Error(`Gemini API error: ${res.status} - ${parsed?.error?.message || errText}`);
+  for (const model of modelsToTry) {
+    try {
+      const url = `${baseApiUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const body = {
+        contents: [{ parts: [
+          { text: prompt },
+          { inlineData: { mimeType, data: base64Data } }
+        ]}],
+      };
+      if (jsonMode) {
+        body.generationConfig = { responseMimeType: 'application/json' };
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        let parsed;
+        try { parsed = JSON.parse(errText); } catch { parsed = null; }
+        const errMsg = parsed?.error?.message || errText;
+        throw new Error(`Gemini API error: ${res.status} - ${errMsg}`);
+      }
+
+      const json = await res.json();
+      const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('No text response received from Gemini.');
+      return text;
+    } catch (err) {
+      lastError = err;
+      console.warn(`[Gemini Cascade] Model ${model} failed: ${err.message}. Trying next fallback model...`);
+      // If the API key is completely invalid or unauthorized (400/403), throw immediately
+      if (err.message.includes('API key') || err.message.includes('not valid') || err.message.includes('403')) {
+        throw err;
+      }
+    }
   }
-
-  const json = await res.json();
-  const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('No text response received from Gemini.');
-  return text;
+  throw lastError;
 }
 
 const OCR_PROMPT = `Analyze the image and perform extremely high-precision document OCR.
@@ -171,13 +198,13 @@ function parseOcrJson(raw) {
 // Public API — Full-Image OCR  (single tile, goes through queue)
 // ---------------------------------------------------------------------------
 
-export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange) {
+export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
   const m = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error('Invalid image data format.');
 
   return geminiQueue.enqueue(async () => {
     if (onStatusChange) onStatusChange('Running Gemini AI OCR…');
-    const raw = await callGemini(m[2], m[1], OCR_PROMPT, apiKey, true);
+    const raw = await callGemini(m[2], m[1], OCR_PROMPT, apiKey, true, modelName, apiUrl);
     return parseOcrJson(raw);
   }, onStatusChange);
 }
@@ -190,15 +217,9 @@ export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange) {
  * Splits the image into `tileCount` horizontal strips, processes each one
  * through the rate-limited queue, and merges the results with corrected
  * bounding-box coordinates mapped back to the original full-image space.
- *
- * @param {string}   base64DataUrl  Full image as data-URL
- * @param {string}   apiKey         Gemini API key
- * @param {function} onStatusChange Status bar callback
- * @param {number}   tileCount      Number of horizontal strips (default 3)
- * @returns {Promise<Array>}        Merged array of {text, bbox} blocks
  */
 export async function runGeminiOcrTiled(
-  base64DataUrl, apiKey, onStatusChange, tileCount = 3,
+  base64DataUrl, apiKey, onStatusChange, tileCount = 3, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com'
 ) {
   const img = await loadImage(base64DataUrl);
   const fullW = img.width;
@@ -230,7 +251,7 @@ export async function runGeminiOcrTiled(
         if (onStatusChange) {
           onStatusChange(`📄 Tile ${i + 1}/${tileCount}: Running Gemini AI OCR…`);
         }
-        const raw = await callGemini(tm[2], tm[1], OCR_PROMPT, apiKey, true);
+        const raw = await callGemini(tm[2], tm[1], OCR_PROMPT, apiKey, true, modelName, apiUrl);
         return parseOcrJson(raw);
       }, (status) => {
         if (onStatusChange) onStatusChange(`📄 Tile ${i + 1}/${tileCount}: ${status}`);
@@ -260,13 +281,12 @@ export async function runGeminiOcrTiled(
       if (onStatusChange) {
         onStatusChange(`⚠️ Tile ${i + 1}/${tileCount} failed: ${err.message}. Continuing…`);
       }
-      // Keep going — don't let one tile block the rest.
     }
   }
 
   if (succeeded === 0) {
     throw new Error(
-      'All tiles failed — your daily API quota may be exhausted. Please wait and try again later.'
+      'All tiles failed — your daily API quota may be exhausted or model is restricted. Please wait or try choosing a fallback model (e.g. Gemini 1.5 Flash).'
     );
   }
 
@@ -277,7 +297,7 @@ export async function runGeminiOcrTiled(
 // Public API — Regional (Crop-Box) OCR
 // ---------------------------------------------------------------------------
 
-export async function runGeminiRegionalOcr(base64DataUrl, apiKey, onStatusChange) {
+export async function runGeminiRegionalOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
   const m = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error('Invalid image data format.');
 
@@ -288,7 +308,7 @@ Return ONLY the raw recognized text content, nothing else. Do not include markdo
 
   return geminiQueue.enqueue(async () => {
     if (onStatusChange) onStatusChange('Running Gemini Regional OCR…');
-    const raw = await callGemini(m[2], m[1], prompt, apiKey, false);
+    const raw = await callGemini(m[2], m[1], prompt, apiKey, false, modelName, apiUrl);
     return raw.trim();
   }, onStatusChange);
 }
