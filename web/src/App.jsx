@@ -28,7 +28,7 @@ function App() {
   // OCR Engine (local Tesseract vs cloud Gemini)
   const [ocrEngine, setOcrEngine] = useState(() => localStorage.getItem('ocr_engine') || 'local');
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-  const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.0-flash');
+  const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.5-flash');
   const [geminiApiUrl, setGeminiApiUrl] = useState(() => localStorage.getItem('gemini_api_url') || 'https://generativelanguage.googleapis.com');
 
   const handleOcrEngineChange = (engine) => {
@@ -557,9 +557,10 @@ function App() {
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (預設)</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (推薦相容)</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro (高精確度)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (預設)</option>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (相容)</option>
+                  <option value="gemini-2.0-pro">Gemini 2.0 Pro (高精準度)</option>
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (備用)</option>
                 </select>
 
                 <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>

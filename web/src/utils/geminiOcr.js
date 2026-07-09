@@ -112,22 +112,27 @@ function loadImage(dataUrl) {
 }
 
 /** Fire a single Gemini generateContent request with model cascade and custom endpoint base URL. */
-async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
-  // Build a cascade list of models to try if the primary model is blocked or limited
-  const modelsToTry = [modelName];
-  if (modelName === 'gemini-2.0-flash') {
-    modelsToTry.push('gemini-1.5-flash');
-    modelsToTry.push('gemini-1.5-pro');
-  } else if (modelName === 'gemini-1.5-flash') {
-    modelsToTry.push('gemini-2.0-flash');
-    modelsToTry.push('gemini-1.5-pro');
-  }
+async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com', onStatusChange = null) {
+  // Build a cascade list of models to try if the primary model is blocked or limited (2026 specs)
+  const fallbackChain = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-pro',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro'
+  ];
+  const modelsToTry = [modelName, ...fallbackChain.filter(m => m !== modelName)];
 
   let lastError;
   const baseApiUrl = apiUrl.replace(/\/+$/, ''); // Strip trailing slashes
 
+  let activeIndex = 0;
   for (const model of modelsToTry) {
     try {
+      if (activeIndex > 0 && onStatusChange) {
+        onStatusChange(`⚠️ 備用切換：正在嘗試 ${model} 模型…`);
+      }
+      activeIndex++;
       const url = `${baseApiUrl}/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const body = {
         contents: [{ parts: [
@@ -198,13 +203,13 @@ function parseOcrJson(raw) {
 // Public API — Full-Image OCR  (single tile, goes through queue)
 // ---------------------------------------------------------------------------
 
-export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
+export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
   const m = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error('Invalid image data format.');
 
   return geminiQueue.enqueue(async () => {
     if (onStatusChange) onStatusChange('Running Gemini AI OCR…');
-    const raw = await callGemini(m[2], m[1], OCR_PROMPT, apiKey, true, modelName, apiUrl);
+    const raw = await callGemini(m[2], m[1], OCR_PROMPT, apiKey, true, modelName, apiUrl, onStatusChange);
     return parseOcrJson(raw);
   }, onStatusChange);
 }
@@ -219,7 +224,7 @@ export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelN
  * bounding-box coordinates mapped back to the original full-image space.
  */
 export async function runGeminiOcrTiled(
-  base64DataUrl, apiKey, onStatusChange, tileCount = 3, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com'
+  base64DataUrl, apiKey, onStatusChange, tileCount = 3, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com'
 ) {
   const img = await loadImage(base64DataUrl);
   const fullW = img.width;
@@ -251,7 +256,7 @@ export async function runGeminiOcrTiled(
         if (onStatusChange) {
           onStatusChange(`📄 Tile ${i + 1}/${tileCount}: Running Gemini AI OCR…`);
         }
-        const raw = await callGemini(tm[2], tm[1], OCR_PROMPT, apiKey, true, modelName, apiUrl);
+        const raw = await callGemini(tm[2], tm[1], OCR_PROMPT, apiKey, true, modelName, apiUrl, onStatusChange);
         return parseOcrJson(raw);
       }, (status) => {
         if (onStatusChange) onStatusChange(`📄 Tile ${i + 1}/${tileCount}: ${status}`);
@@ -297,7 +302,7 @@ export async function runGeminiOcrTiled(
 // Public API — Regional (Crop-Box) OCR
 // ---------------------------------------------------------------------------
 
-export async function runGeminiRegionalOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.0-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
+export async function runGeminiRegionalOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
   const m = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error('Invalid image data format.');
 
@@ -308,7 +313,7 @@ Return ONLY the raw recognized text content, nothing else. Do not include markdo
 
   return geminiQueue.enqueue(async () => {
     if (onStatusChange) onStatusChange('Running Gemini Regional OCR…');
-    const raw = await callGemini(m[2], m[1], prompt, apiKey, false, modelName, apiUrl);
+    const raw = await callGemini(m[2], m[1], prompt, apiKey, false, modelName, apiUrl, onStatusChange);
     return raw.trim();
   }, onStatusChange);
 }
