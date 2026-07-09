@@ -25,11 +25,12 @@ function App() {
   const [uiLanguage, setUiLanguage] = useState('繁體中文');
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
 
-  // OCR Engine (local Tesseract vs cloud Gemini)
+  // OCR Engine (local Tesseract vs cloud Gemini vs custom local server)
   const [ocrEngine, setOcrEngine] = useState(() => localStorage.getItem('ocr_engine') || 'local');
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.5-flash');
   const [geminiApiUrl, setGeminiApiUrl] = useState(() => localStorage.getItem('gemini_api_url') || 'https://generativelanguage.googleapis.com');
+  const [localServerUrl, setLocalServerUrl] = useState(() => localStorage.getItem('local_server_url') || 'http://localhost:5000/ocr');
 
   const handleOcrEngineChange = (engine) => {
     setOcrEngine(engine);
@@ -49,6 +50,11 @@ function App() {
   const handleGeminiApiUrlChange = (url) => {
     setGeminiApiUrl(url);
     localStorage.setItem('gemini_api_url', url);
+  };
+
+  const handleLocalServerUrlChange = (url) => {
+    setLocalServerUrl(url);
+    localStorage.setItem('local_server_url', url);
   };
 
   // Preset Fonts
@@ -360,6 +366,7 @@ function App() {
             geminiApiKey={geminiApiKey}
             geminiModel={geminiModel}
             geminiApiUrl={geminiApiUrl}
+            localServerUrl={localServerUrl}
             t={t}
           />
 
@@ -504,20 +511,27 @@ function App() {
 
           <div className="panel-subtitle">{t('ocrEngine')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
-                style={{ flex: 1, padding: '6px 4px', fontSize: '11px' }}
+                style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
                 onClick={() => handleOcrEngineChange('local')}
               >
                 {uiLanguage === '繁體中文' ? '本地 (Tesseract)' : 'Local (Tesseract)'}
               </button>
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
-                style={{ flex: 1, padding: '6px 4px', fontSize: '11px' }}
+                style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
                 onClick={() => handleOcrEngineChange('cloud')}
               >
-                {uiLanguage === '繁體中文' ? '雲端 (Gemini 2.0)' : 'Cloud (Gemini 2.0)'}
+                {uiLanguage === '繁體中文' ? '雲端 (Gemini AI)' : 'Cloud (Gemini AI)'}
+              </button>
+              <button 
+                className={`btn btn-secondary ${ocrEngine === 'custom' ? 'active' : ''}`}
+                style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                onClick={() => handleOcrEngineChange('custom')}
+              >
+                {uiLanguage === '繁體中文' ? '本地伺服器' : 'Local Server'}
               </button>
             </div>
             
@@ -590,6 +604,126 @@ function App() {
                 >
                   {t('getKeyLink')}
                 </a>
+              </div>
+            )}
+
+            {ocrEngine === 'custom' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                  {uiLanguage === '繁體中文' ? '本地伺服器位址 (URL):' : 'Local Server URL:'}
+                </span>
+                <input 
+                  type="text"
+                  value={localServerUrl}
+                  onChange={(e) => handleLocalServerUrlChange(e.target.value)}
+                  placeholder="http://localhost:5000/ocr"
+                  style={{
+                    background: '#111111',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '4px',
+                    padding: '6px 8px',
+                    fontSize: '12px',
+                    width: '100%'
+                  }}
+                />
+
+                <details style={{
+                  marginTop: '8px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '4px',
+                  padding: '6px 8px'
+                }}>
+                  <summary style={{ fontSize: '11px', color: '#60CDFF', cursor: 'pointer', outline: 'none', userSelect: 'none' }}>
+                    {uiLanguage === '繁體中文' ? '如何建置強大本地 OCR 伺服器？' : 'How to set up Local OCR Server?'}
+                  </summary>
+                  <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '6px', lineHeight: '1.5' }}>
+                    <p style={{ margin: '0 0 4px 0' }}>
+                      {uiLanguage === '繁體中文' 
+                        ? '1. 安裝環境所需的 Python 套件：' 
+                        : '1. Install required Python packages:'}
+                    </p>
+                    <pre style={{
+                      background: '#111111',
+                      padding: '4px 6px',
+                      borderRadius: '3px',
+                      overflowX: 'auto',
+                      fontSize: '10px',
+                      color: '#4ADE80',
+                      margin: '0 0 8px 0'
+                    }}>
+                      pip install flask flask-cors easyocr opencv-python numpy
+                    </pre>
+                    <p style={{ margin: '0 0 4px 0' }}>
+                      {uiLanguage === '繁體中文' 
+                        ? '2. 複製並啟動以下 Python 腳本 (app.py)：' 
+                        : '2. Copy and run the Python script (app.py):'}
+                    </p>
+                    <textarea 
+                      readOnly 
+                      value={`from flask import Flask, request, jsonify
+from flask_cors import CORS
+import base64, cv2, numpy as np, easyocr
+
+app = Flask(__name__)
+CORS(app)
+# ch_tra = 繁體中文, en = 英文
+reader = easyocr.Reader(['ch_tra', 'en'])
+
+@app.route('/ocr', methods=['POST'])
+def perform_ocr():
+    data = request.json
+    img_bytes = base64.b64decode(data['image'].split(',')[1])
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    h, w, _ = img.shape
+    
+    results = reader.readtext(img)
+    blocks = []
+    for (bbox, text, prob) in results:
+        xs = [pt[0] for pt in bbox]
+        ys = [pt[1] for pt in bbox]
+        xmin, xmax = min(xs), max(xs)
+        ymin, ymax = min(ys), max(ys)
+        blocks.append({
+            "text": text,
+            "bbox": [
+                int(ymin / h * 1000),
+                int(xmin / w * 1000),
+                int(ymax / h * 1000),
+                int(xmax / w * 1000)
+            ]
+        })
+    return jsonify(blocks)
+
+if __name__ == '__main__':
+    app.run(port=5000)
+`}
+                      onClick={(e) => { e.target.select(); document.execCommand('copy'); alert('Copied code to clipboard!'); }}
+                      style={{
+                        width: '100%',
+                        height: '110px',
+                        background: '#111111',
+                        color: '#bbb',
+                        fontSize: '9px',
+                        fontFamily: 'monospace',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '3px',
+                        padding: '4px',
+                        resize: 'vertical',
+                        cursor: 'pointer',
+                        margin: '0 0 6px 0'
+                      }}
+                      title="Click to select all and copy"
+                    />
+                    <small style={{ color: '#888', display: 'block' }}>
+                      {uiLanguage === '繁體中文' 
+                        ? '※ 點擊程式碼框可快速全選複製。EasyOCR 在本地辨識力與排版精準度堪比 Windows 內建引擎。' 
+                        : '* Click the code block to select and copy. EasyOCR provides near 100% accuracy.'}
+                    </small>
+                  </div>
+                </details>
               </div>
             )}
           </div>

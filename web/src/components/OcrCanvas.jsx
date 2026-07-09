@@ -145,6 +145,7 @@ const OcrCanvas = forwardRef(({
   geminiApiKey = '',
   geminiModel = 'gemini-2.0-flash',
   geminiApiUrl = 'https://generativelanguage.googleapis.com',
+  localServerUrl = 'http://localhost:5000/ocr',
   t = (key) => key
 }, ref) => {
   const containerRef = useRef(null);
@@ -621,6 +622,35 @@ const OcrCanvas = forwardRef(({
             id: `layer_${Date.now()}_0`
           });
         }
+      } else if (ocrEngine === 'custom') {
+        const cropDataUrl = cropCanvas.toDataURL();
+        if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
+        const response = await fetch(localServerUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: cropDataUrl })
+        });
+        if (!response.ok) {
+          throw new Error(`Local OCR server returned error: ${response.status}`);
+        }
+        const customResult = await response.json();
+        
+        customResult.forEach((item, index) => {
+          const [ymin, xmin, ymax, xmax] = item.bbox;
+          const blockLeft = left + (xmin / 1000) * width;
+          const blockTop = top + (ymin / 1000) * height;
+          const blockWidth = ((xmax - xmin) / 1000) * width;
+          const blockHeight = ((ymax - ymin) / 1000) * height || 16;
+
+          blocks.push({
+            text: item.text,
+            left: blockLeft,
+            top: blockTop,
+            width: blockWidth,
+            height: blockHeight,
+            id: `layer_${Date.now()}_${index}`
+          });
+        });
       } else {
         // Apply preprocessing on the cropped area to improve accuracy with 2x supersampling and adaptive thresholding
         const scaleFactor = 2;
@@ -727,6 +757,14 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     isHistoryDisabled.current = true;
+
+    // Clear any existing OCR layers (textboxes and cover patches) to avoid duplicate overlays
+    const objects = [...canvas.getObjects()];
+    objects.forEach(obj => {
+      if (obj.type === 'textbox' || obj.isPatch) {
+        canvas.remove(obj);
+      }
+    });
 
     const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
 
@@ -1102,6 +1140,34 @@ const OcrCanvas = forwardRef(({
             const xmin = item.bbox[1];
             const ymax = item.bbox[2];
             const xmax = item.bbox[3];
+
+            blocks.push({
+              id: `layer_${Date.now()}_${index}`,
+              text: item.text,
+              bbox: {
+                x: (xmin / 1000) * canvasWidth,
+                y: (ymin / 1000) * canvasHeight,
+                w: ((xmax - xmin) / 1000) * canvasWidth,
+                h: ((ymax - ymin) / 1000) * canvasHeight
+              }
+            });
+          });
+        } else if (ocrEngine === 'custom') {
+          if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
+          const response = await fetch(localServerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: data })
+          });
+          if (!response.ok) {
+            throw new Error(`Local OCR server returned error: ${response.status}`);
+          }
+          const customResult = await response.json();
+          const canvasWidth = canvas.width;
+          const canvasHeight = canvas.height;
+
+          customResult.forEach((item, index) => {
+            const [ymin, xmin, ymax, xmax] = item.bbox;
 
             blocks.push({
               id: `layer_${Date.now()}_${index}`,
