@@ -2,7 +2,7 @@ import { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 're
 import * as fabric from 'fabric';
 import Tesseract from 'tesseract.js';
 import { jsPDF } from 'jspdf';
-import { runGeminiOcr, runGeminiRegionalOcr } from '../utils/geminiOcr';
+import { runGeminiOcrTiled, runGeminiRegionalOcr } from '../utils/geminiOcr';
 
 // Typo correction dictionary from WPF project to achieve 99%+ accuracy for target mindmap
 const ocrCorrectionDict = {
@@ -1016,7 +1016,7 @@ const OcrCanvas = forwardRef(({
             throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
           }
           
-          const geminiResult = await runGeminiOcr(data, geminiApiKey, onWorkerStatusChange);
+          const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 3);
           const canvasWidth = canvas.width;
           const canvasHeight = canvas.height;
 
