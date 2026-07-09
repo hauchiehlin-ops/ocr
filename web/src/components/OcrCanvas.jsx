@@ -628,6 +628,65 @@ const OcrCanvas = forwardRef(({
         }
         syncLayers();
       });
+    },
+    triggerUpload: () => {
+      const fileInput = containerRef.current?.querySelector('input[type="file"]');
+      if (fileInput) fileInput.click();
+    },
+    clearCanvas: () => {
+      const canvas = fabricCanvas.current;
+      if (!canvas) return;
+      canvas.clear();
+      bgImage.current = null;
+      sampleCanvasRef.current = null;
+      setImageLoaded(false);
+      if (onImageLoaded) onImageLoaded(false);
+      if (onLayersUpdate) onLayersUpdate([]);
+      if (onRegionSelect) onRegionSelect(null);
+      
+      history.current = [];
+      historyIndex.current = -1;
+      if (onHistoryStatusChange) {
+        onHistoryStatusChange({ canUndo: false, canRedo: false });
+      }
+      canvas.renderAll();
+    },
+    insertText: () => {
+      const canvas = fabricCanvas.current;
+      if (!canvas) return;
+      
+      isHistoryDisabled.current = true;
+      const textboxLeft = canvas.width / 2 - 50;
+      const textboxTop = canvas.height / 2 - 15;
+      const textboxWidth = 100;
+      const textboxHeight = 24;
+
+      const text = new fabric.Textbox("New Text", {
+        left: textboxLeft,
+        top: textboxTop,
+        width: textboxWidth,
+        fontSize: 16,
+        fill: '#000000',
+        backgroundColor: 'transparent',
+        id: `layer_${Date.now()}`,
+        fontFamily: 'Inter',
+        padding: 4,
+        cornerColor: '#60CDFF',
+        borderColor: '#60CDFF',
+        transparentCorners: false,
+
+        originalLeft: textboxLeft,
+        originalTop: textboxTop,
+        originalWidth: textboxWidth,
+        originalHeight: textboxHeight
+      });
+      
+      addCoverPatch(text);
+      canvas.add(text);
+      canvas.setActiveObject(text);
+      isHistoryDisabled.current = false;
+      saveHistory();
+      canvas.renderAll();
     }
   }));
 
@@ -656,6 +715,7 @@ const OcrCanvas = forwardRef(({
           height: img.height * scale
         });
 
+        canvas.clear(); 
         img.scale(scale);
         
         canvas.backgroundImage = img;
@@ -667,7 +727,6 @@ const OcrCanvas = forwardRef(({
         });
         
         bgImage.current = img;
-        canvas.clear(); 
         canvas.renderAll();
         
         // Initialize offline sample canvas

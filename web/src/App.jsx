@@ -16,6 +16,14 @@ function App() {
   const [llmProgress, setLlmProgress] = useState('');
   const [zoom, setZoom] = useState(1);
 
+  // Panel visible states to align with View Menu in WPF
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [showRightPanel, setShowRightPanel] = useState(true);
+
+  // Settings States
+  const [ocrLanguage, setOcrLanguage] = useState('auto');
+  const [uiLanguage, setUiLanguage] = useState('繁體中文');
+
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
@@ -94,7 +102,6 @@ function App() {
   const handleApplyDefaultFontAll = () => {
      if (canvasRef.current) {
         canvasRef.current.applyDefaultFontToAll();
-        // Update local selected state to sync fonts
         if (selectedRegion) {
           setSelectedRegion(prev => ({ ...prev, fontFamily: 'Inter' }));
         }
@@ -119,6 +126,35 @@ function App() {
     document.body.removeChild(link);
   };
 
+  const handleExportCSV = () => {
+    if (layers.length === 0) {
+      alert("No layers to export.");
+      return;
+    }
+    let csv = "ID,Text\n";
+    layers.forEach(layer => {
+      csv += `"${layer.id}","${layer.text.replace(/"/g, '""')}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "ocr-exported.csv";
+    link.click();
+  };
+
+  const triggerImageUpload = () => {
+     canvasRef.current?.triggerUpload();
+  };
+
+  const handleCloseImage = () => {
+     canvasRef.current?.clearCanvas();
+  };
+
+  const handleInsertText = () => {
+     if (!imageLoaded) return alert("Please load an image first.");
+     canvasRef.current?.insertText();
+  };
+
   return (
     <div className="app-container">
       {/* --- TitleBar & MenuBar --- */}
@@ -126,10 +162,61 @@ function App() {
         <div className="header-left">
           <h1 style={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>OCR Visual Editor Pro</h1>
           <div className="menu-bar">
-            <div className="menu-item">File</div>
-            <div className="menu-item">Edit</div>
-            <div className="menu-item">View</div>
-            <div className="menu-item">Settings</div>
+            {/* File Menu */}
+            <div className="menu-container">
+              <div className="menu-item">File</div>
+              <div className="dropdown-menu">
+                <div className="dropdown-item" onClick={triggerImageUpload}>Load Image...</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleCloseImage : null}>Close Image</div>
+                <div className="dropdown-separator"></div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExport : null}>Save Image</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportCSV : null}>Export to CSV</div>
+              </div>
+            </div>
+
+            {/* Edit Menu */}
+            <div className="menu-container">
+              <div className="menu-item">Edit</div>
+              <div className="dropdown-menu">
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={handleInsertText}>Insert Text</div>
+                <div className="dropdown-separator"></div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleApplyDefaultFontAll : null}>Apply Default Font</div>
+                <div className="dropdown-separator"></div>
+                <div className={`dropdown-item ${!canUndo ? 'disabled' : ''}`} onClick={canUndo ? () => canvasRef.current?.undo() : null}>Undo</div>
+                <div className={`dropdown-item ${!canRedo ? 'disabled' : ''}`} onClick={canRedo ? () => canvasRef.current?.redo() : null}>Redo</div>
+              </div>
+            </div>
+
+            {/* View Menu */}
+            <div className="menu-container">
+              <div className="menu-item">View</div>
+              <div className="dropdown-menu">
+                <div className="dropdown-item" onClick={() => setShowLeftPanel(!showLeftPanel)}>
+                  <span>Show Left Panel</span>
+                  <span>{showLeftPanel ? '✓' : ''}</span>
+                </div>
+                <div className="dropdown-item" onClick={() => setShowRightPanel(!showRightPanel)}>
+                  <span>Show Right Panel</span>
+                  <span>{showRightPanel ? '✓' : ''}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Settings Menu */}
+            <div className="menu-container">
+              <div className="menu-item">Settings</div>
+              <div className="dropdown-menu">
+                <div className="dropdown-item" style={{ cursor: 'default' }}>
+                  <span>UI Language</span>
+                  <span style={{ fontSize: '11px', opacity: 0.6 }}>繁體中文</span>
+                </div>
+                <div className="dropdown-separator"></div>
+                <div className="dropdown-item" style={{ cursor: 'default' }}>
+                  <span>OCR Language</span>
+                  <span style={{ fontSize: '11px', opacity: 0.6 }}>Auto (zh-Hant + eng)</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -159,7 +246,7 @@ function App() {
       <div className="main-content">
         
         {/* Left Sidebar */}
-        <aside className="sidebar left-sidebar">
+        <aside className="sidebar left-sidebar" style={{ display: showLeftPanel ? 'flex' : 'none' }}>
           <h2 className="panel-title">Document Status</h2>
           <div className="status-box" style={{ minHeight: '50px', display: 'flex', alignItems: 'center' }}>
             {isOcrProcessing ? (
@@ -210,7 +297,7 @@ function App() {
         </main>
 
         {/* Right Inspector */}
-        <aside className="sidebar right-sidebar">
+        <aside className="sidebar right-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
           <h2 className="panel-title">Text Formatting</h2>
           
           <div className="panel-subtitle">Edit Content</div>
@@ -270,6 +357,31 @@ function App() {
                 }}
               />
             ))}
+
+            {/* Custom Color Palette Picker */}
+            <label 
+              className="color-btn" 
+              style={{
+                background: 'linear-gradient(45deg, red, orange, yellow, green, blue, purple)',
+                display: 'inline-block',
+                cursor: selectedRegion ? 'pointer' : 'not-allowed',
+                position: 'relative',
+                opacity: selectedRegion ? 1 : 0.5
+              }}
+              title="Custom Color"
+            >
+              <input 
+                type="color" 
+                style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegion ? 'pointer' : 'not-allowed' }}
+                disabled={!selectedRegion}
+                value={selectedRegion?.fill || '#000000'}
+                onChange={(e) => {
+                  const color = e.target.value;
+                  setSelectedRegion(prev => ({...prev, fill: color}));
+                  canvasRef.current?.updateRegionStyle(selectedRegion.id, { fill: color });
+                }}
+              />
+            </label>
           </div>
 
           <button 
