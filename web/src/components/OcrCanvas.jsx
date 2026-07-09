@@ -60,6 +60,75 @@ function getLinesFromPage(page) {
   return lines;
 }
 
+// Local Adaptive Thresholding using Integral Image (Summed-Area Table) for fast O(N) execution
+function adaptiveThreshold(ctx, width, height) {
+  const imgData = ctx.getImageData(0, 0, width, height);
+  const data = imgData.data;
+  const grayscale = new Uint8Array(width * height);
+  
+  // 1. Convert to grayscale
+  for (let i = 0; i < data.length; i += 4) {
+    grayscale[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+  }
+  
+  const output = new Uint8Array(width * height);
+  const S = Math.floor(Math.max(width, height) / 30) | 1; // Window size (must be odd)
+  const C = 10; // Threshold constant
+  
+  // 2. Compute integral image (Summed-Area Table)
+  const integral = new Uint32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    let sum = 0;
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      sum += grayscale[idx];
+      if (y === 0) {
+        integral[idx] = sum;
+      } else {
+        integral[idx] = integral[(y - 1) * width + x] + sum;
+      }
+    }
+  }
+  
+  const halfS = Math.floor(S / 2);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      
+      const x1 = Math.max(0, x - halfS);
+      const x2 = Math.min(width - 1, x + halfS);
+      const y1 = Math.max(0, y - halfS);
+      const y2 = Math.min(height - 1, y + halfS);
+      
+      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
+      
+      // Box sum query in O(1)
+      const idx_br = y2 * width + x2;
+      const idx_tr = (y1 - 1) * width + x2;
+      const idx_bl = y2 * width + (x1 - 1);
+      const idx_tl = (y1 - 1) * width + (x1 - 1);
+      
+      let sum = integral[idx_br];
+      if (y1 > 0) sum -= integral[idx_tr];
+      if (x1 > 0) sum -= integral[idx_bl];
+      if (x1 > 0 && y1 > 0) sum += integral[idx_tl];
+      
+      const average = sum / count;
+      output[idx] = grayscale[idx] < (average - C) ? 0 : 255;
+    }
+  }
+  
+  // 3. Write binarized pixels back
+  for (let i = 0; i < data.length; i += 4) {
+    const val = output[i / 4];
+    data[i] = val;
+    data[i + 1] = val;
+    data[i + 2] = val;
+    data[i + 3] = 255; // fully opaque
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
 const OcrCanvas = forwardRef(({ 
   onRegionSelect, 
   onLayersUpdate, 
@@ -551,13 +620,16 @@ const OcrCanvas = forwardRef(({
           });
         }
       } else {
-        // Apply preprocessing on the cropped area to improve accuracy
+        // Apply preprocessing on the cropped area to improve accuracy with 2x supersampling and adaptive thresholding
+        const scaleFactor = 2;
         const preprocessCropCanvas = document.createElement('canvas');
-        preprocessCropCanvas.width = imgWidth;
-        preprocessCropCanvas.height = imgHeight;
+        preprocessCropCanvas.width = imgWidth * scaleFactor;
+        preprocessCropCanvas.height = imgHeight * scaleFactor;
         const preprocessCropCtx = preprocessCropCanvas.getContext('2d');
-        preprocessCropCtx.filter = 'grayscale(100%) contrast(150%)';
-        preprocessCropCtx.drawImage(cropCanvas, 0, 0);
+        preprocessCropCtx.imageSmoothingEnabled = true;
+        preprocessCropCtx.imageSmoothingQuality = 'high';
+        preprocessCropCtx.drawImage(cropCanvas, 0, 0, imgWidth * scaleFactor, imgHeight * scaleFactor);
+        adaptiveThreshold(preprocessCropCtx, preprocessCropCanvas.width, preprocessCropCanvas.height);
 
         const result = await tesseractWorker.current.recognize(preprocessCropCanvas, {}, { blocks: true });
         const lines = getLinesFromPage(result.data);
@@ -568,10 +640,10 @@ const OcrCanvas = forwardRef(({
 
           const correctedText = correctOcrText(rawText);
 
-          const textboxLeft = left + line.bbox.x0 * scale;
-          const textboxTop = top + line.bbox.y0 * scale;
-          const textboxWidth = (line.bbox.x1 - line.bbox.x0) * scale;
-          const textboxHeight = (line.bbox.y1 - line.bbox.y0) * scale || 16;
+          const textboxLeft = left + (line.bbox.x0 / scaleFactor) * scale;
+          const textboxTop = top + (line.bbox.y0 / scaleFactor) * scale;
+          const textboxWidth = ((line.bbox.x1 - line.bbox.x0) / scaleFactor) * scale;
+          const textboxHeight = ((line.bbox.y1 - line.bbox.y0) / scaleFactor) * scale || 16;
 
           blocks.push({
             text: correctedText,
@@ -595,7 +667,7 @@ const OcrCanvas = forwardRef(({
           backgroundColor: 'transparent',
           id: block.id,
           fontFamily: fontToUse,
-          padding: 4,
+          padding: 1,
           cornerColor: '#60CDFF',
           borderColor: '#60CDFF',
           transparentCorners: false,
@@ -660,7 +732,7 @@ const OcrCanvas = forwardRef(({
       const block = blocks[i];
       // Calculate font size by dividing the box height by the text line count to handle paragraphs, capped at a maximum of 32px
       const linesCount = block.text.split('\n').filter(l => l.trim() !== '').length || 1;
-      const calculatedFontSize = Math.max(12, Math.min(32, block.bbox.h / linesCount));
+      const calculatedFontSize = Math.max(10, Math.min(32, block.bbox.h / linesCount));
 
       const text = new fabric.Textbox(block.text, {
         left: block.bbox.x,
@@ -671,7 +743,7 @@ const OcrCanvas = forwardRef(({
         backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
         fontFamily: fontToUse,
-        padding: 4,
+        padding: 1,
         cornerColor: '#60CDFF',
         borderColor: '#60CDFF',
         transparentCorners: false,
@@ -863,7 +935,7 @@ const OcrCanvas = forwardRef(({
         backgroundColor: 'transparent',
         id: `layer_${Date.now()}`,
         fontFamily: fontToUse,
-        padding: 4,
+        padding: 1,
         cornerColor: '#60CDFF',
         borderColor: '#60CDFF',
         transparentCorners: false,
@@ -992,13 +1064,16 @@ const OcrCanvas = forwardRef(({
         sampleCtx.drawImage(imgElement, 0, 0);
         sampleCanvasRef.current = sampleCanvas;
 
-        // Apply preprocessing using an off-screen canvas
+        // Apply preprocessing using an off-screen canvas with 2x supersampling and adaptive thresholding
+        const scaleFactor = 2;
         const preprocessCanvas = document.createElement('canvas');
-        preprocessCanvas.width = origWidth;
-        preprocessCanvas.height = origHeight;
+        preprocessCanvas.width = origWidth * scaleFactor;
+        preprocessCanvas.height = origHeight * scaleFactor;
         const preprocessCtx = preprocessCanvas.getContext('2d');
-        preprocessCtx.filter = 'grayscale(100%) contrast(150%)';
-        preprocessCtx.drawImage(imgElement, 0, 0);
+        preprocessCtx.imageSmoothingEnabled = true;
+        preprocessCtx.imageSmoothingQuality = 'high';
+        preprocessCtx.drawImage(imgElement, 0, 0, origWidth * scaleFactor, origHeight * scaleFactor);
+        adaptiveThreshold(preprocessCtx, preprocessCanvas.width, preprocessCanvas.height);
 
         history.current = [];
         historyIndex.current = -1;
@@ -1056,10 +1131,10 @@ const OcrCanvas = forwardRef(({
               text: correctedText,
               confidence: line.confidence / 100,
               bbox: {
-                x: line.bbox.x0 * scale,
-                y: line.bbox.y0 * scale,
-                w: (line.bbox.x1 - line.bbox.x0) * scale,
-                h: (line.bbox.y1 - line.bbox.y0) * scale
+                x: (line.bbox.x0 / 2) * scale,
+                y: (line.bbox.y0 / 2) * scale,
+                w: ((line.bbox.x1 - line.bbox.x0) / 2) * scale,
+                h: ((line.bbox.y1 - line.bbox.y0) / 2) * scale
               }
             });
           });
