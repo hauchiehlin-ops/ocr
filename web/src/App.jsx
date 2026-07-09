@@ -112,21 +112,15 @@ function App() {
   };
 
   const handleExport = () => {
-    if (!canvasRef.current) return;
-    
-    const canvasElement = document.querySelector('canvas.lower-canvas');
-    if (!canvasElement) {
-       alert("No canvas found to export!");
-       return;
+    if (canvasRef.current) {
+      canvasRef.current.exportImage();
     }
-    
-    const dataUrl = canvasElement.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.href = dataUrl;
-    link.download = "ocr-exported.png";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  };
+
+  const handleExportPDF = () => {
+    if (canvasRef.current) {
+      canvasRef.current.exportPDF();
+    }
   };
 
   const handleExportCSV = () => {
@@ -143,31 +137,6 @@ function App() {
     link.href = URL.createObjectURL(blob);
     link.download = "ocr-exported.csv";
     link.click();
-  };
-
-  const handleExportPDF = () => {
-    if (!imageLoaded) return;
-    const canvasElement = document.querySelector('canvas.lower-canvas');
-    if (!canvasElement) return;
-
-    const dataUrl = canvasElement.toDataURL("image/jpeg", 1.0);
-    const pdf = new jsPDF({
-      orientation: canvasElement.width > canvasElement.height ? "landscape" : "portrait",
-      unit: "px",
-      format: [canvasElement.width, canvasElement.height]
-    });
-
-    pdf.addImage(dataUrl, "JPEG", 0, 0, canvasElement.width, canvasElement.height);
-    
-    // Add OCR text layers invisibly on top of the image to make it searchable
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(10);
-    // Add text slightly shifted or very small to keep PDF searchable
-    layers.forEach(layer => {
-       pdf.text(layer.text, 10, 10);
-    });
-
-    pdf.save("ocr-exported.pdf");
   };
 
   const triggerImageUpload = () => {

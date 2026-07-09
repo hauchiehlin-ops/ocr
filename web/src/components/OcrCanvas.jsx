@@ -1,6 +1,7 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
 import * as fabric from 'fabric';
 import Tesseract from 'tesseract.js';
+import { jsPDF } from 'jspdf';
 
 // Typo correction dictionary from WPF project to achieve 99%+ accuracy for target mindmap
 const ocrCorrectionDict = {
@@ -27,7 +28,7 @@ const ocrCorrectionDict = {
   "配套": "配套",
   "机制": "機制",
   "追踪": "追蹤",
-  "选出": "選出",
+  "選出": "選出",
   "筛选": "篩選",
   "排序": "排序"
 };
@@ -118,7 +119,6 @@ const OcrCanvas = forwardRef(({
     const initTesseract = async () => {
       if (onWorkerStatusChange) onWorkerStatusChange('Initializing OCR Engine...');
       
-      // Terminate any existing worker
       if (tesseractWorker.current) {
         await tesseractWorker.current.terminate();
         tesseractWorker.current = null;
@@ -448,7 +448,8 @@ const OcrCanvas = forwardRef(({
 
       if (onOcrProcessing) onOcrProcessing(true);
 
-      const result = await tesseractWorker.current.recognize(dataUrl);
+      // CRITICAL: Must specify { blocks: true } in recognize options in Tesseract v5+
+      const result = await tesseractWorker.current.recognize(dataUrl, {}, { blocks: true });
       const canvas = fabricCanvas.current;
 
       isHistoryDisabled.current = true;
@@ -726,6 +727,60 @@ const OcrCanvas = forwardRef(({
       isHistoryDisabled.current = false;
       saveHistory();
       canvas.renderAll();
+    },
+    exportImage: () => {
+      const canvas = fabricCanvas.current;
+      if (!canvas || !bgImage.current) return;
+
+      const scale = bgImage.current.scaleX;
+      // Get data URL at original image resolution using multiplier
+      const dataUrl = canvas.toDataURL({
+        format: 'png',
+        multiplier: 1 / scale
+      });
+
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = "ocr-exported.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    },
+    exportPDF: () => {
+      const canvas = fabricCanvas.current;
+      if (!canvas || !bgImage.current) return;
+
+      const scale = bgImage.current.scaleX;
+      // Export full resolution image
+      const dataUrl = canvas.toDataURL({
+        format: 'jpeg',
+        quality: 1.0,
+        multiplier: 1 / scale
+      });
+
+      const origWidth = bgImage.current.width;
+      const origHeight = bgImage.current.height;
+
+      const pdf = new jsPDF({
+        orientation: origWidth > origHeight ? "landscape" : "portrait",
+        unit: "px",
+        format: [origWidth, origHeight]
+      });
+
+      pdf.addImage(dataUrl, "JPEG", 0, 0, origWidth, origHeight);
+
+      // Add text layers invisibly on top of the image to make it searchable
+      const textLayers = canvas.getObjects().filter(o => o.type === 'textbox');
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(12);
+
+      textLayers.forEach(layer => {
+         const origX = layer.left / scale;
+         const origY = (layer.top + layer.height) / scale; // jsPDF origin is bottom-left
+         pdf.text(layer.text, origX, origY);
+      });
+
+      pdf.save("ocr-exported.pdf");
     }
   }));
 
@@ -787,7 +842,8 @@ const OcrCanvas = forwardRef(({
         const worker = tesseractWorker.current;
         if (!worker) throw new Error("OCR Engine is not initialized yet.");
         
-        const result = await worker.recognize(data);
+        // CRITICAL: Must specify { blocks: true } in recognize options in Tesseract v5+
+        const result = await worker.recognize(data, {}, { blocks: true });
         
         const lines = getLinesFromPage(result.data);
         const blocks = [];
