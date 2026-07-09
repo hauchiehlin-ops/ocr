@@ -659,11 +659,15 @@ const OcrCanvas = forwardRef(({
 
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
+      // Calculate font size by dividing the box height by the text line count to handle paragraphs, capped at a maximum of 32px
+      const linesCount = block.text.split('\n').filter(l => l.trim() !== '').length || 1;
+      const calculatedFontSize = Math.max(12, Math.min(32, block.bbox.h / linesCount));
+
       const text = new fabric.Textbox(block.text, {
         left: block.bbox.x,
         top: block.bbox.y,
         width: block.bbox.w,
-        fontSize: Math.max(12, block.bbox.h),
+        fontSize: calculatedFontSize,
         fill: '#000000',
         backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
@@ -676,7 +680,7 @@ const OcrCanvas = forwardRef(({
         originalLeft: block.bbox.x,
         originalTop: block.bbox.y,
         originalWidth: block.bbox.w,
-        originalHeight: Math.max(12, block.bbox.h)
+        originalHeight: calculatedFontSize
       });
       
       await addCoverPatch(text);
