@@ -348,6 +348,56 @@ function App() {
             geminiApiKey={geminiApiKey}
             t={t}
           />
+
+          {/* ── Processing Overlay ── */}
+          {isOcrProcessing && (
+            <div style={{
+              position: 'absolute',
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0, 0, 0, 0.65)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 900,
+              gap: '16px',
+              pointerEvents: 'none',
+            }}>
+              {/* Spinner */}
+              <div style={{
+                width: '48px', height: '48px',
+                border: '4px solid rgba(96, 205, 255, 0.2)',
+                borderTopColor: '#60CDFF',
+                borderRadius: '50%',
+                animation: 'ocr-spin 0.8s linear infinite',
+              }} />
+
+              {/* Status Text */}
+              <div style={{
+                color: '#60CDFF',
+                fontSize: '16px',
+                fontWeight: '600',
+                textAlign: 'center',
+                maxWidth: '80%',
+                lineHeight: '1.6',
+                animation: 'ocr-pulse 2s ease-in-out infinite',
+              }}>
+                {workerStatus}
+              </div>
+
+              {/* Sub-hint */}
+              <div style={{
+                color: 'rgba(255,255,255,0.5)',
+                fontSize: '12px',
+                textAlign: 'center',
+              }}>
+                {ocrEngine === 'cloud'
+                  ? '圖片已分割為多區域，依序透過佇列進行辨識…'
+                  : 'OCR 辨識中，請稍候…'}
+              </div>
+            </div>
+          )}
         </main>
 
         {/* Right Inspector */}
