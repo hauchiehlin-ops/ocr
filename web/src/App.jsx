@@ -57,6 +57,39 @@ function App() {
     localStorage.setItem('local_server_url', url);
   };
 
+  const [localServerStatus, setLocalServerStatus] = useState('disconnected');
+
+  const testLocalServerConnection = async () => {
+    setLocalServerStatus('checking');
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      
+      const baseUrl = localServerUrl.replace(/\/ocr$/, '');
+      const response = await fetch(`${baseUrl}/status`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.status === 'running') {
+          setLocalServerStatus('connected');
+          return;
+        }
+      }
+      setLocalServerStatus('disconnected');
+    } catch (e) {
+      setLocalServerStatus('disconnected');
+    }
+  };
+
+  useEffect(() => {
+    if (ocrEngine === 'custom') {
+      testLocalServerConnection();
+    }
+  }, [ocrEngine, localServerUrl]);
+
   // Preset Fonts
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
   const [englishFont, setEnglishFont] = useState('Century Gothic');
@@ -627,6 +660,39 @@ function App() {
                     width: '100%'
                   }}
                 />
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: localServerStatus === 'connected' ? '#4ADE80' : localServerStatus === 'checking' ? '#FBBF24' : '#EF4444',
+                      display: 'inline-block'
+                    }} />
+                    <span style={{ opacity: 0.85 }}>
+                      {localServerStatus === 'connected' 
+                        ? (uiLanguage === '繁體中文' ? '已連接 (EasyOCR)' : 'Connected (EasyOCR)')
+                        : localServerStatus === 'checking'
+                        ? (uiLanguage === '繁體中文' ? '正在檢測...' : 'Checking...')
+                        : (uiLanguage === '繁體中文' ? '未偵測到伺服器' : '未偵測到伺服器')}
+                    </span>
+                  </span>
+                  <button
+                    onClick={testLocalServerConnection}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: '4px',
+                      color: '#fff',
+                      padding: '2px 6px',
+                      fontSize: '10px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {uiLanguage === '繁體中文' ? '測試連接' : 'Test Conn'}
+                  </button>
+                </div>
 
                 <details style={{
                   marginTop: '8px',
