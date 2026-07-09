@@ -40,6 +40,24 @@ function correctOcrText(text) {
   return corrected;
 }
 
+function getLinesFromPage(page) {
+  const lines = [];
+  if (page && page.blocks) {
+    page.blocks.forEach(block => {
+      if (block.paragraphs) {
+        block.paragraphs.forEach(para => {
+          if (para.lines) {
+            para.lines.forEach(line => {
+              lines.push(line);
+            });
+          }
+        });
+      }
+    });
+  }
+  return lines;
+}
+
 const OcrCanvas = forwardRef(({ 
   onRegionSelect, 
   onLayersUpdate, 
@@ -393,8 +411,9 @@ const OcrCanvas = forwardRef(({
 
       isHistoryDisabled.current = true;
 
-      for (let i = 0; i < result.data.lines.length; i++) {
-        const line = result.data.lines[i];
+      const lines = getLinesFromPage(result.data);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         const rawText = line.text.trim();
         if (!rawText) continue;
 
@@ -672,8 +691,9 @@ const OcrCanvas = forwardRef(({
         // Run full Tesseract OCR
         const result = await Tesseract.recognize(file, 'chi_tra+eng');
         
+        const lines = getLinesFromPage(result.data);
         const blocks = [];
-        result.data.lines.forEach((line, index) => {
+        lines.forEach((line, index) => {
           const rawText = line.text.trim();
           if (!rawText) return;
           
