@@ -610,9 +610,9 @@ namespace OCREditor
                         0, 0, original.Width, original.Height, GraphicsUnit.Pixel);
                 }
                 
-                // Use the C++ Interop logic for consistency with Apple Vision contrast
                 using (var processed = OCREngineInterop.PreprocessImage(scaled))
                 {
+                    if (processed == null) return originalPath;
                     string tempPath = Path.Combine(Path.GetTempPath(), "ocr_preprocessed.png");
                     processed.Save(tempPath, ImageFormat.Png);
                     return tempPath;
@@ -1826,7 +1826,7 @@ namespace OCREditor
             RenderRegions();
         }
 
-        private void PresetColor_Click(object sender, RoutedEventArgs e)
+        private void ColorPreset_Click(object sender, RoutedEventArgs e)
         {
             if (_selectedRegion == null || !(sender is System.Windows.Controls.Button button)) return;
             
