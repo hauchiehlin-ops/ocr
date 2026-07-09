@@ -1,4 +1,50 @@
-export async function runGeminiOcr(base64DataUrl, apiKey) {
+class GeminiRequestQueue {
+  constructor() {
+    this.queue = [];
+    this.processing = false;
+    this.lastRequestTime = 0;
+    this.minDelayMs = 4500; // 4.5 seconds gap to avoid 15 RPM limits safely
+  }
+
+  enqueue(fn, onQueueWait) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject, onQueueWait });
+      this.processNext();
+    });
+  }
+
+  async processNext() {
+    if (this.processing || this.queue.length === 0) return;
+
+    this.processing = true;
+    const { fn, resolve, reject, onQueueWait } = this.queue.shift();
+
+    try {
+      const now = Date.now();
+      const timeSinceLast = now - this.lastRequestTime;
+      if (timeSinceLast < this.minDelayMs) {
+        const delay = this.minDelayMs - timeSinceLast;
+        if (onQueueWait) {
+          onQueueWait(delay);
+        }
+        await new Promise(r => setTimeout(r, delay));
+      }
+
+      this.lastRequestTime = Date.now();
+      const result = await fn();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this.processing = false;
+      this.processNext();
+    }
+  }
+}
+
+const geminiQueue = new GeminiRequestQueue();
+
+export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange) {
   // Extract base64 data and mimeType
   const match = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) {
@@ -42,51 +88,59 @@ Only return the raw JSON array.`
     }
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(requestBody)
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    let parsedErr;
-    try {
-      parsedErr = JSON.parse(errText);
-    } catch {
-      parsedErr = null;
-    }
-    const errMsg = parsedErr?.error?.message || errText;
-    throw new Error(`Gemini API error: ${response.status} - ${errMsg}`);
-  }
-
-  const result = await response.json();
-  const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!textResponse) {
-    throw new Error("No text response received from Gemini.");
-  }
-
-  try {
-    // Sanitize markdown code block wraps if any
-    let sanitized = textResponse.trim();
-    if (sanitized.startsWith("```")) {
-      sanitized = sanitized.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-    }
+  return geminiQueue.enqueue(async () => {
+    if (onStatusChange) onStatusChange("Running Gemini AI OCR...");
     
-    const blocks = JSON.parse(sanitized.trim());
-    if (!Array.isArray(blocks)) {
-      throw new Error("Response is not a valid array.");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedErr;
+      try {
+        parsedErr = JSON.parse(errText);
+      } catch {
+        parsedErr = null;
+      }
+      const errMsg = parsedErr?.error?.message || errText;
+      throw new Error(`Gemini API error: ${response.status} - ${errMsg}`);
     }
-    return blocks;
-  } catch (e) {
-    console.error("Failed to parse Gemini response as JSON:", textResponse);
-    throw new Error("Gemini returned invalid JSON structure: " + e.message);
-  }
+
+    const result = await response.json();
+    const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textResponse) {
+      throw new Error("No text response received from Gemini.");
+    }
+
+    try {
+      let sanitized = textResponse.trim();
+      if (sanitized.startsWith("```")) {
+        sanitized = sanitized.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+      }
+      
+      const blocks = JSON.parse(sanitized.trim());
+      if (!Array.isArray(blocks)) {
+        throw new Error("Response is not a valid array.");
+      }
+      return blocks;
+    } catch (e) {
+      console.error("Failed to parse Gemini response as JSON:", textResponse);
+      throw new Error("Gemini returned invalid JSON structure: " + e.message);
+    }
+  }, (delayMs) => {
+    if (onStatusChange) {
+      const sec = (delayMs / 1000).toFixed(1);
+      onStatusChange(`Queued: Waiting ${sec}s to avoid API rate limit...`);
+    }
+  });
 }
 
-export async function runGeminiRegionalOcr(base64DataUrl, apiKey) {
+export async function runGeminiRegionalOcr(base64DataUrl, apiKey, onStatusChange) {
   const match = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) {
     throw new Error("Invalid image data format.");
@@ -117,31 +171,40 @@ Return ONLY the raw recognized text content, nothing else. Do not include markdo
     ]
   };
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(requestBody)
-  });
+  return geminiQueue.enqueue(async () => {
+    if (onStatusChange) onStatusChange("Running Gemini Regional OCR...");
 
-  if (!response.ok) {
-    const errText = await response.text();
-    let parsedErr;
-    try {
-      parsedErr = JSON.parse(errText);
-    } catch {
-      parsedErr = null;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let parsedErr;
+      try {
+        parsedErr = JSON.parse(errText);
+      } catch {
+        parsedErr = null;
+      }
+      const errMsg = parsedErr?.error?.message || errText;
+      throw new Error(`Gemini API error: ${response.status} - ${errMsg}`);
     }
-    const errMsg = parsedErr?.error?.message || errText;
-    throw new Error(`Gemini API error: ${response.status} - ${errMsg}`);
-  }
 
-  const result = await response.json();
-  const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!textResponse) {
-    throw new Error("No text response received from Gemini.");
-  }
+    const result = await response.json();
+    const textResponse = result.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textResponse) {
+      throw new Error("No text response received from Gemini.");
+    }
 
-  return textResponse.trim();
+    return textResponse.trim();
+  }, (delayMs) => {
+    if (onStatusChange) {
+      const sec = (delayMs / 1000).toFixed(1);
+      onStatusChange(`Queued: Waiting ${sec}s to avoid API rate limit...`);
+    }
+  });
 }

@@ -1,6 +1,6 @@
 const translations = {
   en: {
-    title: "OCR Visual Editor Pro",
+    title: "AI OCR Pro Editor",
     file: "File",
     edit: "Edit",
     view: "View",
@@ -59,7 +59,7 @@ const translations = {
     keyNeeded: "⚠️ Gemini API Key is required for Cloud OCR."
   },
   zh: {
-    title: "OCR 視覺編輯器 Pro",
+    title: "AI OCR Pro Editor",
     file: "檔案",
     edit: "編輯",
     view: "檢視",

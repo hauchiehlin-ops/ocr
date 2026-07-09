@@ -538,7 +538,7 @@ const OcrCanvas = forwardRef(({
         }
         
         const cropDataUrl = cropCanvas.toDataURL();
-        const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey);
+        const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey, onWorkerStatusChange);
 
         if (textResult) {
           const linesCount = textResult.split('\n').filter(l => l.trim() !== '').length || 1;
@@ -622,6 +622,7 @@ const OcrCanvas = forwardRef(({
       alert("Regional OCR failed: " + e.message);
     } finally {
       if (onOcrProcessing) onOcrProcessing(false);
+      if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
     }
   };
 
@@ -1015,7 +1016,7 @@ const OcrCanvas = forwardRef(({
             throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
           }
           
-          const geminiResult = await runGeminiOcr(data, geminiApiKey);
+          const geminiResult = await runGeminiOcr(data, geminiApiKey, onWorkerStatusChange);
           const canvasWidth = canvas.width;
           const canvasHeight = canvas.height;
 
@@ -1070,6 +1071,7 @@ const OcrCanvas = forwardRef(({
         alert("OCR Failed: " + error.message);
       } finally {
         if (onOcrProcessing) onOcrProcessing(false);
+        if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
       }
     };
     reader.readAsDataURL(file);
