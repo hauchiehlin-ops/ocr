@@ -16,6 +16,15 @@ function App() {
   const [llmProgress, setLlmProgress] = useState('');
   const [zoom, setZoom] = useState(1);
 
+  // Undo/Redo states
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  const handleHistoryStatusChange = (status) => {
+    setCanUndo(status.canUndo);
+    setCanRedo(status.canRedo);
+  };
+
   const handleFixText = async () => {
     if (!selectedRegion) return;
     setIsLoadingLLM(true);
@@ -82,6 +91,16 @@ function App() {
      }
   };
 
+  const handleApplyDefaultFontAll = () => {
+     if (canvasRef.current) {
+        canvasRef.current.applyDefaultFontToAll();
+        // Update local selected state to sync fonts
+        if (selectedRegion) {
+          setSelectedRegion(prev => ({ ...prev, fontFamily: 'Inter' }));
+        }
+     }
+  };
+
   const handleExport = () => {
     if (!canvasRef.current) return;
     
@@ -116,6 +135,14 @@ function App() {
 
         <div className="header-right">
           <div className="zoom-controls">
+            {/* Undo/Redo Controls */}
+            <button className="btn btn-secondary" style={{padding: '2px 8px', marginRight: '8px'}} disabled={!canUndo} onClick={() => canvasRef.current?.undo()}>
+              Undo
+            </button>
+            <button className="btn btn-secondary" style={{padding: '2px 8px', marginRight: '16px'}} disabled={!canRedo} onClick={() => canvasRef.current?.redo()}>
+              Redo
+            </button>
+
             <span>Zoom:</span>
             <button className="btn btn-secondary" style={{padding: '2px 8px'}} onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}>-</button>
             <span style={{width: '40px', textAlign: 'center'}}>{Math.round(zoom * 100)}%</span>
@@ -178,6 +205,7 @@ function App() {
             onLayersUpdate={setLayers}
             onImageLoaded={setImageLoaded}
             onOcrProcessing={setIsOcrProcessing}
+            onHistoryStatusChange={handleHistoryStatusChange}
           />
         </main>
 
@@ -243,6 +271,15 @@ function App() {
               />
             ))}
           </div>
+
+          <button 
+            className="btn btn-secondary" 
+            style={{ width: '100%', marginBottom: '16px' }}
+            disabled={!imageLoaded}
+            onClick={handleApplyDefaultFontAll}
+          >
+            Apply Default Font to All
+          </button>
 
           <h2 className="panel-title" style={{marginTop: '24px'}}>AI Operations</h2>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
