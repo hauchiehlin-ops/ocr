@@ -387,7 +387,18 @@ body {
   .right-sidebar {
     width: calc(100vw - 16px);
     right: 8px;
-    z-index: 1001;
   }
 }
 
+/* Fabric.js hidden textarea customization to prevent white background during editing */
+.fabric-textbox-hidden-textarea,
+textarea.fabric-textbox-hidden-textarea {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: transparent !important;
+  overflow: hidden !important;
+  resize: none !important;
+}

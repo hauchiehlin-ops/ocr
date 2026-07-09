@@ -44,7 +44,19 @@ const translations = {
     drawingMode: "Drawing Mode",
     removeText: "Remove Text",
     tessInit: "Initializing OCR Engine...",
-    tessReady: "OCR Engine Ready"
+    tessReady: "OCR Engine Ready",
+    presetFonts: "Preset Fonts",
+    engFont: "English Font",
+    zhFont: "Chinese/System Font",
+    forceFont: "Force Apply Preset Fonts on Load",
+    applyFontAllPreset: "Apply Preset Fonts to All",
+    ocrEngine: "OCR Engine",
+    localEngine: "Local Engine (Tesseract.js)",
+    cloudEngine: "Cloud Engine (Gemini 2.0 Flash)",
+    geminiKey: "Gemini API Key",
+    keyRequiredPrompt: "Please enter your Gemini API Key in the Settings menu or sidebar to unlock the high-accuracy Cloud OCR engine.",
+    getKeyLink: "Get API Key (Google AI Studio)",
+    keyNeeded: "⚠️ Gemini API Key is required for Cloud OCR."
   },
   zh: {
     title: "OCR 視覺編輯器 Pro",
@@ -91,7 +103,19 @@ const translations = {
     drawingMode: "框選繪圖模式",
     removeText: "移除文字",
     tessInit: "正在初始化 OCR 引擎...",
-    tessReady: "OCR 引擎已就緒"
+    tessReady: "OCR 引擎已就緒",
+    presetFonts: "預設字型設定",
+    engFont: "英文/數字字型",
+    zhFont: "中文/系統字型",
+    forceFont: "圖片載入/OCR後強制套用",
+    applyFontAllPreset: "套用字型至全檔",
+    ocrEngine: "OCR 辨識引擎",
+    localEngine: "本地端引擎 (Tesseract.js)",
+    cloudEngine: "雲端 AI 引擎 (Gemini 2.0 Flash)",
+    geminiKey: "Gemini API 金鑰 (Key)",
+    keyRequiredPrompt: "請在設定選單或右側面板輸入您的 Gemini API 金鑰，以啟動近乎 100% 辨識率的雲端 AI 引擎。",
+    getKeyLink: "獲取免費金鑰 (Google AI Studio)",
+    keyNeeded: "⚠️ 雲端 OCR 必須輸入 Gemini API 金鑰。"
   }
 };
 

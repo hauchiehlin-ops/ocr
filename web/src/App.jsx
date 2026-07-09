@@ -2,7 +2,6 @@ import { useState, useRef } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import { fixText, translateText, extractEntities } from './utils/llm';
 import { getTranslation } from './utils/i18n';
-import { jsPDF } from 'jspdf';
 import './index.css';
 
 function App() {
@@ -26,6 +25,27 @@ function App() {
   const [ocrLanguage, setOcrLanguage] = useState('auto');
   const [uiLanguage, setUiLanguage] = useState('繁體中文');
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
+
+  // OCR Engine (local Tesseract vs cloud Gemini)
+  const [ocrEngine, setOcrEngine] = useState(() => localStorage.getItem('ocr_engine') || 'local');
+  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+
+  const handleOcrEngineChange = (engine) => {
+    setOcrEngine(engine);
+    localStorage.setItem('ocr_engine', engine);
+  };
+
+  const handleGeminiApiKeyChange = (key) => {
+    setGeminiApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+  };
+
+  // Preset Fonts
+  const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
+  const [englishFont, setEnglishFont] = useState('Century Gothic');
+  const [forcePresetFont, setForcePresetFont] = useState(true);
+
+  const presetFontFamily = `'${englishFont}', '${chineseFont}', sans-serif`;
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
@@ -104,10 +124,17 @@ function App() {
 
   const handleApplyDefaultFontAll = () => {
      if (canvasRef.current) {
-        canvasRef.current.applyDefaultFontToAll();
+        canvasRef.current.applyDefaultFontToAll(presetFontFamily);
         if (selectedRegion) {
-          setSelectedRegion(prev => ({ ...prev, fontFamily: 'Inter' }));
+          setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
         }
+     }
+  };
+
+  const handleApplyPresetFontSelected = () => {
+     if (canvasRef.current && selectedRegion) {
+        canvasRef.current.updateRegionStyle(selectedRegion.id, { fontFamily: presetFontFamily });
+        setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
      }
   };
 
@@ -180,7 +207,7 @@ function App() {
               <div className="dropdown-menu">
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={handleInsertText}>{t('insertText')}</div>
                 <div className="dropdown-separator"></div>
-                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleApplyDefaultFontAll : null}>{t('applyFont')}</div>
+                <div className={`dropdown-item ${!imageLoaded || !selectedRegion ? 'disabled' : ''}`} onClick={imageLoaded && selectedRegion ? handleApplyPresetFontSelected : null}>{t('applyFont')}</div>
                 <div className="dropdown-separator"></div>
                 <div className={`dropdown-item ${!canUndo ? 'disabled' : ''}`} onClick={canUndo ? () => canvasRef.current?.undo() : null}>{t('undo')}</div>
                 <div className={`dropdown-item ${!canRedo ? 'disabled' : ''}`} onClick={canRedo ? () => canvasRef.current?.redo() : null}>{t('redo')}</div>
@@ -236,6 +263,21 @@ function App() {
                 <div className="dropdown-item" onClick={() => setOcrLanguage('en')}>
                   <span>English (eng)</span>
                   <span>{ocrLanguage === 'en' ? '✓' : ''}</span>
+                </div>
+
+                <div className="dropdown-separator"></div>
+
+                {/* OCR Engine Option */}
+                <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
+                  <span>{t('ocrEngine')}</span>
+                </div>
+                <div className="dropdown-item" onClick={() => handleOcrEngineChange('local')}>
+                  <span>{t('localEngine')}</span>
+                  <span>{ocrEngine === 'local' ? '✓' : ''}</span>
+                </div>
+                <div className="dropdown-item" onClick={() => handleOcrEngineChange('cloud')}>
+                  <span>{t('cloudEngine')}</span>
+                  <span>{ocrEngine === 'cloud' ? '✓' : ''}</span>
                 </div>
               </div>
             </div>
@@ -317,9 +359,14 @@ function App() {
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
             onRegionSelect={setSelectedRegion} 
             onLayersUpdate={setLayers}
-            onImageLoaded={setImageLoaded}
+            onImageLoaded={(loaded) => { setImageLoaded(loaded); if (loaded) setZoom(1); }}
             onOcrProcessing={setIsOcrProcessing}
             onHistoryStatusChange={handleHistoryStatusChange}
+            presetFontFamily={presetFontFamily}
+            forcePresetFont={forcePresetFont}
+            ocrEngine={ocrEngine}
+            geminiApiKey={geminiApiKey}
+            t={t}
           />
         </main>
 
@@ -411,13 +458,127 @@ function App() {
             </label>
           </div>
 
+          <div className="panel-subtitle">{t('ocrEngine')}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
+                style={{ flex: 1, padding: '6px 4px', fontSize: '11px' }}
+                onClick={() => handleOcrEngineChange('local')}
+              >
+                {uiLanguage === '繁體中文' ? '本地 (Tesseract)' : 'Local (Tesseract)'}
+              </button>
+              <button 
+                className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
+                style={{ flex: 1, padding: '6px 4px', fontSize: '11px' }}
+                onClick={() => handleOcrEngineChange('cloud')}
+              >
+                {uiLanguage === '繁體中文' ? '雲端 (Gemini 2.0)' : 'Cloud (Gemini 2.0)'}
+              </button>
+            </div>
+            
+            {ocrEngine === 'cloud' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', opacity: 0.8 }}>{t('geminiKey')}:</span>
+                <input 
+                  type="password"
+                  value={geminiApiKey}
+                  onChange={(e) => handleGeminiApiKeyChange(e.target.value)}
+                  placeholder="AI_zaSy..."
+                  style={{
+                    background: '#111111',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '4px',
+                    padding: '6px 8px',
+                    fontSize: '12px',
+                    width: '100%'
+                  }}
+                />
+                <a 
+                  href="https://aistudio.google.com/" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  style={{ fontSize: '11px', color: '#60CDFF', textDecoration: 'underline', marginTop: '2px', display: 'inline-block' }}
+                >
+                  {t('getKeyLink')}
+                </a>
+              </div>
+            )}
+          </div>
+
+          <div className="panel-subtitle">{t('presetFonts')}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('engFont')}:</span>
+              <select 
+                value={englishFont}
+                onChange={(e) => setEnglishFont(e.target.value)}
+                style={{
+                  background: '#2D2D2D',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '12px',
+                  width: '180px'
+                }}
+              >
+                <option value="Century Gothic">Century Gothic</option>
+                <option value="Arial">Arial</option>
+                <option value="Segoe UI">Segoe UI</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Times New Roman">Times New Roman</option>
+              </select>
+            </div>
+            
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('zhFont')}:</span>
+              <select 
+                value={chineseFont}
+                onChange={(e) => setChineseFont(e.target.value)}
+                style={{
+                  background: '#2D2D2D',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '12px',
+                  width: '180px'
+                }}
+              >
+                <option value="Microsoft JhengHei">微軟正黑體 (JhengHei)</option>
+                <option value="PingFang TC">蘋方 (PingFang TC)</option>
+                <option value="DFKai-SB">標楷體 (DFKai-SB)</option>
+                <option value="PMingLiU">新細明體 (PMingLiU)</option>
+                <option value="sans-serif">通用無襯線字 (Sans-serif)</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <input 
+                type="checkbox" 
+                id="forcePresetFontCheckbox"
+                checked={forcePresetFont}
+                onChange={(e) => setForcePresetFont(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              <label 
+                htmlFor="forcePresetFontCheckbox" 
+                style={{ fontSize: '11px', opacity: 0.8, cursor: 'pointer', userSelect: 'none' }}
+              >
+                {t('forceFont')}
+              </label>
+            </div>
+          </div>
+
           <button 
             className="btn btn-secondary" 
             style={{ width: '100%', marginBottom: '16px' }}
             disabled={!imageLoaded}
             onClick={handleApplyDefaultFontAll}
           >
-            {t('applyFontAll')}
+            {t('applyFontAllPreset')}
           </button>
 
           <h2 className="panel-title" style={{marginTop: '24px'}}>{t('aiOps')}</h2>

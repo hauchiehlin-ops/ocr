@@ -2,6 +2,7 @@ import { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 're
 import * as fabric from 'fabric';
 import Tesseract from 'tesseract.js';
 import { jsPDF } from 'jspdf';
+import { runGeminiOcr, runGeminiRegionalOcr } from '../utils/geminiOcr';
 
 // Typo correction dictionary from WPF project to achieve 99%+ accuracy for target mindmap
 const ocrCorrectionDict = {
@@ -69,7 +70,12 @@ const OcrCanvas = forwardRef(({
   onRegionalOcrComplete,
   onHistoryStatusChange,
   ocrLanguage = 'auto',
-  onWorkerStatusChange
+  onWorkerStatusChange,
+  presetFontFamily = 'Inter',
+  forcePresetFont = true,
+  ocrEngine = 'local',
+  geminiApiKey = '',
+  t = (key) => key
 }, ref) => {
   const containerRef = useRef(null);
   const canvasEl = useRef(null);
@@ -77,6 +83,7 @@ const OcrCanvas = forwardRef(({
   const bgImage = useRef(null);
   const sampleCanvasRef = useRef(null);
   const tesseractWorker = useRef(null);
+  const originalDimensions = useRef({ width: 0, height: 0 });
   
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -84,6 +91,11 @@ const OcrCanvas = forwardRef(({
   const isDrawing = useRef(false);
   const startPoint = useRef({ x: 0, y: 0 });
   const activeRect = useRef(null);
+
+  const isRegionalOcrActiveRef = useRef(isRegionalOcrActive);
+  useEffect(() => {
+    isRegionalOcrActiveRef.current = isRegionalOcrActive;
+  }, [isRegionalOcrActive]);
 
   // History stack for Undo/Redo
   const history = useRef([]);
@@ -175,6 +187,43 @@ const OcrCanvas = forwardRef(({
     canvas.on('selection:created', handleSelection);
     canvas.on('selection:updated', handleSelection);
     canvas.on('selection:cleared', () => onRegionSelect(null));
+
+    canvas.on('text:changed', handleTextChanged);
+    canvas.on('text:editing:exited', handleEditingExited);
+
+    // Viewport drag-to-pan support
+    canvas.on('mouse:down', (opt) => {
+      const evt = opt.e;
+      const target = opt.target;
+      if (!isRegionalOcrActiveRef.current && (!target || target === bgImage.current)) {
+        canvas.isDragging = true;
+        canvas.selection = false;
+        canvas.lastPosX = evt.clientX || evt.touches?.[0]?.clientX;
+        canvas.lastPosY = evt.clientY || evt.touches?.[0]?.clientY;
+      }
+    });
+
+    canvas.on('mouse:move', (opt) => {
+      if (canvas.isDragging) {
+        const evt = opt.e;
+        const clientX = evt.clientX || evt.touches?.[0]?.clientX;
+        const clientY = evt.clientY || evt.touches?.[0]?.clientY;
+        const vpt = canvas.viewportTransform;
+        vpt[4] += clientX - canvas.lastPosX;
+        vpt[5] += clientY - canvas.lastPosY;
+        canvas.requestRenderAll();
+        canvas.lastPosX = clientX;
+        canvas.lastPosY = clientY;
+      }
+    });
+
+    canvas.on('mouse:up', () => {
+      if (canvas.isDragging) {
+        canvas.setViewportTransform(canvas.viewportTransform);
+        canvas.isDragging = false;
+        canvas.selection = true;
+      }
+    });
 
     canvas.on('object:modified', saveHistory);
     canvas.on('object:added', (e) => {
@@ -288,31 +337,54 @@ const OcrCanvas = forwardRef(({
 
   // Bilinear Background Generator
   const createBilinearPatch = (left, top, width, height) => {
-    if (!bgImage.current) return '';
-    const scale = bgImage.current.scaleX;
+    const canvas = fabricCanvas.current;
+    if (!canvas) return null;
+    
+    // Find the scale. Fall back to bgImage.scaleX if originalDimensions is not set
+    let scale = 1;
+    if (originalDimensions.current.width) {
+      scale = canvas.width / originalDimensions.current.width;
+    } else if (bgImage.current) {
+      scale = bgImage.current.scaleX;
+    } else {
+      return null;
+    }
     
     const imgLeft = Math.round(left / scale);
     const imgTop = Math.round(top / scale);
     const imgWidth = Math.round(width / scale);
     const imgHeight = Math.round(height / scale);
     
-    const cTL = getAverageCornerColor(imgLeft, imgTop);
-    const cTR = getAverageCornerColor(imgLeft + imgWidth - 1, imgTop);
-    const cBL = getAverageCornerColor(imgLeft, imgTop + imgHeight - 1);
-    const cBR = getAverageCornerColor(imgLeft + imgWidth - 1, imgTop + imgHeight - 1);
+    const imgWidthMax = sampleCanvasRef.current ? sampleCanvasRef.current.width : imgWidth;
+    const imgHeightMax = sampleCanvasRef.current ? sampleCanvasRef.current.height : imgHeight;
+    
+    // We add padding (e.g., 3 pixels at image scale) to make the patch slightly larger
+    const padding = 3;
+    const patchLeft = Math.max(0, imgLeft - padding);
+    const patchTop = Math.max(0, imgTop - padding);
+    const patchWidth = Math.min(imgWidthMax - patchLeft, imgWidth + 2 * padding);
+    const patchHeight = Math.min(imgHeightMax - patchTop, imgHeight + 2 * padding);
+    
+    // Offset for sampling corners to avoid the text inside (4 pixels)
+    const offset = 4;
+    
+    const cTL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.max(0, imgTop - offset));
+    const cTR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgLeft + imgWidth - 1 + offset), Math.max(0, imgTop - offset));
+    const cBL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.min(imgHeightMax - 1, imgTop + imgHeight - 1 + offset));
+    const cBR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgLeft + imgWidth - 1 + offset), Math.min(imgHeightMax - 1, imgTop + imgHeight - 1 + offset));
     
     const patchCanvas = document.createElement('canvas');
-    patchCanvas.width = imgWidth;
-    patchCanvas.height = imgHeight;
+    patchCanvas.width = patchWidth;
+    patchCanvas.height = patchHeight;
     const ctx = patchCanvas.getContext('2d');
-    const imgData = ctx.createImageData(imgWidth, imgHeight);
+    const imgData = ctx.createImageData(patchWidth, patchHeight);
     const data = imgData.data;
     
-    for (let y = 0; y < imgHeight; y++) {
-      for (let x = 0; x < imgWidth; x++) {
-        const index = (y * imgWidth + x) * 4;
-        const tx = imgWidth > 1 ? x / (imgWidth - 1) : 0;
-        const ty = imgHeight > 1 ? y / (imgHeight - 1) : 0;
+    for (let y = 0; y < patchHeight; y++) {
+      for (let x = 0; x < patchWidth; x++) {
+        const index = (y * patchWidth + x) * 4;
+        const tx = patchWidth > 1 ? x / (patchWidth - 1) : 0;
+        const ty = patchHeight > 1 ? y / (patchHeight - 1) : 0;
         
         const rTop = cTL.r * (1 - tx) + cTR.r * tx;
         const gTop = cTL.g * (1 - tx) + cTR.g * tx;
@@ -333,23 +405,30 @@ const OcrCanvas = forwardRef(({
       }
     }
     ctx.putImageData(imgData, 0, 0);
-    return patchCanvas.toDataURL();
+    return {
+      dataUrl: patchCanvas.toDataURL(),
+      patchLeft: patchLeft * scale,
+      patchTop: patchTop * scale,
+      patchWidth: patchWidth * scale,
+      patchHeight: patchHeight * scale
+    };
   };
 
   const addCoverPatch = async (textbox) => {
-    const patchDataUrl = createBilinearPatch(
+    const patchInfo = createBilinearPatch(
       textbox.originalLeft, 
       textbox.originalTop, 
       textbox.originalWidth, 
       textbox.originalHeight
     );
+    if (!patchInfo) return;
     
-    const patchImg = await fabric.FabricImage.fromURL(patchDataUrl);
+    const patchImg = await fabric.FabricImage.fromURL(patchInfo.dataUrl);
     patchImg.set({
-      left: textbox.originalLeft,
-      top: textbox.originalTop,
-      width: textbox.originalWidth,
-      height: textbox.originalHeight,
+      left: patchInfo.patchLeft,
+      top: patchInfo.patchTop,
+      width: patchInfo.patchWidth,
+      height: patchInfo.patchHeight,
       selectable: false,
       evented: false,
       isPatch: true
@@ -429,7 +508,8 @@ const OcrCanvas = forwardRef(({
   };
 
   const runRegionalOcr = async (left, top, width, height) => {
-    if (!bgImage.current || !fabricCanvas.current || !tesseractWorker.current) return;
+    if (!bgImage.current || !fabricCanvas.current) return;
+    if (ocrEngine === 'local' && !tesseractWorker.current) return;
     
     const scale = bgImage.current.scaleX;
     const imgLeft = left / scale;
@@ -444,47 +524,89 @@ const OcrCanvas = forwardRef(({
 
     try {
       ctx.drawImage(bgImage.current.getElement(), imgLeft, imgTop, imgWidth, imgHeight, 0, 0, imgWidth, imgHeight);
-      const dataUrl = cropCanvas.toDataURL();
-
+      
       if (onOcrProcessing) onOcrProcessing(true);
 
-      // CRITICAL: Must specify { blocks: true } in recognize options in Tesseract v5+
-      const result = await tesseractWorker.current.recognize(dataUrl, {}, { blocks: true });
       const canvas = fabricCanvas.current;
-
       isHistoryDisabled.current = true;
+      const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+      const blocks = [];
 
-      const lines = getLinesFromPage(result.data);
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const rawText = line.text.trim();
-        if (!rawText) continue;
+      if (ocrEngine === 'cloud') {
+        if (!geminiApiKey) {
+          throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
+        }
+        
+        const cropDataUrl = cropCanvas.toDataURL();
+        const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey);
 
-        const correctedText = correctOcrText(rawText);
+        if (textResult) {
+          const linesCount = textResult.split('\n').filter(l => l.trim() !== '').length || 1;
+          const calculatedFontSize = Math.max(12, height / linesCount);
 
-        const textboxLeft = left + line.bbox.x0 * scale;
-        const textboxTop = top + line.bbox.y0 * scale;
-        const textboxWidth = (line.bbox.x1 - line.bbox.x0) * scale;
-        const textboxHeight = (line.bbox.y1 - line.bbox.y0) * scale || 16;
+          blocks.push({
+            text: textResult,
+            left: left,
+            top: top,
+            width: width,
+            height: calculatedFontSize,
+            id: `layer_${Date.now()}_0`
+          });
+        }
+      } else {
+        // Apply preprocessing on the cropped area to improve accuracy
+        const preprocessCropCanvas = document.createElement('canvas');
+        preprocessCropCanvas.width = imgWidth;
+        preprocessCropCanvas.height = imgHeight;
+        const preprocessCropCtx = preprocessCropCanvas.getContext('2d');
+        preprocessCropCtx.filter = 'grayscale(100%) contrast(150%)';
+        preprocessCropCtx.drawImage(cropCanvas, 0, 0);
 
-        const text = new fabric.Textbox(correctedText, {
-          left: textboxLeft,
-          top: textboxTop,
-          width: textboxWidth,
-          fontSize: textboxHeight,
+        const result = await tesseractWorker.current.recognize(preprocessCropCanvas, {}, { blocks: true });
+        const lines = getLinesFromPage(result.data);
+
+        lines.forEach((line, index) => {
+          const rawText = line.text.trim();
+          if (!rawText) return;
+
+          const correctedText = correctOcrText(rawText);
+
+          const textboxLeft = left + line.bbox.x0 * scale;
+          const textboxTop = top + line.bbox.y0 * scale;
+          const textboxWidth = (line.bbox.x1 - line.bbox.x0) * scale;
+          const textboxHeight = (line.bbox.y1 - line.bbox.y0) * scale || 16;
+
+          blocks.push({
+            text: correctedText,
+            left: textboxLeft,
+            top: textboxTop,
+            width: textboxWidth,
+            height: textboxHeight,
+            id: `layer_${Date.now()}_${index}`
+          });
+        });
+      }
+
+      for (let i = 0; i < blocks.length; i++) {
+        const block = blocks[i];
+        const text = new fabric.Textbox(block.text, {
+          left: block.left,
+          top: block.top,
+          width: block.width,
+          fontSize: block.height,
           fill: '#000000',
           backgroundColor: 'transparent',
-          id: `layer_${Date.now()}_${i}`,
-          fontFamily: 'Inter',
+          id: block.id,
+          fontFamily: fontToUse,
           padding: 4,
           cornerColor: '#60CDFF',
           borderColor: '#60CDFF',
           transparentCorners: false,
 
-          originalLeft: textboxLeft,
-          originalTop: textboxTop,
-          originalWidth: textboxWidth,
-          originalHeight: textboxHeight
+          originalLeft: block.left,
+          originalTop: block.top,
+          originalWidth: block.width,
+          originalHeight: block.height
         });
 
         await addCoverPatch(text);
@@ -497,7 +619,7 @@ const OcrCanvas = forwardRef(({
       syncLayers();
     } catch (e) {
       console.error("Regional OCR Error:", e);
-      alert("Regional OCR failed.");
+      alert("Regional OCR failed: " + e.message);
     } finally {
       if (onOcrProcessing) onOcrProcessing(false);
     }
@@ -533,6 +655,8 @@ const OcrCanvas = forwardRef(({
 
     isHistoryDisabled.current = true;
 
+    const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
       const text = new fabric.Textbox(block.text, {
@@ -543,7 +667,7 @@ const OcrCanvas = forwardRef(({
         fill: '#000000',
         backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
-        fontFamily: 'Inter',
+        fontFamily: fontToUse,
         padding: 4,
         cornerColor: '#60CDFF',
         borderColor: '#60CDFF',
@@ -565,6 +689,25 @@ const OcrCanvas = forwardRef(({
     syncLayers();
   };
 
+  const handleTextChanged = (e) => {
+    const activeObject = e.target;
+    if (activeObject && activeObject.type === 'textbox') {
+      onRegionSelect({
+        id: activeObject.id,
+        text: activeObject.text,
+        isBold: activeObject.fontWeight === 'bold',
+        isItalic: activeObject.fontStyle === 'italic',
+        fill: activeObject.fill,
+        fontFamily: activeObject.fontFamily
+      });
+      syncLayers();
+    }
+  };
+
+  const handleEditingExited = () => {
+    saveHistory();
+  };
+
   const handleSelection = (e) => {
     const activeObject = e.selected?.[0];
     if (activeObject && activeObject.type === 'textbox') {
@@ -573,7 +716,8 @@ const OcrCanvas = forwardRef(({
         text: activeObject.text,
         isBold: activeObject.fontWeight === 'bold',
         isItalic: activeObject.fontStyle === 'italic',
-        fill: activeObject.fill
+        fill: activeObject.fill,
+        fontFamily: activeObject.fontFamily
       });
     }
   };
@@ -618,13 +762,14 @@ const OcrCanvas = forwardRef(({
         canvas.renderAll();
       }
     },
-    applyDefaultFontToAll: () => {
+    applyDefaultFontToAll: (customFontStack) => {
       const canvas = fabricCanvas.current;
       if (!canvas) return;
+      const fontToUse = customFontStack || 'Inter';
       isHistoryDisabled.current = true;
       canvas.getObjects().forEach(obj => {
         if (obj.type === 'textbox') {
-          obj.set({ fontFamily: 'Inter' });
+          obj.set({ fontFamily: fontToUse });
         }
       });
       isHistoryDisabled.current = false;
@@ -679,6 +824,7 @@ const OcrCanvas = forwardRef(({
       canvas.clear();
       bgImage.current = null;
       sampleCanvasRef.current = null;
+      originalDimensions.current = { width: 0, height: 0 };
       setImageLoaded(false);
       if (onImageLoaded) onImageLoaded(false);
       if (onLayersUpdate) onLayersUpdate([]);
@@ -701,6 +847,8 @@ const OcrCanvas = forwardRef(({
       const textboxWidth = 100;
       const textboxHeight = 24;
 
+      const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+
       const text = new fabric.Textbox("New Text", {
         left: textboxLeft,
         top: textboxTop,
@@ -709,7 +857,7 @@ const OcrCanvas = forwardRef(({
         fill: '#000000',
         backgroundColor: 'transparent',
         id: `layer_${Date.now()}`,
-        fontFamily: 'Inter',
+        fontFamily: fontToUse,
         padding: 4,
         cornerColor: '#60CDFF',
         borderColor: '#60CDFF',
@@ -721,7 +869,6 @@ const OcrCanvas = forwardRef(({
         originalHeight: textboxHeight
       });
       
-      addCoverPatch(text);
       canvas.add(text);
       canvas.setActiveObject(text);
       isHistoryDisabled.current = false;
@@ -730,9 +877,12 @@ const OcrCanvas = forwardRef(({
     },
     exportImage: () => {
       const canvas = fabricCanvas.current;
-      if (!canvas || !bgImage.current) return;
+      if (!canvas || !originalDimensions.current.width) return;
 
-      const scale = bgImage.current.scaleX;
+      canvas.discardActiveObject();
+      canvas.renderAll();
+
+      const scale = canvas.width / originalDimensions.current.width;
       // Get data URL at original image resolution using multiplier
       const dataUrl = canvas.toDataURL({
         format: 'png',
@@ -748,9 +898,12 @@ const OcrCanvas = forwardRef(({
     },
     exportPDF: () => {
       const canvas = fabricCanvas.current;
-      if (!canvas || !bgImage.current) return;
+      if (!canvas || !originalDimensions.current.width) return;
 
-      const scale = bgImage.current.scaleX;
+      canvas.discardActiveObject();
+      canvas.renderAll();
+
+      const scale = canvas.width / originalDimensions.current.width;
       // Export full resolution image
       const dataUrl = canvas.toDataURL({
         format: 'jpeg',
@@ -758,8 +911,8 @@ const OcrCanvas = forwardRef(({
         multiplier: 1 / scale
       });
 
-      const origWidth = bgImage.current.width;
-      const origHeight = bgImage.current.height;
+      const origWidth = originalDimensions.current.width;
+      const origHeight = originalDimensions.current.height;
 
       const pdf = new jsPDF({
         orientation: origWidth > origHeight ? "landscape" : "portrait",
@@ -823,48 +976,89 @@ const OcrCanvas = forwardRef(({
         canvas.renderAll();
         
         const imgElement = img.getElement();
+        const origWidth = imgElement.naturalWidth || imgElement.width || img.width;
+        const origHeight = imgElement.naturalHeight || imgElement.height || img.height;
+        originalDimensions.current = { width: origWidth, height: origHeight };
+
         const sampleCanvas = document.createElement('canvas');
-        sampleCanvas.width = imgElement.naturalWidth || imgElement.width;
-        sampleCanvas.height = imgElement.naturalHeight || imgElement.height;
+        sampleCanvas.width = origWidth;
+        sampleCanvas.height = origHeight;
         const sampleCtx = sampleCanvas.getContext('2d');
         sampleCtx.drawImage(imgElement, 0, 0);
         sampleCanvasRef.current = sampleCanvas;
 
+        // Apply preprocessing using an off-screen canvas
+        const preprocessCanvas = document.createElement('canvas');
+        preprocessCanvas.width = origWidth;
+        preprocessCanvas.height = origHeight;
+        const preprocessCtx = preprocessCanvas.getContext('2d');
+        preprocessCtx.filter = 'grayscale(100%) contrast(150%)';
+        preprocessCtx.drawImage(imgElement, 0, 0);
+
         history.current = [];
         historyIndex.current = -1;
 
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
         setImageLoaded(true);
         if (onImageLoaded) onImageLoaded(true);
 
         if (onOcrProcessing) onOcrProcessing(true);
 
-        // Run full Tesseract OCR on base64 data URL
-        const worker = tesseractWorker.current;
-        if (!worker) throw new Error("OCR Engine is not initialized yet.");
-        
-        // CRITICAL: Must specify { blocks: true } in recognize options in Tesseract v5+
-        const result = await worker.recognize(data, {}, { blocks: true });
-        
-        const lines = getLinesFromPage(result.data);
         const blocks = [];
-        lines.forEach((line, index) => {
-          const rawText = line.text.trim();
-          if (!rawText) return;
-          
-          const correctedText = correctOcrText(rawText);
 
-          blocks.push({
-            id: `layer_${Date.now()}_${index}`,
-            text: correctedText,
-            confidence: line.confidence / 100,
-            bbox: {
-              x: line.bbox.x0 * scale,
-              y: line.bbox.y0 * scale,
-              w: (line.bbox.x1 - line.bbox.x0) * scale,
-              h: (line.bbox.y1 - line.bbox.y0) * scale
-            }
+        if (ocrEngine === 'cloud') {
+          if (!geminiApiKey) {
+            throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
+          }
+          
+          const geminiResult = await runGeminiOcr(data, geminiApiKey);
+          const canvasWidth = canvas.width;
+          const canvasHeight = canvas.height;
+
+          geminiResult.forEach((item, index) => {
+            const ymin = item.bbox[0];
+            const xmin = item.bbox[1];
+            const ymax = item.bbox[2];
+            const xmax = item.bbox[3];
+
+            blocks.push({
+              id: `layer_${Date.now()}_${index}`,
+              text: item.text,
+              bbox: {
+                x: (xmin / 1000) * canvasWidth,
+                y: (ymin / 1000) * canvasHeight,
+                w: ((xmax - xmin) / 1000) * canvasWidth,
+                h: ((ymax - ymin) / 1000) * canvasHeight
+              }
+            });
           });
-        });
+        } else {
+          // Run full Tesseract OCR on preprocessed canvas
+          const worker = tesseractWorker.current;
+          if (!worker) throw new Error("OCR Engine is not initialized yet.");
+          
+          const result = await worker.recognize(preprocessCanvas, {}, { blocks: true });
+          
+          const lines = getLinesFromPage(result.data);
+          lines.forEach((line, index) => {
+            const rawText = line.text.trim();
+            if (!rawText) return;
+            
+            const correctedText = correctOcrText(rawText);
+
+            blocks.push({
+              id: `layer_${Date.now()}_${index}`,
+              text: correctedText,
+              confidence: line.confidence / 100,
+              bbox: {
+                x: line.bbox.x0 * scale,
+                y: line.bbox.y0 * scale,
+                w: (line.bbox.x1 - line.bbox.x0) * scale,
+                h: (line.bbox.y1 - line.bbox.y0) * scale
+              }
+            });
+          });
+        }
 
         await renderOcrResults(blocks);
       } catch (error) {
@@ -888,11 +1082,57 @@ const OcrCanvas = forwardRef(({
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 10,
+          gap: '20px',
+          padding: '20px',
+          textAlign: 'center'
         }}>
           <label className="btn btn-primary" style={{ padding: '12px 24px', fontSize: '1rem', cursor: 'pointer' }}>
             Open Image (Local)
             <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
           </label>
+
+          {ocrEngine === 'cloud' && (
+            <div style={{
+              maxWidth: '420px',
+              padding: '16px',
+              background: !geminiApiKey ? 'rgba(239, 68, 68, 0.1)' : 'rgba(96, 205, 255, 0.1)',
+              border: !geminiApiKey ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid rgba(96, 205, 255, 0.3)',
+              borderRadius: '8px',
+              fontSize: '13px',
+              color: !geminiApiKey ? '#FF6B6B' : '#60CDFF',
+              lineHeight: '1.5',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)'
+            }}>
+              {!geminiApiKey ? (
+                <>
+                  <div style={{ fontWeight: 'bold', marginBottom: '6px', fontSize: '14px' }}>{t('keyNeeded')}</div>
+                  <p style={{ opacity: 0.9, fontSize: '12px', marginBottom: '10px' }}>
+                    {t('keyRequiredPrompt')}
+                  </p>
+                </>
+              ) : (
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#4ADE80' }}>✓ 雲端 AI 辨識引擎已就緒</div>
+              )}
+              <a 
+                href="https://aistudio.google.com/" 
+                target="_blank" 
+                rel="noreferrer"
+                style={{ 
+                  color: '#000', 
+                  background: !geminiApiKey ? '#FF6B6B' : '#60CDFF',
+                  padding: '6px 14px', 
+                  borderRadius: '4px', 
+                  textDecoration: 'none', 
+                  display: 'inline-block',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  transition: 'background 0.2s'
+                }}
+              >
+                {t('getKeyLink')}
+              </a>
+            </div>
+          )}
         </div>
       )}
       
