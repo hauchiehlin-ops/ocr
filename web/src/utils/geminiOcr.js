@@ -219,9 +219,10 @@ export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelN
 // ---------------------------------------------------------------------------
 
 /**
- * Splits the image into `tileCount` horizontal strips, processes each one
- * through the rate-limited queue, and merges the results with corrected
- * bounding-box coordinates mapped back to the original full-image space.
+ * Splits the image into a 2x2 overlapping grid of quadrants (60% width/height each, 20% overlap).
+ * Each quadrant is processed sequentially through the rate-limited queue at high resolution,
+ * preventing downscaling. Bounding box coordinates are mapped back to original space,
+ * and duplicate blocks in overlapping zones are merged using Non-Maximum Suppression (NMS).
  */
 export async function runGeminiOcrTiled(
   base64DataUrl, apiKey, onStatusChange, tileCount = 3, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com'
@@ -229,73 +230,126 @@ export async function runGeminiOcrTiled(
   const img = await loadImage(base64DataUrl);
   const fullW = img.width;
   const fullH = img.height;
-  const stripH = Math.ceil(fullH / tileCount);
 
-  const allBlocks = [];
+  // 2x2 overlapping grid of quadrants
+  const tilesConfig = [
+    { name: 'Top-Left',     x: 0,                           y: 0,                           w: Math.round(fullW * 0.6), h: Math.round(fullH * 0.6) },
+    { name: 'Top-Right',    x: Math.round(fullW * 0.4),     y: 0,                           w: Math.round(fullW * 0.6), h: Math.round(fullH * 0.6) },
+    { name: 'Bottom-Left',  x: 0,                           y: Math.round(fullH * 0.4),     w: Math.round(fullW * 0.6), h: Math.round(fullH * 0.6) },
+    { name: 'Bottom-Right', x: Math.round(fullW * 0.4),     y: Math.round(fullH * 0.4),     w: Math.round(fullW * 0.6), h: Math.round(fullH * 0.6) }
+  ];
+
+  const rawBlocks = [];
   let succeeded = 0;
 
-  for (let i = 0; i < tileCount; i++) {
-    const yStart = i * stripH;
-    const h = Math.min(stripH, fullH - yStart);
-    if (h <= 0) break;
+  for (let i = 0; i < tilesConfig.length; i++) {
+    const config = tilesConfig[i];
+    const { name, x, y, w, h } = config;
+    if (w <= 0 || h <= 0) continue;
 
-    // --- crop this strip ---
+    // Crop the quadrant canvas
     const tile = document.createElement('canvas');
-    tile.width = fullW;
+    tile.width = w;
     tile.height = h;
-    tile.getContext('2d').drawImage(img, 0, yStart, fullW, h, 0, 0, fullW, h);
+    tile.getContext('2d').drawImage(img, x, y, w, h, 0, 0, w, h);
     const tileUrl = tile.toDataURL('image/png');
     const tm = tileUrl.match(/^data:([^;]+);base64,(.+)$/);
 
     try {
       if (onStatusChange) {
-        onStatusChange(`📄 Tile ${i + 1}/${tileCount}: Queuing…`);
+        onStatusChange(`📄 Quadrant ${i + 1}/4 (${name}): Queuing…`);
       }
 
       const blocks = await geminiQueue.enqueue(async () => {
         if (onStatusChange) {
-          onStatusChange(`📄 Tile ${i + 1}/${tileCount}: Running Gemini AI OCR…`);
+          onStatusChange(`📄 Quadrant ${i + 1}/4 (${name}): Running Gemini AI OCR…`);
         }
         const raw = await callGemini(tm[2], tm[1], OCR_PROMPT, apiKey, true, modelName, apiUrl, onStatusChange);
         return parseOcrJson(raw);
       }, (status) => {
-        if (onStatusChange) onStatusChange(`📄 Tile ${i + 1}/${tileCount}: ${status}`);
+        if (onStatusChange) onStatusChange(`📄 Quadrant ${i + 1}/4 (${name}): ${status}`);
       });
 
-      // --- remap coordinates from tile space → full-image space ---
+      // Remap coordinates from quadrant space back to original full image space
       for (const block of blocks) {
         const [ymin, xmin, ymax, xmax] = block.bbox;
-        const yminPx = (ymin / 1000) * h + yStart;
-        const ymaxPx = (ymax / 1000) * h + yStart;
-        block.bbox = [
-          Math.round((yminPx / fullH) * 1000),
-          xmin,                                   // x stays the same
-          Math.round((ymaxPx / fullH) * 1000),
-          xmax,
-        ];
+        
+        // Bbox coordinates on quadrant in absolute pixels
+        const yminPx = (ymin / 1000) * h + y;
+        const xminPx = (xmin / 1000) * w + x;
+        const ymaxPx = (ymax / 1000) * h + y;
+        const xmaxPx = (xmax / 1000) * w + x;
+
+        // Convert back to original image normalized coordinates [0, 1000]
+        const yminNorm = Math.round((yminPx / fullH) * 1000);
+        const xminNorm = Math.round((xminPx / fullW) * 1000);
+        const ymaxNorm = Math.round((ymaxPx / fullH) * 1000);
+        const xmaxNorm = Math.round((xmaxPx / fullW) * 1000);
+
+        rawBlocks.push({
+          text: block.text,
+          bbox: [yminNorm, xminNorm, ymaxNorm, xmaxNorm]
+        });
       }
 
-      allBlocks.push(...blocks);
       succeeded++;
-
       if (onStatusChange) {
-        onStatusChange(`✅ Tile ${i + 1}/${tileCount} done (${blocks.length} blocks)`);
+        onStatusChange(`✅ Quadrant ${i + 1}/4 (${name}) done (${blocks.length} blocks)`);
       }
     } catch (err) {
-      console.error(`Tile ${i + 1}/${tileCount} failed:`, err);
+      console.error(`Quadrant ${i + 1}/4 (${name}) failed:`, err);
       if (onStatusChange) {
-        onStatusChange(`⚠️ Tile ${i + 1}/${tileCount} failed: ${err.message}. Continuing…`);
+        onStatusChange(`⚠️ Quadrant ${i + 1}/4 (${name}) failed: ${err.message}. Continuing…`);
       }
     }
   }
 
   if (succeeded === 0) {
     throw new Error(
-      'All tiles failed — your daily API quota may be exhausted or model is restricted. Please wait or try choosing a fallback model (e.g. Gemini 1.5 Flash).'
+      'All quadrants failed — your daily API quota may be exhausted or model is restricted. Please wait or try choosing a fallback model (e.g. Gemini 1.5 Flash).'
     );
   }
 
-  return allBlocks;
+  // Perform Non-Maximum Suppression (NMS) / Bounding Box Merge to deduplicate overlapping results
+  // Sort blocks by text length descending so we prioritize preserving longer, more complete strings
+  rawBlocks.sort((a, b) => b.text.length - a.text.length);
+  const mergedBlocks = [];
+
+  for (const block of rawBlocks) {
+    let isDuplicate = false;
+    const [yminA, xminA, ymaxA, xmaxA] = block.bbox;
+    const areaA = (xmaxA - xminA) * (ymaxA - yminA);
+
+    for (const existing of mergedBlocks) {
+      const [yminB, xminB, ymaxB, xmaxB] = existing.bbox;
+      
+      // Calculate intersection bounds
+      const interX = Math.max(0, Math.min(xmaxA, xmaxB) - Math.max(xminA, xminB));
+      const interY = Math.max(0, Math.min(ymaxA, ymaxB) - Math.max(yminA, yminB));
+      const interArea = interX * interY;
+
+      if (interArea > 0) {
+        const areaB = (xmaxB - xminB) * (ymaxB - yminB);
+        const minArea = Math.min(areaA, areaB);
+        const overlap = interArea / minArea;
+
+        // If boxes overlap by more than 50%, they are considered duplicate detections of the same text
+        if (overlap > 0.50) {
+          isDuplicate = true;
+          break;
+        }
+      }
+    }
+
+    if (!isDuplicate) {
+      mergedBlocks.push({
+        text: block.text,
+        bbox: block.bbox
+      });
+    }
+  }
+
+  return mergedBlocks;
 }
 
 // ---------------------------------------------------------------------------
