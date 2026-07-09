@@ -69,7 +69,6 @@ const OcrCanvas = forwardRef(({
   isRegionalOcrActive = false,
   onRegionalOcrComplete,
   onHistoryStatusChange,
-  ocrLanguage = 'auto',
   onWorkerStatusChange,
   presetFontFamily = 'Inter',
   forcePresetFont = true,
@@ -137,9 +136,7 @@ const OcrCanvas = forwardRef(({
       }
 
       try {
-        let langCodes = ['chi_tra', 'eng'];
-        if (ocrLanguage === 'zh-Hant') langCodes = ['chi_tra'];
-        if (ocrLanguage === 'en') langCodes = ['eng'];
+        const langCodes = ['chi_tra', 'eng'];
 
         const worker = await Tesseract.createWorker(langCodes, Tesseract.OEM.DEFAULT, {
           logger: m => {
@@ -172,7 +169,7 @@ const OcrCanvas = forwardRef(({
         tesseractWorker.current.terminate();
       }
     };
-  }, [ocrLanguage]);
+  }, []);
 
   // Initialize Fabric Canvas
   useEffect(() => {
@@ -621,6 +618,7 @@ const OcrCanvas = forwardRef(({
       console.error("Regional OCR Error:", e);
       alert("Regional OCR failed: " + e.message);
     } finally {
+      isHistoryDisabled.current = false;
       if (onOcrProcessing) onOcrProcessing(false);
       if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
     }
@@ -788,7 +786,8 @@ const OcrCanvas = forwardRef(({
       isHistoryDisabled.current = true;
       historyIndex.current--;
       const state = history.current[historyIndex.current];
-      canvas.loadFromJSON(state).then(() => {
+      canvas.loadFromJSON(JSON.parse(state)).then(() => {
+        bgImage.current = canvas.backgroundImage;
         canvas.renderAll();
         isHistoryDisabled.current = false;
         if (onHistoryStatusChange) {
@@ -807,7 +806,8 @@ const OcrCanvas = forwardRef(({
       isHistoryDisabled.current = true;
       historyIndex.current++;
       const state = history.current[historyIndex.current];
-      canvas.loadFromJSON(state).then(() => {
+      canvas.loadFromJSON(JSON.parse(state)).then(() => {
+        bgImage.current = canvas.backgroundImage;
         canvas.renderAll();
         isHistoryDisabled.current = false;
         if (onHistoryStatusChange) {
@@ -1078,7 +1078,7 @@ const OcrCanvas = forwardRef(({
   };
 
   return (
-    <div ref={containerRef} className="canvas-container">
+    <div ref={containerRef} className="ocr-canvas-wrapper">
       {!imageLoaded && (
         <div style={{
           position: 'absolute',

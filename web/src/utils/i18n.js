@@ -18,7 +18,7 @@ const translations = {
     showLeft: "Show Left Panel",
     showRight: "Show Right Panel",
     uiLang: "UI Language",
-    ocrLang: "OCR Language",
+
     zoom: "Zoom",
     docStatus: "Document Status",
     noImage: "No Image Loaded",
@@ -77,7 +77,7 @@ const translations = {
     showLeft: "顯示左側面板",
     showRight: "顯示右側面板",
     uiLang: "UI 介面語言",
-    ocrLang: "OCR 辨識語言",
+
     zoom: "縮放",
     docStatus: "文件狀態",
     noImage: "尚未載入圖片",

@@ -21,8 +21,7 @@ function App() {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
 
-  // Settings States (Default to English UI and Auto OCR to match native settings)
-  const [ocrLanguage, setOcrLanguage] = useState('auto');
+  // Settings States (Default to English UI to match native settings)
   const [uiLanguage, setUiLanguage] = useState('繁體中文');
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
 
@@ -248,25 +247,6 @@ function App() {
 
                 <div className="dropdown-separator"></div>
 
-                {/* OCR Language Option */}
-                <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
-                  <span>{t('ocrLang')}</span>
-                </div>
-                <div className="dropdown-item" onClick={() => setOcrLanguage('auto')}>
-                  <span>Auto (繁中 + English)</span>
-                  <span>{ocrLanguage === 'auto' ? '✓' : ''}</span>
-                </div>
-                <div className="dropdown-item" onClick={() => setOcrLanguage('zh-Hant')}>
-                  <span>繁體中文 (chi_tra)</span>
-                  <span>{ocrLanguage === 'zh-Hant' ? '✓' : ''}</span>
-                </div>
-                <div className="dropdown-item" onClick={() => setOcrLanguage('en')}>
-                  <span>English (eng)</span>
-                  <span>{ocrLanguage === 'en' ? '✓' : ''}</span>
-                </div>
-
-                <div className="dropdown-separator"></div>
-
                 {/* OCR Engine Option */}
                 <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
                   <span>{t('ocrEngine')}</span>
@@ -354,7 +334,7 @@ function App() {
             ref={canvasRef} 
             zoomLevel={zoom}
             isRegionalOcrActive={isRegionalOcrActive}
-            ocrLanguage={ocrLanguage}
+
             onWorkerStatusChange={setWorkerStatus}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
             onRegionSelect={setSelectedRegion} 
