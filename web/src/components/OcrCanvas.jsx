@@ -66,13 +66,16 @@ const OcrCanvas = forwardRef(({
   zoomLevel = 1,
   isRegionalOcrActive = false,
   onRegionalOcrComplete,
-  onHistoryStatusChange
+  onHistoryStatusChange,
+  ocrLanguage = 'auto',
+  onWorkerStatusChange
 }, ref) => {
   const containerRef = useRef(null);
   const canvasEl = useRef(null);
   const fabricCanvas = useRef(null);
   const bgImage = useRef(null);
   const sampleCanvasRef = useRef(null);
+  const tesseractWorker = useRef(null);
   
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -91,13 +94,11 @@ const OcrCanvas = forwardRef(({
     const canvas = fabricCanvas.current;
     if (!canvas) return;
 
-    // Serialize canvas state
     const json = JSON.stringify(canvas.toJSON([
       'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch',
       'selectable', 'evented'
     ]));
     
-    // Slice off any redo history
     history.current = history.current.slice(0, historyIndex.current + 1);
     history.current.push(json);
     historyIndex.current = history.current.length - 1;
@@ -110,6 +111,56 @@ const OcrCanvas = forwardRef(({
     }
     syncLayers();
   };
+
+  // Persistent Tesseract Worker initialization linked to OCR language settings
+  useEffect(() => {
+    let active = true;
+    const initTesseract = async () => {
+      if (onWorkerStatusChange) onWorkerStatusChange('Initializing OCR Engine...');
+      
+      // Terminate any existing worker
+      if (tesseractWorker.current) {
+        await tesseractWorker.current.terminate();
+        tesseractWorker.current = null;
+      }
+
+      try {
+        let langCodes = ['chi_tra', 'eng'];
+        if (ocrLanguage === 'zh-Hant') langCodes = ['chi_tra'];
+        if (ocrLanguage === 'en') langCodes = ['eng'];
+
+        const worker = await Tesseract.createWorker(langCodes, Tesseract.OEM.DEFAULT, {
+          logger: m => {
+            console.log("Tesseract loading:", m);
+            if (active && onWorkerStatusChange) {
+              if (m.status === 'recognizing text') {
+                onWorkerStatusChange(`OCR Running: ${Math.round(m.progress * 100)}%`);
+              } else {
+                onWorkerStatusChange(m.status);
+              }
+            }
+          }
+        });
+
+        if (active) {
+          tesseractWorker.current = worker;
+          if (onWorkerStatusChange) onWorkerStatusChange('OCR Engine Ready');
+        }
+      } catch (e) {
+        console.error("Tesseract Worker load failed:", e);
+        if (active && onWorkerStatusChange) onWorkerStatusChange('OCR Engine Error');
+      }
+    };
+
+    initTesseract();
+
+    return () => {
+      active = false;
+      if (tesseractWorker.current) {
+        tesseractWorker.current.terminate();
+      }
+    };
+  }, [ocrLanguage]);
 
   // Initialize Fabric Canvas
   useEffect(() => {
@@ -127,7 +178,6 @@ const OcrCanvas = forwardRef(({
 
     canvas.on('object:modified', saveHistory);
     canvas.on('object:added', (e) => {
-      // Avoid saving history for background image initialization
       if (e.target && e.target !== bgImage.current && !e.target.isPatch) {
         saveHistory();
       }
@@ -138,7 +188,6 @@ const OcrCanvas = forwardRef(({
       }
     });
 
-    // Dynamic resizing observer
     const resizeObserver = new ResizeObserver((entries) => {
       for (let entry of entries) {
         if (!bgImage.current && fabricCanvas.current) {
@@ -169,7 +218,6 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     if (isRegionalOcrActive) {
-      // Disable selection and enable manual drawing mode
       canvas.forEachObject(obj => {
          obj.selectable = false;
          obj.evented = false;
@@ -178,12 +226,10 @@ const OcrCanvas = forwardRef(({
       canvas.discardActiveObject();
       canvas.renderAll();
 
-      // Bind drawing events
       canvas.on('mouse:down', handleMouseDown);
       canvas.on('mouse:move', handleMouseMove);
       canvas.on('mouse:up', handleMouseUp);
     } else {
-      // Re-enable interactive selection
       canvas.off('mouse:down', handleMouseDown);
       canvas.off('mouse:move', handleMouseMove);
       canvas.off('mouse:up', handleMouseUp);
@@ -250,13 +296,11 @@ const OcrCanvas = forwardRef(({
     const imgWidth = Math.round(width / scale);
     const imgHeight = Math.round(height / scale);
     
-    // Sample four corners
     const cTL = getAverageCornerColor(imgLeft, imgTop);
     const cTR = getAverageCornerColor(imgLeft + imgWidth - 1, imgTop);
     const cBL = getAverageCornerColor(imgLeft, imgTop + imgHeight - 1);
     const cBR = getAverageCornerColor(imgLeft + imgWidth - 1, imgTop + imgHeight - 1);
     
-    // Create bilinear gradient
     const patchCanvas = document.createElement('canvas');
     patchCanvas.width = imgWidth;
     patchCanvas.height = imgHeight;
@@ -385,11 +429,9 @@ const OcrCanvas = forwardRef(({
   };
 
   const runRegionalOcr = async (left, top, width, height) => {
-    if (!bgImage.current || !fabricCanvas.current) return;
+    if (!bgImage.current || !fabricCanvas.current || !tesseractWorker.current) return;
     
-    const element = bgImage.current.getElement();
     const scale = bgImage.current.scaleX;
-
     const imgLeft = left / scale;
     const imgTop = top / scale;
     const imgWidth = width / scale;
@@ -401,12 +443,12 @@ const OcrCanvas = forwardRef(({
     const ctx = cropCanvas.getContext('2d');
 
     try {
-      ctx.drawImage(element, imgLeft, imgTop, imgWidth, imgHeight, 0, 0, imgWidth, imgHeight);
+      ctx.drawImage(bgImage.current.getElement(), imgLeft, imgTop, imgWidth, imgHeight, 0, 0, imgWidth, imgHeight);
       const dataUrl = cropCanvas.toDataURL();
 
       if (onOcrProcessing) onOcrProcessing(true);
 
-      const result = await Tesseract.recognize(dataUrl, 'chi_tra+eng');
+      const result = await tesseractWorker.current.recognize(dataUrl);
       const canvas = fabricCanvas.current;
 
       isHistoryDisabled.current = true;
@@ -417,7 +459,6 @@ const OcrCanvas = forwardRef(({
         const rawText = line.text.trim();
         if (!rawText) continue;
 
-        // Apply 99% accuracy correction dictionary
         const correctedText = correctOcrText(rawText);
 
         const textboxLeft = left + line.bbox.x0 * scale;
@@ -499,7 +540,7 @@ const OcrCanvas = forwardRef(({
         width: block.bbox.w,
         fontSize: Math.max(12, block.bbox.h),
         fill: '#000000',
-        backgroundColor: 'transparent', // Transparent background to blend with bilinear patch
+        backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
         fontFamily: 'Inter',
         padding: 4,
@@ -513,7 +554,6 @@ const OcrCanvas = forwardRef(({
         originalHeight: Math.max(12, block.bbox.h)
       });
       
-      // Auto-add seamless cover patch under textbox to hide original text
       await addCoverPatch(text);
       canvas.add(text);
     }
@@ -575,7 +615,6 @@ const OcrCanvas = forwardRef(({
         canvas.remove(activeObj);
         canvas.discardActiveObject();
         canvas.renderAll();
-        // saveHistory is called by 'object:removed' callback automatically
       }
     },
     applyDefaultFontToAll: () => {
@@ -701,7 +740,6 @@ const OcrCanvas = forwardRef(({
         const img = await fabric.FabricImage.fromURL(data);
         const canvas = fabricCanvas.current;
         
-        // Scale to fit within container
         const containerWidth = containerRef.current.clientWidth;
         const containerHeight = containerRef.current.clientHeight;
         
@@ -729,7 +767,6 @@ const OcrCanvas = forwardRef(({
         bgImage.current = img;
         canvas.renderAll();
         
-        // Initialize offline sample canvas
         const imgElement = img.getElement();
         const sampleCanvas = document.createElement('canvas');
         sampleCanvas.width = imgElement.naturalWidth || imgElement.width;
@@ -738,7 +775,6 @@ const OcrCanvas = forwardRef(({
         sampleCtx.drawImage(imgElement, 0, 0);
         sampleCanvasRef.current = sampleCanvas;
 
-        // Reset history stack
         history.current = [];
         historyIndex.current = -1;
 
@@ -747,8 +783,11 @@ const OcrCanvas = forwardRef(({
 
         if (onOcrProcessing) onOcrProcessing(true);
 
-        // Run full Tesseract OCR
-        const result = await Tesseract.recognize(file, 'chi_tra+eng');
+        // Run full Tesseract OCR on base64 data URL
+        const worker = tesseractWorker.current;
+        if (!worker) throw new Error("OCR Engine is not initialized yet.");
+        
+        const result = await worker.recognize(data);
         
         const lines = getLinesFromPage(result.data);
         const blocks = [];
@@ -756,7 +795,6 @@ const OcrCanvas = forwardRef(({
           const rawText = line.text.trim();
           if (!rawText) return;
           
-          // Apply 99% accuracy correction dictionary
           const correctedText = correctOcrText(rawText);
 
           blocks.push({

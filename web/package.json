@@ -12,6 +12,7 @@
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.84",
     "fabric": "^7.4.0",
+    "jspdf": "^4.2.1",
     "onnxruntime-web": "^1.27.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

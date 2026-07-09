@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import { fixText, translateText, extractEntities } from './utils/llm';
+import { getTranslation } from './utils/i18n';
+import { jsPDF } from 'jspdf';
 import './index.css';
 
 function App() {
@@ -20,9 +22,10 @@ function App() {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
 
-  // Settings States
+  // Settings States (Default to English UI and Auto OCR to match native settings)
   const [ocrLanguage, setOcrLanguage] = useState('auto');
   const [uiLanguage, setUiLanguage] = useState('繁體中文');
+  const [workerStatus, setWorkerStatus] = useState('Initializing...');
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
@@ -36,17 +39,17 @@ function App() {
   const handleFixText = async () => {
     if (!selectedRegion) return;
     setIsLoadingLLM(true);
-    setLlmProgress('Initializing AI Engine (first launch will download ~950MB)...');
+    setLlmProgress(uiLanguage === '繁體中文' ? '初始化 AI 引擎中 (首次載入需下載 ~950MB)...' : 'Initializing AI Engine (first launch downloads ~950MB)...');
     try {
       const fixed = await fixText(selectedRegion.text, (prog) => {
          setLlmProgress(prog);
       });
       setSelectedRegion(prev => ({ ...prev, text: fixed }));
       if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, fixed);
-      setLlmProgress('Text corrected successfully!');
+      setLlmProgress(uiLanguage === '繁體中文' ? '文字校對完成！' : 'Text corrected successfully!');
     } catch (e) {
       alert("Error fixing text: " + e.message);
-      setLlmProgress('AI operation failed.');
+      setLlmProgress(uiLanguage === '繁體中文' ? 'AI 協同處理失敗。' : 'AI operation failed.');
     } finally {
       setIsLoadingLLM(false);
     }
@@ -55,17 +58,17 @@ function App() {
   const handleTranslate = async () => {
     if (!selectedRegion) return;
     setIsLoadingLLM(true);
-    setLlmProgress('Initializing AI Engine...');
+    setLlmProgress(uiLanguage === '繁體中文' ? '初始化 AI 引擎中...' : 'Initializing AI Engine...');
     try {
       const translated = await translateText(selectedRegion.text, (prog) => {
          setLlmProgress(prog);
       });
       setSelectedRegion(prev => ({ ...prev, text: translated }));
       if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, translated);
-      setLlmProgress('Translated successfully!');
+      setLlmProgress(uiLanguage === '繁體中文' ? '翻譯完成！' : 'Translated successfully!');
     } catch (e) {
       alert("Error translating text: " + e.message);
-      setLlmProgress('AI operation failed.');
+      setLlmProgress(uiLanguage === '繁體中文' ? 'AI 協同處理失敗。' : 'AI operation failed.');
     } finally {
       setIsLoadingLLM(false);
     }
@@ -74,7 +77,7 @@ function App() {
   const handleExtractEntities = async () => {
     if (!selectedRegion) return;
     setIsLoadingLLM(true);
-    setLlmProgress('Initializing AI Engine...');
+    setLlmProgress(uiLanguage === '繁體中文' ? '初始化 AI 引擎中...' : 'Initializing AI Engine...');
     try {
       const entities = await extractEntities(selectedRegion.text, (prog) => {
          setLlmProgress(prog);
@@ -82,10 +85,10 @@ function App() {
       const combined = `【Entities】\n${entities}\n\n【Original】\n${selectedRegion.text}`;
       setSelectedRegion(prev => ({ ...prev, text: combined }));
       if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, combined);
-      setLlmProgress('Entities extracted!');
+      setLlmProgress(uiLanguage === '繁體中文' ? '實體擷取完成！' : 'Entities extracted!');
     } catch (e) {
       alert("Error extracting entities: " + e.message);
-      setLlmProgress('AI operation failed.');
+      setLlmProgress(uiLanguage === '繁體中文' ? 'AI 協同處理失敗。' : 'AI operation failed.');
     } finally {
       setIsLoadingLLM(false);
     }
@@ -128,7 +131,7 @@ function App() {
 
   const handleExportCSV = () => {
     if (layers.length === 0) {
-      alert("No layers to export.");
+      alert(uiLanguage === '繁體中文' ? "無圖層可供匯出。" : "No layers to export.");
       return;
     }
     let csv = "ID,Text\n";
@@ -142,6 +145,31 @@ function App() {
     link.click();
   };
 
+  const handleExportPDF = () => {
+    if (!imageLoaded) return;
+    const canvasElement = document.querySelector('canvas.lower-canvas');
+    if (!canvasElement) return;
+
+    const dataUrl = canvasElement.toDataURL("image/jpeg", 1.0);
+    const pdf = new jsPDF({
+      orientation: canvasElement.width > canvasElement.height ? "landscape" : "portrait",
+      unit: "px",
+      format: [canvasElement.width, canvasElement.height]
+    });
+
+    pdf.addImage(dataUrl, "JPEG", 0, 0, canvasElement.width, canvasElement.height);
+    
+    // Add OCR text layers invisibly on top of the image to make it searchable
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    // Add text slightly shifted or very small to keep PDF searchable
+    layers.forEach(layer => {
+       pdf.text(layer.text, 10, 10);
+    });
+
+    pdf.save("ocr-exported.pdf");
+  };
+
   const triggerImageUpload = () => {
      canvasRef.current?.triggerUpload();
   };
@@ -151,52 +179,55 @@ function App() {
   };
 
   const handleInsertText = () => {
-     if (!imageLoaded) return alert("Please load an image first.");
+     if (!imageLoaded) return alert(uiLanguage === '繁體中文' ? "請先載入一張圖片。" : "Please load an image first.");
      canvasRef.current?.insertText();
   };
+
+  const t = (key) => getTranslation(uiLanguage, key);
 
   return (
     <div className="app-container">
       {/* --- TitleBar & MenuBar --- */}
       <header className="header">
         <div className="header-left">
-          <h1 style={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>OCR Visual Editor Pro</h1>
+          <h1 style={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>{t('title')}</h1>
           <div className="menu-bar">
             {/* File Menu */}
             <div className="menu-container">
-              <div className="menu-item">File</div>
+              <div className="menu-item">{t('file')}</div>
               <div className="dropdown-menu">
-                <div className="dropdown-item" onClick={triggerImageUpload}>Load Image...</div>
-                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleCloseImage : null}>Close Image</div>
+                <div className="dropdown-item" onClick={triggerImageUpload}>{t('loadImage')}</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleCloseImage : null}>{t('closeImage')}</div>
                 <div className="dropdown-separator"></div>
-                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExport : null}>Save Image</div>
-                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportCSV : null}>Export to CSV</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExport : null}>{t('saveImage')}</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportCSV : null}>{t('exportCsv')}</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportPDF : null}>{t('exportPdf')}</div>
               </div>
             </div>
 
             {/* Edit Menu */}
             <div className="menu-container">
-              <div className="menu-item">Edit</div>
+              <div className="menu-item">{t('edit')}</div>
               <div className="dropdown-menu">
-                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={handleInsertText}>Insert Text</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={handleInsertText}>{t('insertText')}</div>
                 <div className="dropdown-separator"></div>
-                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleApplyDefaultFontAll : null}>Apply Default Font</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleApplyDefaultFontAll : null}>{t('applyFont')}</div>
                 <div className="dropdown-separator"></div>
-                <div className={`dropdown-item ${!canUndo ? 'disabled' : ''}`} onClick={canUndo ? () => canvasRef.current?.undo() : null}>Undo</div>
-                <div className={`dropdown-item ${!canRedo ? 'disabled' : ''}`} onClick={canRedo ? () => canvasRef.current?.redo() : null}>Redo</div>
+                <div className={`dropdown-item ${!canUndo ? 'disabled' : ''}`} onClick={canUndo ? () => canvasRef.current?.undo() : null}>{t('undo')}</div>
+                <div className={`dropdown-item ${!canRedo ? 'disabled' : ''}`} onClick={canRedo ? () => canvasRef.current?.redo() : null}>{t('redo')}</div>
               </div>
             </div>
 
             {/* View Menu */}
             <div className="menu-container">
-              <div className="menu-item">View</div>
+              <div className="menu-item">{t('view')}</div>
               <div className="dropdown-menu">
                 <div className="dropdown-item" onClick={() => setShowLeftPanel(!showLeftPanel)}>
-                  <span>Show Left Panel</span>
+                  <span>{t('showLeft')}</span>
                   <span>{showLeftPanel ? '✓' : ''}</span>
                 </div>
                 <div className="dropdown-item" onClick={() => setShowRightPanel(!showRightPanel)}>
-                  <span>Show Right Panel</span>
+                  <span>{t('showRight')}</span>
                   <span>{showRightPanel ? '✓' : ''}</span>
                 </div>
               </div>
@@ -204,16 +235,38 @@ function App() {
 
             {/* Settings Menu */}
             <div className="menu-container">
-              <div className="menu-item">Settings</div>
+              <div className="menu-item">{t('settings')}</div>
               <div className="dropdown-menu">
-                <div className="dropdown-item" style={{ cursor: 'default' }}>
-                  <span>UI Language</span>
-                  <span style={{ fontSize: '11px', opacity: 0.6 }}>繁體中文</span>
+                {/* UI Language Option */}
+                <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
+                  <span>{t('uiLang')}</span>
                 </div>
+                <div className="dropdown-item" onClick={() => setUiLanguage('繁體中文')}>
+                  <span>繁體中文</span>
+                  <span>{uiLanguage === '繁體中文' ? '✓' : ''}</span>
+                </div>
+                <div className="dropdown-item" onClick={() => setUiLanguage('English')}>
+                  <span>English</span>
+                  <span>{uiLanguage === 'English' ? '✓' : ''}</span>
+                </div>
+
                 <div className="dropdown-separator"></div>
-                <div className="dropdown-item" style={{ cursor: 'default' }}>
-                  <span>OCR Language</span>
-                  <span style={{ fontSize: '11px', opacity: 0.6 }}>Auto (zh-Hant + eng)</span>
+
+                {/* OCR Language Option */}
+                <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
+                  <span>{t('ocrLang')}</span>
+                </div>
+                <div className="dropdown-item" onClick={() => setOcrLanguage('auto')}>
+                  <span>Auto (繁中 + English)</span>
+                  <span>{ocrLanguage === 'auto' ? '✓' : ''}</span>
+                </div>
+                <div className="dropdown-item" onClick={() => setOcrLanguage('zh-Hant')}>
+                  <span>繁體中文 (chi_tra)</span>
+                  <span>{ocrLanguage === 'zh-Hant' ? '✓' : ''}</span>
+                </div>
+                <div className="dropdown-item" onClick={() => setOcrLanguage('en')}>
+                  <span>English (eng)</span>
+                  <span>{ocrLanguage === 'en' ? '✓' : ''}</span>
                 </div>
               </div>
             </div>
@@ -224,13 +277,13 @@ function App() {
           <div className="zoom-controls">
             {/* Undo/Redo Controls */}
             <button className="btn btn-secondary" style={{padding: '2px 8px', marginRight: '8px'}} disabled={!canUndo} onClick={() => canvasRef.current?.undo()}>
-              Undo
+              {t('undo')}
             </button>
             <button className="btn btn-secondary" style={{padding: '2px 8px', marginRight: '16px'}} disabled={!canRedo} onClick={() => canvasRef.current?.redo()}>
-              Redo
+              {t('redo')}
             </button>
 
-            <span>Zoom:</span>
+            <span>{t('zoom')}:</span>
             <button className="btn btn-secondary" style={{padding: '2px 8px'}} onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}>-</button>
             <span style={{width: '40px', textAlign: 'center'}}>{Math.round(zoom * 100)}%</span>
             <button className="btn btn-secondary" style={{padding: '2px 8px'}} onClick={() => setZoom(Math.min(5, zoom + 0.1))}>+</button>
@@ -247,21 +300,24 @@ function App() {
         
         {/* Left Sidebar */}
         <aside className="sidebar left-sidebar" style={{ display: showLeftPanel ? 'flex' : 'none' }}>
-          <h2 className="panel-title">Document Status</h2>
-          <div className="status-box" style={{ minHeight: '50px', display: 'flex', alignItems: 'center' }}>
+          <h2 className="panel-title">{t('docStatus')}</h2>
+          <div className="status-box" style={{ minHeight: '65px', display: 'flex', alignItems: 'center' }}>
             {isOcrProcessing ? (
               <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-                 <div style={{ color: '#60CDFF', fontWeight: 'bold', marginBottom: '4px' }}>Processing Local OCR...</div>
-                 <div style={{ fontSize: '10px', opacity: 0.6 }}>Running Tesseract.js (chi_tra+eng)</div>
+                 <div style={{ color: '#60CDFF', fontWeight: 'bold', marginBottom: '4px' }}>{t('processingOcr')}</div>
+                 <div style={{ fontSize: '11px', opacity: 0.8, color: '#60CDFF' }}>{workerStatus}</div>
               </div>
             ) : imageLoaded ? (
-              <span style={{ color: '#4ADE80', fontWeight: 'bold' }}>✓ Image Loaded & Processed</span>
+              <span style={{ color: '#4ADE80', fontWeight: 'bold' }}>{t('loaded')}</span>
             ) : (
-              <span style={{ opacity: 0.5 }}>No Image Loaded</span>
+              <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+                 <span style={{ opacity: 0.5 }}>{t('noImage')}</span>
+                 <span style={{ fontSize: '11px', opacity: 0.6, marginTop: '4px', color: '#60CDFF' }}>⚙ {workerStatus}</span>
+              </div>
             )}
           </div>
 
-          <h2 className="panel-title" style={{ marginTop: '16px' }}>Interactive Layers</h2>
+          <h2 className="panel-title" style={{ marginTop: '16px' }}>{t('layers')}</h2>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {layers.map(layer => (
               <div 
@@ -277,7 +333,7 @@ function App() {
                 </span>
               </div>
             ))}
-            {layers.length === 0 && <div style={{ opacity: 0.5, fontSize: '12px', padding: '8px' }}>No layers detected yet.</div>}
+            {layers.length === 0 && <div style={{ opacity: 0.5, fontSize: '12px', padding: '8px' }}>{t('noLayers')}</div>}
           </div>
         </aside>
 
@@ -287,6 +343,8 @@ function App() {
             ref={canvasRef} 
             zoomLevel={zoom}
             isRegionalOcrActive={isRegionalOcrActive}
+            ocrLanguage={ocrLanguage}
+            onWorkerStatusChange={setWorkerStatus}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
             onRegionSelect={setSelectedRegion} 
             onLayersUpdate={setLayers}
@@ -298,9 +356,9 @@ function App() {
 
         {/* Right Inspector */}
         <aside className="sidebar right-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
-          <h2 className="panel-title">Text Formatting</h2>
+          <h2 className="panel-title">{t('formatting')}</h2>
           
-          <div className="panel-subtitle">Edit Content</div>
+          <div className="panel-subtitle">{t('editContent')}</div>
           <textarea
             className="textarea"
             value={selectedRegion?.text || ''}
@@ -312,10 +370,10 @@ function App() {
                 canvasRef.current.updateRegionText(selectedRegion.id, newText);
               }
             }}
-            placeholder={selectedRegion ? "Edit text here..." : "Select a region first"}
+            placeholder={selectedRegion ? t('placeholderActive') : t('placeholder')}
           />
 
-          <div className="panel-subtitle">Paragraph Format</div>
+          <div className="panel-subtitle">{t('paragraph')}</div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
             <button 
               className={`btn btn-secondary ${selectedRegion?.isBold ? 'active' : ''}`} 
@@ -327,7 +385,7 @@ function App() {
                  canvasRef.current?.updateRegionStyle(selectedRegion.id, { fontWeight: isBold ? 'bold' : 'normal' });
               }}
             >
-              Bold
+              {t('bold')}
             </button>
             <button 
               className={`btn btn-secondary ${selectedRegion?.isItalic ? 'active' : ''}`} 
@@ -339,11 +397,11 @@ function App() {
                  canvasRef.current?.updateRegionStyle(selectedRegion.id, { fontStyle: isItalic ? 'italic' : 'normal' });
               }}
             >
-              Italic
+              {t('italic')}
             </button>
           </div>
 
-          <div className="panel-subtitle">Color Presets</div>
+          <div className="panel-subtitle">{t('color')}</div>
           <div className="color-presets">
             {['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'].map(color => (
               <button 
@@ -390,10 +448,10 @@ function App() {
             disabled={!imageLoaded}
             onClick={handleApplyDefaultFontAll}
           >
-            Apply Default Font to All
+            {t('applyFontAll')}
           </button>
 
-          <h2 className="panel-title" style={{marginTop: '24px'}}>AI Operations</h2>
+          <h2 className="panel-title" style={{marginTop: '24px'}}>{t('aiOps')}</h2>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
             <button 
               className="btn btn-secondary" 
@@ -401,7 +459,7 @@ function App() {
               disabled={!selectedRegion || isLoadingLLM} 
               onClick={handleFixText}
             >
-              Fix Text
+              {t('fixText')}
             </button>
             <button 
               className="btn btn-secondary" 
@@ -409,7 +467,7 @@ function App() {
               disabled={!selectedRegion || isLoadingLLM}
               onClick={handleExtractEntities}
             >
-              Extract Entities
+              {t('extract')}
             </button>
           </div>
           <button 
@@ -418,7 +476,7 @@ function App() {
             disabled={!selectedRegion || isLoadingLLM} 
             onClick={handleTranslate}
           >
-            Translate to ZH
+            {t('translate')}
           </button>
 
           {/* WebLLM Load Progress Output */}
@@ -438,7 +496,7 @@ function App() {
             </div>
           )}
           
-          <h2 className="panel-title" style={{marginTop: '24px'}}>Operations</h2>
+          <h2 className="panel-title" style={{marginTop: '24px'}}>{t('ops')}</h2>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button 
               className={`btn btn-secondary ${isRegionalOcrActive ? 'active' : ''}`} 
@@ -446,7 +504,7 @@ function App() {
               disabled={!imageLoaded}
               onClick={() => setIsRegionalOcrActive(!isRegionalOcrActive)}
             >
-              {isRegionalOcrActive ? 'Drawing Mode' : 'Regional OCR'}
+              {isRegionalOcrActive ? t('drawingMode') : t('regionalOcr')}
             </button>
             <button 
               className="btn btn-secondary" 
@@ -454,7 +512,7 @@ function App() {
               disabled={!selectedRegion}
               onClick={handleRemoveText}
             >
-              Remove Text
+              {t('removeText')}
             </button>
           </div>
         </aside>
