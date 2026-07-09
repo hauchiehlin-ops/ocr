@@ -47,7 +47,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0CE4051375DD63A733998F6E /* OCREditor.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OCREditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0CE4051375DD63A733998F6E /* OCREditor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OCREditor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1524CD6E52EA09E428D2595C /* context_corrector.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = context_corrector.cpp; sourceTree = "<group>"; };
 		1528423B2C51B72DF65FE2FD /* edge_crop.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = edge_crop.cpp; sourceTree = "<group>"; };
 		26F83801B4A4184B815812D4 /* OCRModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCRModels.swift; sourceTree = "<group>"; };
@@ -360,7 +360,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					B8C4DF0AD77DC06885FD7473 = {
-						DevelopmentTeam = 6UJ8GS752W;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -525,11 +524,15 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = OCREditor/OCREditor.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = "OCR_ENABLE_GPU=1";
-				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				HEADER_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"$(SRCROOT)/../../core/include\"",
+					"\"$(SRCROOT)/../../core/src\"",
+				);
 				INFOPLIST_FILE = OCREditor/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
@@ -612,11 +615,15 @@
 				"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]" = OCREditor/OCREditor.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 6UJ8GS752W;
 				ENABLE_PREVIEWS = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = "OCR_ENABLE_GPU=1";
-				HEADER_SEARCH_PATHS = "\"$(inherited)\" \"$(SRCROOT)/../../core/include\" \"$(SRCROOT)/../../core/src\"";
+				HEADER_SEARCH_PATHS = (
+					"\"$(inherited)\"",
+					"\"$(SRCROOT)/../../core/include\"",
+					"\"$(SRCROOT)/../../core/src\"",
+				);
 				INFOPLIST_FILE = OCREditor/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;

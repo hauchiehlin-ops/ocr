@@ -11,6 +11,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Text.Json;
 using OCREditor.Interop;
 
 namespace OCREditor
@@ -1884,8 +1885,8 @@ namespace OCREditor
             if (_ocrEngine == null || !_ocrEngine.IsReady || _originalBitmap == null) return;
 
             StatusLabel.Text = "Running Regional OCR...";
-            ProgressBar.Visibility = Visibility.Visible;
-            ProgressBar.IsIndeterminate = true;
+            OcrProgressBar.Visibility = Visibility.Visible;
+            OcrProgressBar.IsIndeterminate = true;
 
             try
             {
@@ -1942,8 +1943,8 @@ namespace OCREditor
             }
             finally
             {
-                ProgressBar.Visibility = Visibility.Hidden;
-                ProgressBar.IsIndeterminate = false;
+                OcrProgressBar.Visibility = Visibility.Hidden;
+                OcrProgressBar.IsIndeterminate = false;
                 RegionOcrToggleButton.IsChecked = false;
             }
         }
@@ -1985,8 +1986,8 @@ namespace OCREditor
             if (string.IsNullOrWhiteSpace(originalText)) return;
 
             StatusLabel.Text = "Fixing text with LLM...";
-            ProgressBar.Visibility = Visibility.Visible;
-            ProgressBar.IsIndeterminate = true;
+            OcrProgressBar.Visibility = Visibility.Visible;
+            OcrProgressBar.IsIndeterminate = true;
 
             try
             {
@@ -2017,7 +2018,7 @@ namespace OCREditor
             }
             finally
             {
-                ProgressBar.Visibility = Visibility.Collapsed;
+                OcrProgressBar.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -2033,8 +2034,8 @@ namespace OCREditor
             if (string.IsNullOrWhiteSpace(originalText)) return;
 
             StatusLabel.Text = "Extracting entities with LLM...";
-            ProgressBar.Visibility = Visibility.Visible;
-            ProgressBar.IsIndeterminate = true;
+            OcrProgressBar.Visibility = Visibility.Visible;
+            OcrProgressBar.IsIndeterminate = true;
 
             try
             {
@@ -2066,7 +2067,7 @@ namespace OCREditor
             }
             finally
             {
-                ProgressBar.Visibility = Visibility.Collapsed;
+                OcrProgressBar.Visibility = Visibility.Collapsed;
             }
         }
 
@@ -2082,8 +2083,8 @@ namespace OCREditor
             if (string.IsNullOrWhiteSpace(originalText)) return;
 
             StatusLabel.Text = "Translating text with LLM...";
-            ProgressBar.Visibility = Visibility.Visible;
-            ProgressBar.IsIndeterminate = true;
+            OcrProgressBar.Visibility = Visibility.Visible;
+            OcrProgressBar.IsIndeterminate = true;
 
             try
             {
@@ -2114,7 +2115,7 @@ namespace OCREditor
             }
             finally
             {
-                ProgressBar.Visibility = Visibility.Collapsed;
+                OcrProgressBar.Visibility = Visibility.Collapsed;
             }
         }
 

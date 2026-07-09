@@ -118,7 +118,7 @@ namespace OCREditor.Interop
             int channels,
             ref NativeBBox box,
             [MarshalAs(UnmanagedType.LPStr)] string newText,
-            [MarshalAs(UnmanagedType.LPStr)] string fontConfigJson);
+            [MarshalAs(UnmanagedType.LPStr)] string? fontConfigJson);
 
         /// <summary>
         /// Free a heap-allocated string returned by the native library.
@@ -768,7 +768,7 @@ namespace OCREditor.Interop
         /// <summary>
         /// Pre-process image using GDI+ ColorMatrix to simulate Apple Vision contrast and binarization.
         /// </summary>
-        public static Bitmap PreprocessImage(Bitmap source)
+        public static Bitmap? PreprocessImage(Bitmap? source)
         {
             if (source == null) return null;
             
