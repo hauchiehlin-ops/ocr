@@ -312,3 +312,82 @@ body {
 /* Animations */
 .animate-fade-in { animation: fadeIn 0.3s ease forwards; }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* --- Responsive Web Design (RWD) --- */
+@media (max-width: 1024px) {
+  .main-content {
+    position: relative;
+    padding: 4px;
+    gap: 4px;
+  }
+  
+  .sidebar {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    z-index: 1000;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    background: rgba(32, 32, 32, 0.95);
+    backdrop-filter: blur(16px);
+  }
+  
+  .left-sidebar {
+    left: 8px;
+    width: 260px;
+  }
+  
+  .right-sidebar {
+    right: 8px;
+    width: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    height: auto;
+    flex-direction: column;
+    padding: 8px 12px;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  
+  .header-left {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+  
+  .menu-bar {
+    margin-left: 0;
+    margin-top: 4px;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .zoom-controls {
+    width: 100%;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+
+  .left-sidebar {
+    width: calc(100vw - 16px);
+    left: 8px;
+    z-index: 1001;
+  }
+  
+  .right-sidebar {
+    width: calc(100vw - 16px);
+    right: 8px;
+    z-index: 1001;
+  }
+}
+
