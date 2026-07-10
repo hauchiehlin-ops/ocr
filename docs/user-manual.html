@@ -105,6 +105,98 @@
             font-weight: 600;
         }
 
+        .guide-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin: 20px 0 28px;
+        }
+
+        .guide-card {
+            padding: 18px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .guide-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 0;
+            font-size: 18px;
+        }
+
+        .tool-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 30px;
+            height: 30px;
+            padding: 0 6px;
+            border-radius: 9px;
+            background: rgba(6, 182, 212, 0.12);
+            border: 1px solid rgba(6, 182, 212, 0.28);
+            color: #a5f3fc;
+            font-weight: 800;
+        }
+
+        .button-token {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 8px;
+            margin: 0 2px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-color);
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .button-token.primary {
+            background: rgba(6, 182, 212, 0.2);
+            border-color: rgba(6, 182, 212, 0.45);
+            color: #cffafe;
+        }
+
+        .button-token.success {
+            background: rgba(16, 185, 129, 0.16);
+            border-color: rgba(16, 185, 129, 0.38);
+            color: #bbf7d0;
+        }
+
+        .flow-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .flow-list li {
+            padding: 12px 0 12px 42px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            position: relative;
+        }
+
+        .flow-list li:last-child {
+            border-bottom: none;
+        }
+
+        .flow-list .tool-icon {
+            position: absolute;
+            left: 0;
+            top: 10px;
+        }
+
+        .note-box {
+            margin: 20px 0;
+            padding: 16px;
+            border-radius: 14px;
+            background: rgba(139, 92, 246, 0.12);
+            border: 1px solid rgba(139, 92, 246, 0.32);
+            color: var(--text-muted);
+        }
+
         footer {
             text-align: center;
             padding: 48px;
@@ -150,40 +242,71 @@
 
     <main class="container">
         <h1 data-i18n="manual_h1">OCREditor 官方操作手冊</h1>
-        <p data-i18n="manual_intro">歡迎使用 OCREditor！這是一款強調「端側 100% 離線運行」的智慧型文件與圖片圖層編輯器。透過領先的 AI 模型，能夠自動為您抽離圖片上的文字，並利用智慧漸層演算填補背景，實現真正的「所見即所改」。</p>
+        <p data-i18n="manual_intro">本手冊依照 AI OCR Pro Editor 的實際畫面撰寫，說明檔案載入、原生 OCR、文字圖層編輯、框選 OCR、框選刪除、字型套用、AI 本地協同操作與匯出流程。</p>
 
-        <h2 data-i18n="manual_h2_1">1. 系統需求與安裝</h2>
-        <ul>
-            <li data-i18n="manual_req_win"><strong>Windows</strong>: 支援 Windows 10/11，需具備支援 DirectML 之顯示卡。</li>
-            <li data-i18n="manual_req_mac"><strong>macOS</strong>: 支援 macOS 13.0 (Ventura) 以上版本，完美適配 Apple Silicon (M1/M2/M3) 的 CoreML 晶片加速。</li>
-            <li data-i18n="manual_req_install"><strong>安裝方式</strong>: 前往官方 GitHub Releases 下載對應的安裝檔，依循系統預設安裝程序即可完成。</li>
+        <div class="note-box" data-i18n="manual_icon_note">代表圖示與畫面一致：<span class="button-token">📄 互動圖層</span>、<span class="button-token primary">🔄 重新辨識</span>、<span class="button-token">ⓘ</span>、<span class="button-token">➖</span>、<span class="button-token">➕</span>、<span class="button-token">100%</span>、<span class="button-token">▸/▾</span>。</div>
+
+        <h2 data-i18n="manual_h2_layout">1. 畫面區域與主要面板</h2>
+        <div class="guide-grid">
+            <section class="guide-card">
+                <h3><span class="tool-icon">📄</span><span data-i18n="manual_layout_left_title">左側：文件狀態與互動圖層</span></h3>
+                <p data-i18n="manual_layout_left_desc">顯示圖片是否已載入、OCR 是否正在處理，以及所有可編輯文字圖層。點選任一圖層時，畫布會自動移動到該文字區塊中心。</p>
+            </section>
+            <section class="guide-card">
+                <h3><span class="tool-icon">▣</span><span data-i18n="manual_layout_canvas_title">中央：圖片畫布</span></h3>
+                <p data-i18n="manual_layout_canvas_desc">畫布顯示原圖、OCR 文字框、背景遮罩與手動新增的文字。可縮放、拖曳檢視、點選文字框直接編輯。</p>
+            </section>
+            <section class="guide-card">
+                <h3><span class="tool-icon">⚙</span><span data-i18n="manual_layout_right_title">右側：格式、OCR 與常用操作</span></h3>
+                <p data-i18n="manual_layout_right_desc">包含文字格式設定、主線原生 OCR、備援引擎、預設字型、AI 本地協同操作與常用操作按鈕。</p>
+            </section>
+        </div>
+
+        <h2 data-i18n="manual_h2_start">2. 載入圖片與重新辨識</h2>
+        <ul class="flow-list">
+            <li><span class="tool-icon">📁</span><span data-i18n="manual_start_file">從上方 <span class="button-token">檔案</span> 選單選擇 <span class="button-token">載入圖片...</span>，或在尚未載入圖片時點擊畫布中的 Open Image 按鈕。載入後會顯示 <span class="button-token success">✓ 圖片已載入並處理完成</span>。</span></li>
+            <li><span class="tool-icon">OCR</span><span data-i18n="manual_start_engine">預設主線是 <span class="button-token primary">主線引擎：原生 OCR</span>。桌面瀏覽器可透過本地伺服器使用 Apple Vision / Windows OCR；iOS/Android App 可直接走手機端原生 OCR。</span></li>
+            <li><span class="tool-icon">🔄</span><span data-i18n="manual_start_rerun">切換 OCR 設定或調整圖片後，按 <span class="button-token primary">🔄 重新辨識</span> 會套用目前引擎重新產生文字圖層。</span></li>
+            <li><span class="tool-icon">▸</span><span data-i18n="manual_start_details">右側 <span class="button-token">本地伺服器的用途</span> 是可收合面板；點擊 <span class="button-token">▸/▾</span> 可展開或收起，節省版面空間。</span></li>
         </ul>
 
-        <h2 data-i18n="manual_h2_2">2. 基本操作：載入圖片</h2>
-        <p data-i18n="manual_p2">啟動應用程式後，點擊左上角的 <span class="highlight">「Load Image」</span> 按鈕，或直接將圖片 (JPG, PNG, TIFF) 拖曳至應用程式視窗中。應用程式會在本地端立即執行 OCR 文字識別與區塊分割。</p>
-
-        <h2 data-i18n="manual_h2_3">3. 編輯與背景無痕抹除 (Inpainting)</h2>
-        <h3 data-i18n="manual_h3_1">3.1 修改現有文字</h3>
-        <p data-i18n="manual_p3_1">點擊任何被識別出來的文字區塊，輸入您想要的文字。當您開始修改時，系統會自動擷取該區塊四角的背景顏色，使用「四角雙線性漸層演算法」向內渲染背景，完美抹除原有的文字筆畫，達到無殘影的替換效果。</p>
-        
-        <h3 data-i18n="manual_h3_2">3.2 使用橡皮擦功能（刪除區塊）</h3>
-        <p data-i18n="manual_p3_2">若圖上有不想要的浮水印或雜訊被識別為文字，您可以點擊該文字區塊，然後點選 <span class="highlight">「Delete Layer」</span>（刪除圖層）。文字區塊會消失，且底圖會自動套用漸層背景修補，就像無痕橡皮擦一樣。</p>
-        
-        <h3 data-i18n="manual_h3_3">3.3 手動框選未辨識區塊</h3>
-        <p data-i18n="manual_p3_3">若有文字未被自動辨識，您可以點擊上方的 <span class="highlight">「Add Region」</span> 按鈕。接著在畫面上使用滑鼠左鍵拖曳，畫出一個新的文字區塊。該區塊同樣會觸發背景修補邏輯，您可以將其當作「手動橡皮擦」或是「新增翻譯區塊」使用。</p>
-
-        <h2 data-i18n="manual_h2_4">4. 視圖與工具列</h2>
-        <ul>
-            <li data-i18n="manual_li_4_1"><strong>縮放功能 (Zoom)</strong>: 在右上角的工具列中，您可以使用 <code>➖</code> 和 <code>➕</code> 微調畫面比例，或者直接拖曳滑桿進行快速縮放。點擊 <code>100%</code> 可快速還原為原始大小。</li>
-            <li data-i18n="manual_li_4_2"><strong>調色盤 (Color Palette)</strong>: 點擊彩色圓形圖標，即可開啟系統調色盤，為選定的文字區塊自訂您喜歡的顏色。系統亦提供多組快捷色塊供您快速切換。</li>
-            
-            <li data-i18n="manual_li_4_4"><strong>全域字型設定 (Global Fonts Settings)</strong>: 於 Settings 選單中可分別設定「主要 (中日韓)」與「次要 (英數)」預設字型。執行 OCR 後，文字會自動綁定此雙字型組合。</li>
-            <li data-i18n="manual_li_4_5"><strong>強制套用電腦字型 (Force Computer Font)</strong>: 啟用此選項後，OCR 辨識完成會立即捨棄圖片原始字型，全面套用您選擇的雙預設字型，維持高度視覺一致性。</li>
-            <li data-i18n="manual_li_4_3"><strong>字體調整 (Font)</strong>: 支援系統內建字體列表，並可即時調整字型大小，讓排版更符合您的需求。</li>
+        <h2 data-i18n="manual_h2_edit">3. 編輯已辨識文字</h2>
+        <ul class="flow-list">
+            <li><span class="tool-icon">📄</span><span data-i18n="manual_edit_select">點擊畫布上的文字框，或點擊左側 <span class="button-token">📄 互動圖層</span> 中的段落。被選取的文字會同步出現在右側 <span class="button-token">編輯內容</span> 欄位。</span></li>
+            <li><span class="tool-icon">✎</span><span data-i18n="manual_edit_inline">可直接在畫布內雙擊文字框編輯。進入編輯時，控制點會暫時隱藏，避免遮住文字內容；離開編輯後控制點會恢復。</span></li>
+            <li><span class="tool-icon">↶</span><span data-i18n="manual_edit_history">上方工具列的 <span class="button-token">復原</span> 與 <span class="button-token">重做</span> 會記錄文字、樣式、刪除與背景遮罩操作。</span></li>
+            <li><span class="tool-icon">🧩</span><span data-i18n="manual_edit_masking">自動 OCR 遮罩只會處理像文字筆畫的像素；若系統判斷區塊過大或像背景標籤，會放棄自動遮罩以避免產生深色區塊。</span></li>
         </ul>
 
-        <h2 data-i18n="manual_h2_5">5. 儲存與匯出</h2>
-        <p data-i18n="manual_p5">編輯完成後，點擊上方的 <span class="highlight">「Save Image」</span> 即可將目前畫面包含替換的文字與修復的背景合併，匯出為一張完整的圖檔。所有處理皆在您的設備上完成，完全確保機密文件的安全。</p>
+        <h2 data-i18n="manual_h2_common">4. 常用操作：區域 OCR、框選刪除與插入文字</h2>
+        <ul class="flow-list">
+            <li><span class="tool-icon">▣</span><span data-i18n="manual_common_region">按 <span class="button-token">區域 OCR</span> 後會進入 <span class="button-token">框選繪圖模式</span>。在未辨識文字上拖曳框選，系統會只辨識該區域；若沒有辨識結果，會建立可手動輸入的文字框。</span></li>
+            <li><span class="tool-icon">⌫</span><span data-i18n="manual_common_erase">按 <span class="button-token">框選刪除</span> 後會進入 <span class="button-token">框選刪除模式</span>。框住要移除的原圖內容後，系統會以周邊背景補洞，並刪除框內文字圖層。</span></li>
+            <li><span class="tool-icon">✚</span><span data-i18n="manual_common_insert">從 <span class="button-token">編輯</span> 選單點 <span class="button-token">插入文字</span> 後，文字框不會立刻出現；請在畫布需要新增文字的位置點一下，文字框才會放在該位置。</span></li>
+            <li><span class="tool-icon">×</span><span data-i18n="manual_common_remove">選取文字框後按 <span class="button-token">移除文字</span>，會移除目前文字圖層及其關聯遮罩。</span></li>
+        </ul>
+
+        <h2 data-i18n="manual_h2_format">5. 文字格式與本機字型</h2>
+        <ul class="flow-list">
+            <li><span class="tool-icon">B</span><span data-i18n="manual_format_style">右側 <span class="button-token">粗體</span>、<span class="button-token">斜體</span>、色彩預設 <span class="button-token">■ □ ■ ■ ■ 🌈</span> 可即時套用到選取文字。</span></li>
+            <li><span class="tool-icon">Aa</span><span data-i18n="manual_format_fonts">在 <span class="button-token">預設字型設定</span> 可分別選擇 <span class="button-token">英文/數字字型</span> 與 <span class="button-token">中文/系統字型</span>。按 <span class="button-token">載入本機字型</span> 後，支援的瀏覽器會列出裝置可存取字型。</span></li>
+            <li><span class="tool-icon">☑</span><span data-i18n="manual_format_force">目前 <span class="button-token">圖片載入/OCR 後強制套用</span> 預設關閉。需要統一所有 OCR 文字外觀時再手動啟用，或按 <span class="button-token">套用字型至全檔</span> 一次套用。</span></li>
+        </ul>
+
+        <h2 data-i18n="manual_h2_ai">6. AI 本地協同操作</h2>
+        <ul class="flow-list">
+            <li><span class="tool-icon">ⓘ</span><span data-i18n="manual_ai_proof">選取文字後按 <span class="button-token">智能校對</span>，用於修正 OCR 錯字、空格與語句不順。旁邊的 <span class="button-token">ⓘ</span> 可查看該功能用途。</span></li>
+            <li><span class="tool-icon">ⓘ</span><span data-i18n="manual_ai_extract">按 <span class="button-token">擷取實體</span> 可從選取文字中整理人名、組織、指標、日期與核心概念；結果會附加到目前文字圖層。</span></li>
+        </ul>
+
+        <h2 data-i18n="manual_h2_export">7. 匯出與保存</h2>
+        <ul class="flow-list">
+            <li><span class="tool-icon">⬇</span><span data-i18n="manual_export_image">按右上角 <span class="button-token primary">匯出圖片</span>，會輸出已套用文字、遮罩與背景修補後的圖片。</span></li>
+            <li><span class="tool-icon">CSV</span><span data-i18n="manual_export_data">從 <span class="button-token">檔案</span> 選單可匯出 CSV 或可搜尋 PDF；CSV 保存文字圖層內容，PDF 會把文字層加到圖片上方以利搜尋。</span></li>
+        </ul>
+
+        <h2 data-i18n="manual_h2_mobile">8. iOS / Android 使用注意</h2>
+        <p data-i18n="manual_mobile_desc">若使用真正手機端原生 OCR，請以 Capacitor 或原生 App 打包。手機瀏覽器通常不能直接啟動 localhost 原生 OCR 伺服器；打包 App 後可由 iOS Vision 或 Android ML Kit / Text Recognition 在裝置上完成辨識，不需同網段伺服器。</p>
 
     </main>
 

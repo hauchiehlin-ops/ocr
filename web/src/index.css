@@ -395,6 +395,45 @@ body {
   opacity: 0.82;
 }
 
+.font-workflow-panel {
+  padding: 7px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.font-workflow-panel summary {
+  cursor: pointer;
+  color: #60CDFF;
+  font-weight: 700;
+  list-style: none;
+}
+
+.font-workflow-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.font-workflow-panel summary::before {
+  content: '▸';
+  margin-right: 5px;
+}
+
+.font-workflow-panel[open] summary::before {
+  content: '▾';
+}
+
+.font-workflow-panel ol {
+  margin: 7px 0 0;
+  padding-left: 16px;
+}
+
+.font-workflow-panel li {
+  margin-bottom: 4px;
+}
+
 .native-ocr-warning {
   margin-top: 5px;
   color: #FFB86C;

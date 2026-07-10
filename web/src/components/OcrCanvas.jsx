@@ -566,188 +566,11 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  // Build a source-aware replacement patch for every OCR box. Only pixels that
-  // look like original glyph strokes are inpainted; untouched pixels stay
-  // identical to the source image, so the patch hides doubled text without
-  // leaving visible grey/dark rectangles around labels.
-  const createTextPatch = (left, top, width, height) => {
-    const canvas = fabricCanvas.current;
-    if (!canvas) return null;
-    
-    const layout = imageLayout.current;
-    if (!layout.width || !bgImage.current) return null;
-    const scale = layout.scale;
-
-    // Convert from canvas space to image pixel space (image is centered on the canvas)
-    const imgWidthMax = sampleCanvasRef.current?.width || 0;
-    const imgHeightMax = sampleCanvasRef.current?.height || 0;
-    if (!imgWidthMax || !imgHeightMax || scale <= 0) return null;
-
-    const imgLeft = Math.max(0, Math.min(imgWidthMax - 1, Math.round((left - layout.left) / scale)));
-    const imgTop = Math.max(0, Math.min(imgHeightMax - 1, Math.round((top - layout.top) / scale)));
-    const imgWidth = Math.max(1, Math.min(imgWidthMax - imgLeft, Math.round(width / scale)));
-    const imgHeight = Math.max(1, Math.min(imgHeightMax - imgTop, Math.round(height / scale)));
-    const sourceArea = imgWidthMax * imgHeightMax;
-    const boxArea = imgWidth * imgHeight;
-    // Automatic masking must be conservative. When an OCR engine returns a
-    // broad/uncertain box, covering it can create the dark rectangles reported
-    // by the user. Explicit regional erase handles large destructive edits.
-    if (sourceArea > 0 && boxArea / sourceArea > 0.08) return null;
-    
-    // Include a small margin to cover anti-aliased glyph edges and the common
-    // one-pixel difference between OCR and canvas bounding boxes.
-    const padding = 2;
-    const patchLeft = Math.max(0, imgLeft - padding);
-    const patchTop = Math.max(0, imgTop - padding);
-    const patchWidth = Math.min(imgWidthMax - patchLeft, imgWidth + 2 * padding);
-    const patchHeight = Math.min(imgHeightMax - patchTop, imgHeight + 2 * padding);
-    
-    // Sample just outside the box so the original glyph is never used as a
-    // replacement colour. Scale the offset for very small source images.
-    const offset = Math.max(3, Math.min(8, Math.round(Math.min(imgWidth, imgHeight) * 0.15)));
-    
-    const cTL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.max(0, imgTop - offset));
-    const cTR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgLeft + imgWidth - 1 + offset), Math.max(0, imgTop - offset));
-    const cBL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.min(imgHeightMax - 1, imgTop + imgHeight - 1 + offset));
-    const cBR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgLeft + imgWidth - 1 + offset), Math.min(imgHeightMax - 1, imgTop + imgHeight - 1 + offset));
-    
-    const patchCanvas = document.createElement('canvas');
-    patchCanvas.width = patchWidth;
-    patchCanvas.height = patchHeight;
-    const ctx = patchCanvas.getContext('2d');
-    const sourceCtx = sampleCanvasRef.current.getContext('2d');
-    const sourceData = sourceCtx.getImageData(patchLeft, patchTop, patchWidth, patchHeight);
-    const imgData = new ImageData(new Uint8ClampedArray(sourceData.data), patchWidth, patchHeight);
-    const data = imgData.data;
-    const glyphMask = new Uint8Array(patchWidth * patchHeight);
-    const expandedMask = new Uint8Array(patchWidth * patchHeight);
-    const getInterpolatedBackground = (imageX, imageY) => {
-      const tx = imgWidth > 1 ? (imageX - imgLeft) / (imgWidth - 1) : 0;
-      const ty = imgHeight > 1 ? (imageY - imgTop) / (imgHeight - 1) : 0;
-      const clampedTx = Math.max(0, Math.min(1, tx));
-      const clampedTy = Math.max(0, Math.min(1, ty));
-      const rTop = cTL.r * (1 - clampedTx) + cTR.r * clampedTx;
-      const gTop = cTL.g * (1 - clampedTx) + cTR.g * clampedTx;
-      const bTop = cTL.b * (1 - clampedTx) + cTR.b * clampedTx;
-      const rBot = cBL.r * (1 - clampedTx) + cBR.r * clampedTx;
-      const gBot = cBL.g * (1 - clampedTx) + cBR.g * clampedTx;
-      const bBot = cBL.b * (1 - clampedTx) + cBR.b * clampedTx;
-      return {
-        r: rTop * (1 - clampedTy) + rBot * clampedTy,
-        g: gTop * (1 - clampedTy) + gBot * clampedTy,
-        b: bTop * (1 - clampedTy) + bBot * clampedTy
-      };
-    };
-
-    let glyphPixels = 0;
-
-    for (let y = 0; y < patchHeight; y++) {
-      for (let x = 0; x < patchWidth; x++) {
-        const index = (y * patchWidth + x) * 4;
-        const imageX = patchLeft + x;
-        const imageY = patchTop + y;
-        if (
-          imageX < imgLeft ||
-          imageX > imgLeft + imgWidth - 1 ||
-          imageY < imgTop ||
-          imageY > imgTop + imgHeight - 1
-        ) {
-          continue;
-        }
-        const srcR = data[index];
-        const srcG = data[index + 1];
-        const srcB = data[index + 2];
-        const srcLum = 0.299 * srcR + 0.587 * srcG + 0.114 * srcB;
-        const saturation = Math.max(srcR, srcG, srcB) - Math.min(srcR, srcG, srcB);
-
-        let localLumSum = 0;
-        let localCount = 0;
-        let strongestLocalEdge = 0;
-        for (let dy = -2; dy <= 2; dy++) {
-          const ny = y + dy;
-          if (ny < 0 || ny >= patchHeight) continue;
-          for (let dx = -2; dx <= 2; dx++) {
-            const nx = x + dx;
-            if (nx < 0 || nx >= patchWidth || (dx === 0 && dy === 0)) continue;
-            const nIndex = (ny * patchWidth + nx) * 4;
-            const nLum = 0.299 * data[nIndex] + 0.587 * data[nIndex + 1] + 0.114 * data[nIndex + 2];
-            localLumSum += nLum;
-            localCount += 1;
-            strongestLocalEdge = Math.max(strongestLocalEdge, Math.abs(srcLum - nLum));
-          }
-        }
-
-        if (!localCount) continue;
-        const localLum = localLumSum / localCount;
-        const isNeutralInk = saturation < 96;
-        const isDarkStroke = srcLum < 175 && localLum > srcLum + 10;
-        const isLightStroke = srcLum > 95 && localLum < srcLum - 10;
-        const looksLikeGlyphStroke = isNeutralInk &&
-          (isDarkStroke || isLightStroke) &&
-          strongestLocalEdge > 18;
-
-        if (looksLikeGlyphStroke) {
-          glyphMask[y * patchWidth + x] = 1;
-          glyphPixels += 1;
-        }
-      }
-    }
-
-    const minGlyphPixels = Math.max(2, Math.floor(patchWidth * patchHeight * 0.001));
-    if (glyphPixels < minGlyphPixels) return null;
-
-    const dilationRadius = 2;
-    let expandedPixels = 0;
-    for (let y = 0; y < patchHeight; y++) {
-      for (let x = 0; x < patchWidth; x++) {
-        if (!glyphMask[y * patchWidth + x]) continue;
-        for (let dy = -dilationRadius; dy <= dilationRadius; dy++) {
-          const ny = y + dy;
-          if (ny < 0 || ny >= patchHeight) continue;
-          for (let dx = -dilationRadius; dx <= dilationRadius; dx++) {
-            const nx = x + dx;
-            if (nx < 0 || nx >= patchWidth) continue;
-            const expandedIndex = ny * patchWidth + nx;
-            if (!expandedMask[expandedIndex]) {
-              expandedMask[expandedIndex] = 1;
-              expandedPixels += 1;
-            }
-          }
-        }
-      }
-    }
-
-    const expandedRatio = expandedPixels / Math.max(1, patchWidth * patchHeight);
-    // A high mask ratio almost always means the engine boxed a coloured label,
-    // icon, divider, or background block rather than just glyph strokes.
-    if (expandedRatio > 0.42 || (patchWidth * patchHeight > 5000 && expandedRatio > 0.30)) {
-      return null;
-    }
-
-    for (let y = 0; y < patchHeight; y++) {
-      for (let x = 0; x < patchWidth; x++) {
-        if (!expandedMask[y * patchWidth + x]) continue;
-        const index = (y * patchWidth + x) * 4;
-        const imageX = patchLeft + x;
-        const imageY = patchTop + y;
-        const bg = getInterpolatedBackground(imageX, imageY);
-        data[index] = clampByte(bg.r);
-        data[index + 1] = clampByte(bg.g);
-        data[index + 2] = clampByte(bg.b);
-        data[index + 3] = 255;
-      }
-    }
-    ctx.putImageData(imgData, 0, 0);
-    return {
-      dataUrl: patchCanvas.toDataURL(),
-      patchLeft: layout.left + patchLeft * scale,
-      patchTop: layout.top + patchTop * scale,
-      patchWidth: patchWidth * scale,
-      patchHeight: patchHeight * scale
-    };
-  };
-
-  const createRegionErasePatch = (left, top, width, height) => {
+  // Full-area background reconstruction based on many samples around the
+  // selected/OCR box perimeter.  This guarantees that source glyphs are hidden,
+  // while avoiding a flat single-colour rectangle: every output pixel blends
+  // top/bottom/left/right perimeter samples according to its position.
+  const createPerimeterFillPatch = (left, top, width, height, { padding = 2, maxSourceRatio = 0.12 } = {}) => {
     const layout = imageLayout.current;
     if (!layout.width || !sampleCanvasRef.current || layout.scale <= 0) return null;
 
@@ -766,33 +589,76 @@ const OcrCanvas = forwardRef(({
     const imgHeight = imgBottom - imgTop;
     if (imgWidth <= 1 || imgHeight <= 1) return null;
 
-    const offset = Math.max(4, Math.min(12, Math.round(Math.min(imgWidth, imgHeight) * 0.12)));
-    const cTL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.max(0, imgTop - offset));
-    const cTR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgRight - 1 + offset), Math.max(0, imgTop - offset));
-    const cBL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.min(imgHeightMax - 1, imgBottom - 1 + offset));
-    const cBR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgRight - 1 + offset), Math.min(imgHeightMax - 1, imgBottom - 1 + offset));
+    const sourceArea = imgWidthMax * imgHeightMax;
+    const boxArea = imgWidth * imgHeight;
+    if (maxSourceRatio && sourceArea > 0 && boxArea / sourceArea > maxSourceRatio) return null;
+
+    const patchLeft = Math.max(0, imgLeft - padding);
+    const patchTop = Math.max(0, imgTop - padding);
+    const patchRight = Math.min(imgWidthMax, imgRight + padding);
+    const patchBottom = Math.min(imgHeightMax, imgBottom + padding);
+    const patchWidth = Math.max(1, patchRight - patchLeft);
+    const patchHeight = Math.max(1, patchBottom - patchTop);
+    const offset = Math.max(3, Math.min(14, Math.round(Math.min(imgWidth, imgHeight) * 0.18)));
+
+    const sampleX = (x) => Math.max(0, Math.min(imgWidthMax - 1, Math.round(x)));
+    const sampleY = (y) => Math.max(0, Math.min(imgHeightMax - 1, Math.round(y)));
+    const topY = sampleY(imgTop - offset);
+    const bottomY = sampleY(imgBottom - 1 + offset);
+    const leftX = sampleX(imgLeft - offset);
+    const rightX = sampleX(imgRight - 1 + offset);
+
+    const topSamples = Array.from({ length: patchWidth }, (_, x) =>
+      getAverageCornerColor(sampleX(patchLeft + x), topY)
+    );
+    const bottomSamples = Array.from({ length: patchWidth }, (_, x) =>
+      getAverageCornerColor(sampleX(patchLeft + x), bottomY)
+    );
+    const leftSamples = Array.from({ length: patchHeight }, (_, y) =>
+      getAverageCornerColor(leftX, sampleY(patchTop + y))
+    );
+    const rightSamples = Array.from({ length: patchHeight }, (_, y) =>
+      getAverageCornerColor(rightX, sampleY(patchTop + y))
+    );
 
     const patchCanvas = document.createElement('canvas');
-    patchCanvas.width = imgWidth;
-    patchCanvas.height = imgHeight;
+    patchCanvas.width = patchWidth;
+    patchCanvas.height = patchHeight;
     const ctx = patchCanvas.getContext('2d');
-    const imgData = ctx.createImageData(imgWidth, imgHeight);
+    const imgData = ctx.createImageData(patchWidth, patchHeight);
     const data = imgData.data;
 
-    for (let y = 0; y < imgHeight; y++) {
-      const ty = imgHeight > 1 ? y / (imgHeight - 1) : 0;
-      for (let x = 0; x < imgWidth; x++) {
-        const tx = imgWidth > 1 ? x / (imgWidth - 1) : 0;
-        const rTop = cTL.r * (1 - tx) + cTR.r * tx;
-        const gTop = cTL.g * (1 - tx) + cTR.g * tx;
-        const bTop = cTL.b * (1 - tx) + cTR.b * tx;
-        const rBot = cBL.r * (1 - tx) + cBR.r * tx;
-        const gBot = cBL.g * (1 - tx) + cBR.g * tx;
-        const bBot = cBL.b * (1 - tx) + cBR.b * tx;
-        const index = (y * imgWidth + x) * 4;
-        data[index] = clampByte(rTop * (1 - ty) + rBot * ty);
-        data[index + 1] = clampByte(gTop * (1 - ty) + gBot * ty);
-        data[index + 2] = clampByte(bTop * (1 - ty) + bBot * ty);
+    for (let y = 0; y < patchHeight; y++) {
+      const imageY = patchTop + y;
+      const ty = imgHeight > 1 ? Math.max(0, Math.min(1, (imageY - imgTop) / (imgHeight - 1))) : 0;
+      const yEdgeDistance = Math.min(ty, 1 - ty);
+      const horizontalWeight = 1 / (yEdgeDistance + 0.12);
+      const leftColor = leftSamples[y];
+      const rightColor = rightSamples[y];
+
+      for (let x = 0; x < patchWidth; x++) {
+        const imageX = patchLeft + x;
+        const tx = imgWidth > 1 ? Math.max(0, Math.min(1, (imageX - imgLeft) / (imgWidth - 1))) : 0;
+        const xEdgeDistance = Math.min(tx, 1 - tx);
+        const verticalWeight = 1 / (xEdgeDistance + 0.12);
+        const topColor = topSamples[x];
+        const bottomColor = bottomSamples[x];
+
+        const verticalBlend = {
+          r: topColor.r * (1 - ty) + bottomColor.r * ty,
+          g: topColor.g * (1 - ty) + bottomColor.g * ty,
+          b: topColor.b * (1 - ty) + bottomColor.b * ty
+        };
+        const horizontalBlend = {
+          r: leftColor.r * (1 - tx) + rightColor.r * tx,
+          g: leftColor.g * (1 - tx) + rightColor.g * tx,
+          b: leftColor.b * (1 - tx) + rightColor.b * tx
+        };
+        const totalWeight = horizontalWeight + verticalWeight;
+        const index = (y * patchWidth + x) * 4;
+        data[index] = clampByte((verticalBlend.r * horizontalWeight + horizontalBlend.r * verticalWeight) / totalWeight);
+        data[index + 1] = clampByte((verticalBlend.g * horizontalWeight + horizontalBlend.g * verticalWeight) / totalWeight);
+        data[index + 2] = clampByte((verticalBlend.b * horizontalWeight + horizontalBlend.b * verticalWeight) / totalWeight);
         data[index + 3] = 255;
       }
     }
@@ -800,18 +666,22 @@ const OcrCanvas = forwardRef(({
     ctx.putImageData(imgData, 0, 0);
     return {
       dataUrl: patchCanvas.toDataURL(),
-      patchLeft: layout.left + imgLeft * scale,
-      patchTop: layout.top + imgTop * scale,
-      patchWidth: imgWidth * scale,
-      patchHeight: imgHeight * scale
+      patchLeft: layout.left + patchLeft * scale,
+      patchTop: layout.top + patchTop * scale,
+      patchWidth: patchWidth * scale,
+      patchHeight: patchHeight * scale
     };
   };
+
+  const createTextPatch = (left, top, width, height) =>
+    createPerimeterFillPatch(left, top, width, height, { padding: 3, maxSourceRatio: null });
+
+  const createRegionErasePatch = (left, top, width, height) =>
+    createPerimeterFillPatch(left, top, width, height, { padding: 0, maxSourceRatio: null });
 
   const _addCoverPatch = async (textbox, { force = false } = {}) => {
     if (!textbox || textbox.manual || textbox.isManualText) return false;
     if (!force && !textbox.isOcrReview) return false;
-    const confidence = Number(textbox.confidence);
-    if (Number.isFinite(confidence) && confidence > 0 && confidence < 0.2) return false;
 
     const patchInfo = createTextPatch(
       textbox.originalLeft, 

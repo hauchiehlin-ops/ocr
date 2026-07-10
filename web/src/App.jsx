@@ -148,6 +148,7 @@ function App() {
   const [forcePresetFont, setForcePresetFont] = useState(() => localStorage.getItem('force_preset_font') === 'true');
   const [availableFontFamilies, setAvailableFontFamilies] = useState(FALLBACK_FONT_FAMILIES);
   const [fontLoadStatus, setFontLoadStatus] = useState('');
+  const [fontApplyStatus, setFontApplyStatus] = useState('');
 
   const mergeFontFamilies = (fonts = []) => {
     const families = new Set(FALLBACK_FONT_FAMILIES);
@@ -297,6 +298,7 @@ function App() {
   const handleApplyDefaultFontAll = () => {
      if (canvasRef.current) {
         canvasRef.current.applyDefaultFontToAll(presetFontFamily);
+        setFontApplyStatus('fontAppliedAll');
         if (selectedRegion) {
           setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
         }
@@ -307,6 +309,7 @@ function App() {
      if (canvasRef.current && selectedRegion) {
         canvasRef.current.updateRegionStyle(selectedRegion.id, { fontFamily: presetFontFamily });
         setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
+        setFontApplyStatus('fontAppliedSelected');
      }
   };
 
@@ -928,6 +931,15 @@ function App() {
             <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
               {t('localFontsHint')}
             </div>
+            <details className="font-workflow-panel">
+              <summary>{t('presetFontWorkflowTitle')}</summary>
+              <ol>
+                <li>{t('presetFontWorkflowStep1')}</li>
+                <li>{t('presetFontWorkflowStep2')}</li>
+                <li>{t('presetFontWorkflowStep3')}</li>
+                <li>{t('presetFontWorkflowStep4')}</li>
+              </ol>
+            </details>
             <button
               type="button"
               className="btn btn-secondary"
@@ -939,6 +951,11 @@ function App() {
             {fontLoadStatus && (
               <div className="font-load-status">
                 {t(fontLoadStatus)}
+              </div>
+            )}
+            {fontApplyStatus && (
+              <div className="font-load-status">
+                {t(fontApplyStatus)}
               </div>
             )}
           </div>
