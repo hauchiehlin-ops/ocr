@@ -4,6 +4,13 @@ import Tesseract from 'tesseract.js';
 import { jsPDF } from 'jspdf';
 import { runGeminiOcrTiled, runGeminiRegionalOcr } from '../utils/geminiOcr';
 
+// Fabric v7 changed the default object origin from left/top to center, so every
+// object placed by (left, top) rendered shifted up-left by half its size: cover
+// patches missed the source glyphs and OCR text landed offset on top of them.
+// The whole pipeline (OCR bboxes, patches, exports) works in top-left space.
+fabric.FabricObject.ownDefaults.originX = 'left';
+fabric.FabricObject.ownDefaults.originY = 'top';
+
 // Typo correction dictionary from WPF project to achieve 99%+ accuracy for target mindmap
 const ocrCorrectionDict = {
   "連瘠廟關": "連動機制",
@@ -443,9 +450,11 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  // Reconstruct only foreground glyph pixels instead of painting a solid
-  // rectangle over the infographic. The untouched source pixels preserve
-  // connector lines, gradients and icons around the edited text.
+  // Build an opaque replacement patch for every OCR box. Leaving the original
+  // pixels visible underneath a semi-transparent text layer creates the exact
+  // doubled-glyph effect users see after recognition. The patch uses the four
+  // surrounding edge colours to continue a local gradient, so the original
+  // glyphs are fully covered without introducing a flat grey rectangle.
   const createTextPatch = (left, top, width, height) => {
     const canvas = fabricCanvas.current;
     if (!canvas) return null;
@@ -464,16 +473,17 @@ const OcrCanvas = forwardRef(({
     const imgWidth = Math.max(1, Math.min(imgWidthMax - imgLeft, Math.round(width / scale)));
     const imgHeight = Math.max(1, Math.min(imgHeightMax - imgTop, Math.round(height / scale)));
     
-    // A one-pixel margin is enough to hide antialiased glyph edges without
-    // producing the visible grey bars that the old full-rectangle patch caused.
-    const padding = 1;
+    // Include a small margin to cover anti-aliased glyph edges and the common
+    // one-pixel difference between OCR and canvas bounding boxes.
+    const padding = 2;
     const patchLeft = Math.max(0, imgLeft - padding);
     const patchTop = Math.max(0, imgTop - padding);
     const patchWidth = Math.min(imgWidthMax - patchLeft, imgWidth + 2 * padding);
     const patchHeight = Math.min(imgHeightMax - patchTop, imgHeight + 2 * padding);
     
-    // Offset for sampling corners to avoid the text inside (4 pixels)
-    const offset = 4;
+    // Sample just outside the box so the original glyph is never used as a
+    // replacement colour. Scale the offset for very small source images.
+    const offset = Math.max(3, Math.min(8, Math.round(Math.min(imgWidth, imgHeight) * 0.15)));
     
     const cTL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.max(0, imgTop - offset));
     const cTR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgLeft + imgWidth - 1 + offset), Math.max(0, imgTop - offset));
@@ -494,35 +504,29 @@ const OcrCanvas = forwardRef(({
         const index = (y * patchWidth + x) * 4;
         const imageX = patchLeft + x;
         const imageY = patchTop + y;
-        const inside = imageX >= imgLeft && imageX < imgLeft + imgWidth &&
-          imageY >= imgTop && imageY < imgTop + imgHeight;
-        if (!inside) continue;
-
         const tx = imgWidth > 1 ? (imageX - imgLeft) / (imgWidth - 1) : 0;
         const ty = imgHeight > 1 ? (imageY - imgTop) / (imgHeight - 1) : 0;
+        const clampedTx = Math.max(0, Math.min(1, tx));
+        const clampedTy = Math.max(0, Math.min(1, ty));
         
-        const rTop = cTL.r * (1 - tx) + cTR.r * tx;
-        const gTop = cTL.g * (1 - tx) + cTR.g * tx;
-        const bTop = cTL.b * (1 - tx) + cTR.b * tx;
+        const rTop = cTL.r * (1 - clampedTx) + cTR.r * clampedTx;
+        const gTop = cTL.g * (1 - clampedTx) + cTR.g * clampedTx;
+        const bTop = cTL.b * (1 - clampedTx) + cTR.b * clampedTx;
 
-        const rBot = cBL.r * (1 - tx) + cBR.r * tx;
-        const gBot = cBL.g * (1 - tx) + cBR.g * tx;
-        const bBot = cBL.b * (1 - tx) + cBR.b * tx;
+        const rBot = cBL.r * (1 - clampedTx) + cBR.r * clampedTx;
+        const gBot = cBL.g * (1 - clampedTx) + cBR.g * clampedTx;
+        const bBot = cBL.b * (1 - clampedTx) + cBR.b * clampedTx;
 
-        const bgR = rTop * (1 - ty) + rBot * ty;
-        const bgG = gTop * (1 - ty) + gBot * ty;
-        const bgB = bTop * (1 - ty) + bBot * ty;
-        const sourceLum = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
-        const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
-        const distance = Math.abs(data[index] - bgR) + Math.abs(data[index + 1] - bgG) + Math.abs(data[index + 2] - bgB);
-
-        // Replace only pixels that look like foreground glyphs. Pixels already
-        // matching the local background remain byte-for-byte from the source.
-        if (distance > 36 || Math.abs(sourceLum - bgLum) > 18) {
-          data[index] = Math.round(bgR);
-          data[index + 1] = Math.round(bgG);
-          data[index + 2] = Math.round(bgB);
-        }
+        const bgR = rTop * (1 - clampedTy) + rBot * clampedTy;
+        const bgG = gTop * (1 - clampedTy) + gBot * clampedTy;
+        const bgB = bTop * (1 - clampedTy) + bBot * clampedTy;
+        // Replace every pixel inside the OCR box. This is deliberate: a
+        // foreground-only mask leaves anti-aliased source glyphs behind the
+        // replacement text and produces visible double text.
+        data[index] = Math.round(bgR);
+        data[index + 1] = Math.round(bgG);
+        data[index + 2] = Math.round(bgB);
+        data[index + 3] = 255;
       }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -545,11 +549,14 @@ const OcrCanvas = forwardRef(({
     if (!patchInfo) return;
     
     const patchImg = await fabric.FabricImage.fromURL(patchInfo.dataUrl);
+    // Fabric images treat width/height as a source crop, not a resize: the
+    // bitmap is at original image resolution, so map it into canvas space
+    // with scaleX/scaleY or the patch covers the wrong area.
     patchImg.set({
       left: patchInfo.patchLeft,
       top: patchInfo.patchTop,
-      width: patchInfo.patchWidth,
-      height: patchInfo.patchHeight,
+      scaleX: patchInfo.patchWidth / patchImg.width,
+      scaleY: patchInfo.patchHeight / patchImg.height,
       selectable: false,
       evented: false,
       isPatch: true,
