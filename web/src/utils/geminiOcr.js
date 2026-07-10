@@ -177,7 +177,10 @@ async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false
 const OCR_PROMPT = `Analyze the image and perform extremely high-precision document OCR.
 Extract ALL text blocks, lines, labels, words, including very small text, vertically written text, and low-contrast background details.
 Output the text in Traditional Chinese (繁體中文) or English exactly as it appears.
-For each text segment/line, detect its bounding box coordinates precisely.
+Rules for segmentation and bounding boxes:
+- Create ONE object per visual text line or short standalone label. NEVER merge separate labels, nodes, or paragraphs into a single object.
+- Each "bbox" must TIGHTLY enclose only its own text pixels — not the surrounding shape, icon, or whitespace.
+- Do not output the same text twice.
 Return ONLY a valid JSON array of objects conforming EXACTLY to this schema (no markdown, no quotes, no explanations, no text wrapping block):
 [
   {
@@ -196,7 +199,28 @@ function parseOcrJson(raw) {
   }
   const arr = JSON.parse(s.trim());
   if (!Array.isArray(arr)) throw new Error('Response is not a valid array.');
-  return arr;
+  // Drop malformed entries early: empty text or degenerate/invalid bbox
+  return arr.filter(b =>
+    b && typeof b.text === 'string' && b.text.trim() !== '' &&
+    Array.isArray(b.bbox) && b.bbox.length === 4 &&
+    b.bbox.every(v => Number.isFinite(v)) &&
+    b.bbox[2] > b.bbox[0] && b.bbox[3] > b.bbox[1]
+  );
+}
+
+/** Normalize text for duplicate comparison: strip whitespace/punctuation, lowercase. */
+function normalizeForCompare(text) {
+  return text.replace(/[\s\p{P}\p{S}]+/gu, '').toLowerCase();
+}
+
+/** Whether two text strings are likely the same detection (equal or one contains the other). */
+function textsSimilar(a, b) {
+  const na = normalizeForCompare(a);
+  const nb = normalizeForCompare(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
+  return shorter.length >= 2 && longer.includes(shorter);
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +264,7 @@ export async function runGeminiOcrTiled(
   ];
 
   const rawBlocks = [];
+  const quadrantSucceeded = [false, false, false, false];
   let succeeded = 0;
 
   for (let i = 0; i < tilesConfig.length; i++) {
@@ -288,10 +313,12 @@ export async function runGeminiOcrTiled(
 
         rawBlocks.push({
           text: block.text,
-          bbox: [yminNorm, xminNorm, ymaxNorm, xmaxNorm]
+          bbox: [yminNorm, xminNorm, ymaxNorm, xmaxNorm],
+          quadrant: i
         });
       }
 
+      quadrantSucceeded[i] = true;
       succeeded++;
       if (onStatusChange) {
         onStatusChange(`✅ Quadrant ${i + 1}/4 (${name}) done (${blocks.length} blocks)`);
@@ -310,34 +337,49 @@ export async function runGeminiOcrTiled(
     );
   }
 
-  // Perform Non-Maximum Suppression (NMS) / Bounding Box Merge to deduplicate overlapping results
-  // Sort blocks by text length descending so we prioritize preserving longer, more complete strings
-  rawBlocks.sort((a, b) => b.text.length - a.text.length);
+  // -------------------------------------------------------------------------
+  // Stage 1 — Ownership filtering (deterministic dedup for the overlap zones):
+  // each block belongs to the quadrant whose half of the image contains the
+  // block's center. Blocks reported by a non-owner quadrant are dropped,
+  // unless the owner quadrant's request failed (then any detection is kept).
+  // -------------------------------------------------------------------------
+  const ownedBlocks = rawBlocks.filter(block => {
+    const [ymin, xmin, ymax, xmax] = block.bbox;
+    const cx = (xmin + xmax) / 2;
+    const cy = (ymin + ymax) / 2;
+    const ownerIndex = (cy < 500 ? 0 : 2) + (cx < 500 ? 0 : 1); // TL=0, TR=1, BL=2, BR=3
+    return block.quadrant === ownerIndex || !quadrantSucceeded[ownerIndex];
+  });
+
+  // -------------------------------------------------------------------------
+  // Stage 2 — Text-aware NMS for residual duplicates: two blocks are the same
+  // detection only when their boxes overlap AND their texts match. A pure
+  // geometric overlap no longer deletes distinct neighboring labels.
+  // -------------------------------------------------------------------------
+  ownedBlocks.sort((a, b) => b.text.length - a.text.length);
   const mergedBlocks = [];
 
-  for (const block of rawBlocks) {
+  for (const block of ownedBlocks) {
     let isDuplicate = false;
     const [yminA, xminA, ymaxA, xmaxA] = block.bbox;
     const areaA = (xmaxA - xminA) * (ymaxA - yminA);
 
     for (const existing of mergedBlocks) {
       const [yminB, xminB, ymaxB, xmaxB] = existing.bbox;
-      
-      // Calculate intersection bounds
+
       const interX = Math.max(0, Math.min(xmaxA, xmaxB) - Math.max(xminA, xminB));
       const interY = Math.max(0, Math.min(ymaxA, ymaxB) - Math.max(yminA, yminB));
       const interArea = interX * interY;
+      if (interArea <= 0) continue;
 
-      if (interArea > 0) {
-        const areaB = (xmaxB - xminB) * (ymaxB - yminB);
-        const minArea = Math.min(areaA, areaB);
-        const overlap = interArea / minArea;
+      const areaB = (xmaxB - xminB) * (ymaxB - yminB);
+      const overlap = interArea / Math.min(areaA, areaB);
 
-        // If boxes overlap by more than 50%, they are considered duplicate detections of the same text
-        if (overlap > 0.50) {
-          isDuplicate = true;
-          break;
-        }
+      // Same text + slight overlap → duplicate (Gemini boxes drift between tiles).
+      // Near-total containment (>85%) → duplicate even if OCR read it differently.
+      if ((overlap > 0.15 && textsSimilar(block.text, existing.text)) || overlap > 0.85) {
+        isDuplicate = true;
+        break;
       }
     }
 

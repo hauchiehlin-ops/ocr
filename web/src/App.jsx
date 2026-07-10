@@ -30,7 +30,15 @@ function App() {
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.5-flash');
   const [geminiApiUrl, setGeminiApiUrl] = useState(() => localStorage.getItem('gemini_api_url') || 'https://generativelanguage.googleapis.com');
-  const [localServerUrl, setLocalServerUrl] = useState(() => localStorage.getItem('local_server_url') || 'http://localhost:5000/ocr');
+  const [localServerUrl, setLocalServerUrl] = useState(() => {
+    const saved = localStorage.getItem('local_server_url');
+    // Migrate the old default: port 5000 is occupied by macOS AirPlay Receiver
+    if (!saved || saved === 'http://localhost:5000/ocr') {
+      localStorage.setItem('local_server_url', 'http://localhost:5001/ocr');
+      return 'http://localhost:5001/ocr';
+    }
+    return saved;
+  });
 
   const handleOcrEngineChange = (engine) => {
     setOcrEngine(engine);
@@ -296,20 +304,6 @@ function App() {
                   <span>{uiLanguage === 'English' ? '✓' : ''}</span>
                 </div>
 
-                <div className="dropdown-separator"></div>
-
-                {/* OCR Engine Option */}
-                <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
-                  <span>{t('ocrEngine')}</span>
-                </div>
-                <div className="dropdown-item" onClick={() => handleOcrEngineChange('local')}>
-                  <span>{t('localEngine')}</span>
-                  <span>{ocrEngine === 'local' ? '✓' : ''}</span>
-                </div>
-                <div className="dropdown-item" onClick={() => handleOcrEngineChange('cloud')}>
-                  <span>{t('cloudEngine')}</span>
-                  <span>{ocrEngine === 'cloud' ? '✓' : ''}</span>
-                </div>
               </div>
             </div>
           </div>
@@ -649,7 +643,7 @@ function App() {
                   type="text"
                   value={localServerUrl}
                   onChange={(e) => handleLocalServerUrlChange(e.target.value)}
-                  placeholder="http://localhost:5000/ocr"
+                  placeholder="http://localhost:5001/ocr"
                   style={{
                     background: '#111111',
                     color: '#fff',
@@ -764,7 +758,7 @@ def perform_ocr():
     return jsonify(blocks)
 
 if __name__ == '__main__':
-    app.run(port=5000)
+    app.run(port=5001)
 `}
                       onClick={(e) => { e.target.select(); document.execCommand('copy'); alert('Copied code to clipboard!'); }}
                       style={{

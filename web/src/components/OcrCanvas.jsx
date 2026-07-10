@@ -129,7 +129,19 @@ function adaptiveThreshold(ctx, width, height) {
   ctx.putImageData(imgData, 0, 0);
 }
 
-const OcrCanvas = forwardRef(({ 
+// Font size constrained by BOTH box height (per line) and box width (per character):
+// loose bounding boxes from cloud OCR would otherwise produce oversized text.
+function calcOcrFontSize(text, boxW, boxH, maxSize = 32) {
+  const lines = String(text).split('\n').filter(l => l.trim() !== '');
+  const linesCount = lines.length || 1;
+  // CJK characters occupy ~1em width, Latin characters ~0.55em
+  const maxLineUnits = Math.max(1, ...lines.map(l =>
+    [...l].reduce((units, ch) => units + (ch.charCodeAt(0) > 0x2E7F ? 1 : 0.55), 0)
+  ));
+  return Math.max(10, Math.min(maxSize, boxH / linesCount, boxW / maxLineUnits));
+}
+
+const OcrCanvas = forwardRef(({
   onRegionSelect, 
   onLayersUpdate, 
   onImageLoaded, 
@@ -145,7 +157,7 @@ const OcrCanvas = forwardRef(({
   geminiApiKey = '',
   geminiModel = 'gemini-2.0-flash',
   geminiApiUrl = 'https://generativelanguage.googleapis.com',
-  localServerUrl = 'http://localhost:5000/ocr',
+  localServerUrl = 'http://localhost:5001/ocr',
   t = (key) => key
 }, ref) => {
   const containerRef = useRef(null);
@@ -610,15 +622,12 @@ const OcrCanvas = forwardRef(({
         const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey, onWorkerStatusChange, geminiModel, geminiApiUrl);
 
         if (textResult) {
-          const linesCount = textResult.split('\n').filter(l => l.trim() !== '').length || 1;
-          const calculatedFontSize = Math.max(12, height / linesCount);
-
           blocks.push({
             text: textResult,
             left: left,
             top: top,
             width: width,
-            height: calculatedFontSize,
+            height: height,
             id: `layer_${Date.now()}_0`
           });
         }
@@ -690,11 +699,12 @@ const OcrCanvas = forwardRef(({
 
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
+        const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height);
         const text = new fabric.Textbox(block.text, {
           left: block.left,
           top: block.top,
           width: block.width,
-          fontSize: block.height,
+          fontSize: regionalFontSize,
           fill: '#000000',
           backgroundColor: 'transparent',
           id: block.id,
@@ -770,9 +780,7 @@ const OcrCanvas = forwardRef(({
 
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
-      // Calculate font size by dividing the box height by the text line count to handle paragraphs, capped at a maximum of 32px
-      const linesCount = block.text.split('\n').filter(l => l.trim() !== '').length || 1;
-      const calculatedFontSize = Math.max(10, Math.min(32, block.bbox.h / linesCount));
+      const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h);
 
       const text = new fabric.Textbox(block.text, {
         left: block.bbox.x,
@@ -791,7 +799,7 @@ const OcrCanvas = forwardRef(({
         originalLeft: block.bbox.x,
         originalTop: block.bbox.y,
         originalWidth: block.bbox.w,
-        originalHeight: calculatedFontSize
+        originalHeight: block.bbox.h
       });
       
       await addCoverPatch(text);
