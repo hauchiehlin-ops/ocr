@@ -200,7 +200,7 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     const json = JSON.stringify(canvas.toJSON([
-      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch', 'isOcrReview', 'confidence',
+      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch', 'sourceLayerId', 'isOcrReview', 'confidence',
       'selectable', 'evented'
     ]));
     
@@ -544,7 +544,8 @@ const OcrCanvas = forwardRef(({
       height: patchInfo.patchHeight,
       selectable: false,
       evented: false,
-      isPatch: true
+      isPatch: true,
+      sourceLayerId: textbox.id
     });
     
     const canvas = fabricCanvas.current;
@@ -741,8 +742,8 @@ const OcrCanvas = forwardRef(({
           top: block.top,
           width: block.width,
           fontSize: regionalFontSize,
-          // Keep OCR text visible for comparison while leaving the source image
-          // intact. A slight transparency makes disagreements easy to spot.
+          // Keep OCR text visible for comparison while the surrounding source
+          // pixels remain intact. A slight transparency makes disagreements easy to spot.
           fill: 'rgba(0,0,0,0.78)',
           backgroundColor: 'transparent',
           id: block.id,
@@ -759,6 +760,9 @@ const OcrCanvas = forwardRef(({
           originalHeight: block.height
         });
 
+        // Replace the source glyphs after the OCR box is accepted. The patch is
+        // pixel-masked, so surrounding diagram lines and colours remain intact.
+        await _addCoverPatch(text);
         canvas.add(text);
       }
 
@@ -828,11 +832,9 @@ const OcrCanvas = forwardRef(({
         top: block.bbox.y,
         width: block.bbox.w,
         fontSize: calculatedFontSize,
-        // OCR output is a review layer, not an automatic destructive rewrite.
-        // The original image remains the visual source of truth until a user
-        // explicitly edits and approves a replacement.
-        // Keep OCR text visible for comparison while leaving the source image
-        // intact. A slight transparency makes disagreements easy to spot.
+        // OCR output is a review/replacement layer. The patch removes only the
+        // recognized glyph pixels; surrounding diagram content remains intact.
+        // A slight transparency makes disagreements easy to spot.
         fill: 'rgba(0,0,0,0.78)',
         backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
@@ -850,6 +852,9 @@ const OcrCanvas = forwardRef(({
         originalHeight: block.bbox.h
       });
       
+      // The OCR layer is visible for comparison, but the original glyphs must
+      // be removed first or the two renderings will appear as doubled text.
+      await _addCoverPatch(text);
       canvas.add(text);
     }
 
@@ -902,9 +907,11 @@ const OcrCanvas = forwardRef(({
       isOcrReview: false,
       fill: '#000000'
     });
-    // Background reconstruction is intentionally deferred until a user makes a
-    // real edit. OCR alone must never alter the source image.
-    await _addCoverPatch(textbox);
+    const canvas = fabricCanvas.current;
+    const alreadyPatched = canvas?.getObjects().some(obj =>
+      obj.isPatch && obj.sourceLayerId === textbox.id
+    );
+    if (!alreadyPatched) await _addCoverPatch(textbox);
   };
 
   useImperativeHandle(ref, () => ({
