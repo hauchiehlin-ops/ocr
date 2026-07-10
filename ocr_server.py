@@ -1,6 +1,8 @@
 import sys
 import base64
 import platform
+import io
+import re
 
 # Automatically check and install missing dependencies on first run
 try:
@@ -37,7 +39,7 @@ if IS_MACOS:
         import subprocess
         try:
             subprocess.check_call([sys.executable, "-m", "pip", "install",
-                                   "pyobjc-framework-Vision", "pyobjc-framework-Quartz"])
+                                   "pyobjc-framework-Vision", "pyobjc-framework-Quartz", "Pillow"])
             import Vision
             from Foundation import NSData
             vision_available = True
@@ -45,14 +47,16 @@ if IS_MACOS:
             print(f"Could not install Vision bindings ({e}); falling back to EasyOCR.")
 
 
-def vision_ocr(img_bytes):
-    """Run macOS native Vision OCR. Returns list of block dicts."""
+def vision_ocr_tile(img_bytes, offset_x, offset_y, tile_w, tile_h, full_w, full_h):
+    """Recognize one crop and remap Vision's box into full-image coordinates."""
     ns_data = NSData.dataWithBytes_length_(img_bytes, len(img_bytes))
     handler = Vision.VNImageRequestHandler.alloc().initWithData_options_(ns_data, None)
     req = Vision.VNRecognizeTextRequest.alloc().init()
     req.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
     req.setRecognitionLanguages_(["zh-Hant", "en-US"])
-    req.setUsesLanguageCorrection_(True)
+    # Infographics contain labels, acronyms and KPI names; language correction
+    # tends to "repair" valid short labels into unrelated dictionary words.
+    req.setUsesLanguageCorrection_(False)
     success, error = handler.performRequests_error_([req], None)
     if not success:
         raise RuntimeError(f"Vision request failed: {error}")
@@ -65,25 +69,84 @@ def vision_ocr(img_bytes):
         cand = candidates.objectAtIndex_(0)
         text = str(cand.string())
         conf = float(cand.confidence())
-        if conf < 0.2 or not text.strip():
+        if conf < 0.45 or not text.strip():
             continue
         # Vision bbox: normalized [0,1], origin at BOTTOM-left
         bb = obs.boundingBox()
-        x = bb.origin.x
-        y = bb.origin.y
-        bw = bb.size.width
-        bh = bb.size.height
+        xmin = (offset_x + bb.origin.x * tile_w) / full_w
+        ymin = (offset_y + (1 - bb.origin.y - bb.size.height) * tile_h) / full_h
+        xmax = (offset_x + (bb.origin.x + bb.size.width) * tile_w) / full_w
+        ymax = (offset_y + (1 - bb.origin.y) * tile_h) / full_h
         blocks.append({
             "text": text,
             "confidence": round(conf, 3),
             "bbox": [
-                int((1 - y - bh) * 1000),  # ymin (flip to top-left origin)
-                int(x * 1000),             # xmin
-                int((1 - y) * 1000),       # ymax
-                int((x + bw) * 1000)       # xmax
+                round(ymin * 1000),
+                round(xmin * 1000),
+                round(ymax * 1000),
+                round(xmax * 1000)
             ]
         })
     return blocks
+
+
+def _normalized_text(text):
+    return re.sub(r"[\W_]+", "", text).lower()
+
+
+def _overlap_ratio(a, b):
+    ay0, ax0, ay1, ax1 = a
+    by0, bx0, by1, bx1 = b
+    intersection = max(0, min(ax1, bx1) - max(ax0, bx0)) * max(0, min(ay1, by1) - max(ay0, by0))
+    if not intersection:
+        return 0
+    area_a = (ax1 - ax0) * (ay1 - ay0)
+    area_b = (bx1 - bx0) * (by1 - by0)
+    return intersection / min(area_a, area_b)
+
+
+def _dedupe_blocks(blocks):
+    """Remove only same-text detections from the overlap between two crops."""
+    kept = []
+    for block in sorted(blocks, key=lambda item: item["confidence"], reverse=True):
+        text = _normalized_text(block["text"])
+        duplicate = any(
+            text and text == _normalized_text(existing["text"]) and
+            _overlap_ratio(block["bbox"], existing["bbox"]) > 0.35
+            for existing in kept
+        )
+        if not duplicate:
+            kept.append(block)
+    return kept
+
+
+def vision_ocr(img_bytes):
+    """Run high-accuracy Vision OCR, using overlapping crops for dense diagrams."""
+    try:
+        from PIL import Image
+        image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    except Exception:
+        # Vision still works without Pillow; only the dense-image tiling is skipped.
+        return vision_ocr_tile(img_bytes, 0, 0, 1, 1, 1, 1)
+
+    full_w, full_h = image.size
+    use_tiles = full_w > 1200 or full_h > 900
+    tile_w = int(round(full_w * 0.58)) if use_tiles else full_w
+    tile_h = int(round(full_h * 0.58)) if use_tiles else full_h
+    xs = [0, full_w - tile_w] if use_tiles else [0]
+    ys = [0, full_h - tile_h] if use_tiles else [0]
+    blocks = []
+
+    for top in ys:
+        for left in xs:
+            crop = image.crop((left, top, left + tile_w, top + tile_h))
+            payload = io.BytesIO()
+            crop.save(payload, format="PNG")
+            blocks.extend(vision_ocr_tile(
+                payload.getvalue(), left, top, tile_w, tile_h, full_w, full_h
+            ))
+
+    return _dedupe_blocks(blocks)
 
 
 # ---------------------------------------------------------------------------

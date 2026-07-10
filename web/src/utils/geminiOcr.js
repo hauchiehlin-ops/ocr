@@ -175,8 +175,9 @@ async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false
 }
 
 const OCR_PROMPT = `Analyze the image and perform extremely high-precision document OCR.
-Extract ALL text blocks, lines, labels, words, including very small text, vertically written text, and low-contrast background details.
-Output the text in Traditional Chinese (繁體中文) or English exactly as it appears.
+Extract visible text blocks, lines and short labels. Do not infer, translate, correct,
+or hallucinate text that is not clearly visible. Output the text in Traditional Chinese
+(繁體中文) or English exactly as it appears.
 Rules for segmentation and bounding boxes:
 - Create ONE object per visual text line or short standalone label. NEVER merge separate labels, nodes, or paragraphs into a single object.
 - Each "bbox" must TIGHTLY enclose only its own text pixels — not the surrounding shape, icon, or whitespace.
@@ -200,12 +201,16 @@ function parseOcrJson(raw) {
   const arr = JSON.parse(s.trim());
   if (!Array.isArray(arr)) throw new Error('Response is not a valid array.');
   // Drop malformed entries early: empty text or degenerate/invalid bbox
-  return arr.filter(b =>
-    b && typeof b.text === 'string' && b.text.trim() !== '' &&
-    Array.isArray(b.bbox) && b.bbox.length === 4 &&
-    b.bbox.every(v => Number.isFinite(v)) &&
-    b.bbox[2] > b.bbox[0] && b.bbox[3] > b.bbox[1]
-  );
+  return arr.flatMap(b => {
+    if (!b || typeof b.text !== 'string' || !b.text.trim() || !Array.isArray(b.bbox) || b.bbox.length !== 4) {
+      return [];
+    }
+    const coords = b.bbox.map(Number);
+    if (coords.some(v => !Number.isFinite(v))) return [];
+    const [ymin, xmin, ymax, xmax] = coords.map(v => Math.max(0, Math.min(1000, v)));
+    if (ymax <= ymin || xmax <= xmin) return [];
+    return [{ text: b.text.trim(), bbox: [ymin, xmin, ymax, xmax] }];
+  });
 }
 
 /** Normalize text for duplicate comparison: strip whitespace/punctuation, lowercase. */
@@ -249,7 +254,7 @@ export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelN
  * and duplicate blocks in overlapping zones are merged using Non-Maximum Suppression (NMS).
  */
 export async function runGeminiOcrTiled(
-  base64DataUrl, apiKey, onStatusChange, tileCount = 3, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com'
+  base64DataUrl, apiKey, onStatusChange, tileCount = 4, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com'
 ) {
   const img = await loadImage(base64DataUrl);
   const fullW = img.width;
@@ -375,9 +380,10 @@ export async function runGeminiOcrTiled(
       const areaB = (xmaxB - xminB) * (ymaxB - yminB);
       const overlap = interArea / Math.min(areaA, areaB);
 
-      // Same text + slight overlap → duplicate (Gemini boxes drift between tiles).
-      // Near-total containment (>85%) → duplicate even if OCR read it differently.
-      if ((overlap > 0.15 && textsSimilar(block.text, existing.text)) || overlap > 0.85) {
+      // Same text + overlap → duplicate (Gemini boxes drift between tiles).
+      // Keep different neighbouring labels even when their loose boxes touch;
+      // geometric-only suppression was deleting valid mind-map nodes.
+      if (overlap > 0.15 && textsSimilar(block.text, existing.text)) {
         isDuplicate = true;
         break;
       }

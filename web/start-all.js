@@ -22,7 +22,7 @@ const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3';
 if (pythonCmd === 'python3') {
   console.log("⚠️  No venv found at ../venv — using system python3.");
   console.log("   If the OCR server fails to install dependencies, run:");
-  console.log("   python3 -m venv venv && venv/bin/pip install flask flask-cors pyobjc-framework-Vision pyobjc-framework-Quartz\n");
+    console.log("   python3 -m venv venv && venv/bin/pip install flask flask-cors Pillow pyobjc-framework-Vision pyobjc-framework-Quartz\n");
 }
 
 // 1. Spawn Python OCR Server

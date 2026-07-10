@@ -60,71 +60,20 @@ function getLinesFromPage(page) {
   return lines;
 }
 
-// Local Adaptive Thresholding using Integral Image (Summed-Area Table) for fast O(N) execution
-function adaptiveThreshold(ctx, width, height) {
+// Preserve thin glyph edges; Tesseract performs its own thresholding.
+function prepareTesseractImage(ctx, width, height) {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
-  const grayscale = new Uint8Array(width * height);
+  // Preserve anti-aliased glyph edges; Tesseract performs its own binarisation.
   
-  // 1. Convert to grayscale
+  // Convert to grayscale with a mild contrast boost.
   for (let i = 0; i < data.length; i += 4) {
-    grayscale[i / 4] = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
-  }
-  
-  const output = new Uint8Array(width * height);
-  const S = Math.floor(Math.max(width, height) / 30) | 1; // Window size (must be odd)
-  const C = 10; // Threshold constant
-  
-  // 2. Compute integral image (Summed-Area Table)
-  const integral = new Uint32Array(width * height);
-  for (let y = 0; y < height; y++) {
-    let sum = 0;
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      sum += grayscale[idx];
-      if (y === 0) {
-        integral[idx] = sum;
-      } else {
-        integral[idx] = integral[(y - 1) * width + x] + sum;
-      }
-    }
-  }
-  
-  const halfS = Math.floor(S / 2);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-      
-      const x1 = Math.max(0, x - halfS);
-      const x2 = Math.min(width - 1, x + halfS);
-      const y1 = Math.max(0, y - halfS);
-      const y2 = Math.min(height - 1, y + halfS);
-      
-      const count = (x2 - x1 + 1) * (y2 - y1 + 1);
-      
-      // Box sum query in O(1)
-      const idx_br = y2 * width + x2;
-      const idx_tr = (y1 - 1) * width + x2;
-      const idx_bl = y2 * width + (x1 - 1);
-      const idx_tl = (y1 - 1) * width + (x1 - 1);
-      
-      let sum = integral[idx_br];
-      if (y1 > 0) sum -= integral[idx_tr];
-      if (x1 > 0) sum -= integral[idx_bl];
-      if (x1 > 0 && y1 > 0) sum += integral[idx_tl];
-      
-      const average = sum / count;
-      output[idx] = grayscale[idx] < (average - C) ? 0 : 255;
-    }
-  }
-  
-  // 3. Write binarized pixels back
-  for (let i = 0; i < data.length; i += 4) {
-    const val = output[i / 4];
-    data[i] = val;
-    data[i + 1] = val;
-    data[i + 2] = val;
-    data[i + 3] = 255; // fully opaque
+    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    const value = Math.max(0, Math.min(255, Math.round((gray - 128) * 1.12 + 128)));
+    data[i] = value;
+    data[i + 1] = value;
+    data[i + 2] = value;
+    data[i + 3] = 255;
   }
   ctx.putImageData(imgData, 0, 0);
 }
@@ -138,7 +87,64 @@ function calcOcrFontSize(text, boxW, boxH, maxSize = 32) {
   const maxLineUnits = Math.max(1, ...lines.map(l =>
     [...l].reduce((units, ch) => units + (ch.charCodeAt(0) > 0x2E7F ? 1 : 0.55), 0)
   ));
-  return Math.max(10, Math.min(maxSize, boxH / linesCount, boxW / maxLineUnits));
+  // Fabric renders a line taller than its fontSize. The former 10px floor made
+  // tiny OCR boxes wrap into oversized labels over neighbouring text.
+  const byHeight = (boxH - 2) / (linesCount * 1.18);
+  const byWidth = (boxW - 2) / maxLineUnits;
+  return Math.max(3, Math.min(maxSize, byHeight, byWidth));
+}
+
+function normalizedText(text) {
+  return String(text).replace(/[\s\p{P}\p{S}]+/gu, '').toLowerCase();
+}
+
+function overlapRatio(a, b) {
+  const left = Math.max(a.x, b.x);
+  const top = Math.max(a.y, b.y);
+  const right = Math.min(a.x + a.w, b.x + b.w);
+  const bottom = Math.min(a.y + a.h, b.y + b.h);
+  const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+  if (!intersection) return 0;
+  return intersection / Math.min(a.w * a.h, b.w * b.h);
+}
+
+function getRecognizedLines(data) {
+  // Tesseract returns `lines` for normal output and nests them under blocks when
+  // block output is requested. Support both shapes so sparse-text mode cannot
+  // silently produce an empty result.
+  if (Array.isArray(data?.lines) && data.lines.length > 0) return data.lines;
+  return getLinesFromPage(data);
+}
+
+function sanitizeOcrBlocks(blocks, layout) {
+  return (Array.isArray(blocks) ? blocks : []).flatMap(block => {
+    const raw = block?.bbox;
+    if (!block?.text?.trim() || !raw) return [];
+    const values = [raw.x, raw.y, raw.w, raw.h].map(Number);
+    if (values.some(value => !Number.isFinite(value))) return [];
+    const [x, y, w, h] = values;
+    if (w <= 1 || h <= 1 ||
+        (layout?.width > 0 && w > 0.9 * layout.width) ||
+        (layout?.height > 0 && h > 0.25 * layout.height)) {
+      return [];
+    }
+    return [{ ...block, bbox: { x, y, w, h } }];
+  });
+}
+
+function dedupeOcrBlocks(blocks) {
+  return [...blocks]
+    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+    .filter((block, index, sorted) => {
+      const text = normalizedText(block.text);
+      return !sorted.slice(0, index).some(existing => {
+        const existingText = normalizedText(existing.text);
+        const sameText = text && existingText &&
+          (text === existingText || (Math.min(text.length, existingText.length) >= 3 &&
+            (text.includes(existingText) || existingText.includes(text))));
+        return sameText && overlapRatio(block.bbox, existing.bbox) > 0.35;
+      });
+    });
 }
 
 const OcrCanvas = forwardRef(({
@@ -194,7 +200,7 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     const json = JSON.stringify(canvas.toJSON([
-      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch',
+      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch', 'isOcrReview', 'confidence',
       'selectable', 'evented'
     ]));
     
@@ -236,6 +242,13 @@ const OcrCanvas = forwardRef(({
               }
             }
           }
+        });
+
+        // This image is an infographic/mind-map, not a paragraph document.
+        // Sparse-text mode avoids joining distant nodes into one invented line.
+        await worker.setParameters({
+          tessedit_pageseg_mode: Tesseract.PSM.SPARSE_TEXT,
+          preserve_interword_spaces: '1'
         });
 
         if (active) {
@@ -422,8 +435,10 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  // Bilinear Background Generator
-  const createBilinearPatch = (left, top, width, height) => {
+  // Reconstruct only foreground glyph pixels instead of painting a solid
+  // rectangle over the infographic. The untouched source pixels preserve
+  // connector lines, gradients and icons around the edited text.
+  const createTextPatch = (left, top, width, height) => {
     const canvas = fabricCanvas.current;
     if (!canvas) return null;
     
@@ -432,16 +447,18 @@ const OcrCanvas = forwardRef(({
     const scale = layout.scale;
 
     // Convert from canvas space to image pixel space (image is centered on the canvas)
-    const imgLeft = Math.round((left - layout.left) / scale);
-    const imgTop = Math.round((top - layout.top) / scale);
-    const imgWidth = Math.round(width / scale);
-    const imgHeight = Math.round(height / scale);
+    const imgWidthMax = sampleCanvasRef.current?.width || 0;
+    const imgHeightMax = sampleCanvasRef.current?.height || 0;
+    if (!imgWidthMax || !imgHeightMax || scale <= 0) return null;
+
+    const imgLeft = Math.max(0, Math.min(imgWidthMax - 1, Math.round((left - layout.left) / scale)));
+    const imgTop = Math.max(0, Math.min(imgHeightMax - 1, Math.round((top - layout.top) / scale)));
+    const imgWidth = Math.max(1, Math.min(imgWidthMax - imgLeft, Math.round(width / scale)));
+    const imgHeight = Math.max(1, Math.min(imgHeightMax - imgTop, Math.round(height / scale)));
     
-    const imgWidthMax = sampleCanvasRef.current ? sampleCanvasRef.current.width : imgWidth;
-    const imgHeightMax = sampleCanvasRef.current ? sampleCanvasRef.current.height : imgHeight;
-    
-    // We add padding (e.g., 3 pixels at image scale) to make the patch slightly larger
-    const padding = 3;
+    // A one-pixel margin is enough to hide antialiased glyph edges without
+    // producing the visible grey bars that the old full-rectangle patch caused.
+    const padding = 1;
     const patchLeft = Math.max(0, imgLeft - padding);
     const patchTop = Math.max(0, imgTop - padding);
     const patchWidth = Math.min(imgWidthMax - patchLeft, imgWidth + 2 * padding);
@@ -459,14 +476,22 @@ const OcrCanvas = forwardRef(({
     patchCanvas.width = patchWidth;
     patchCanvas.height = patchHeight;
     const ctx = patchCanvas.getContext('2d');
-    const imgData = ctx.createImageData(patchWidth, patchHeight);
+    const sourceCtx = sampleCanvasRef.current.getContext('2d');
+    const sourceData = sourceCtx.getImageData(patchLeft, patchTop, patchWidth, patchHeight);
+    const imgData = new ImageData(new Uint8ClampedArray(sourceData.data), patchWidth, patchHeight);
     const data = imgData.data;
-    
+
     for (let y = 0; y < patchHeight; y++) {
       for (let x = 0; x < patchWidth; x++) {
         const index = (y * patchWidth + x) * 4;
-        const tx = patchWidth > 1 ? x / (patchWidth - 1) : 0;
-        const ty = patchHeight > 1 ? y / (patchHeight - 1) : 0;
+        const imageX = patchLeft + x;
+        const imageY = patchTop + y;
+        const inside = imageX >= imgLeft && imageX < imgLeft + imgWidth &&
+          imageY >= imgTop && imageY < imgTop + imgHeight;
+        if (!inside) continue;
+
+        const tx = imgWidth > 1 ? (imageX - imgLeft) / (imgWidth - 1) : 0;
+        const ty = imgHeight > 1 ? (imageY - imgTop) / (imgHeight - 1) : 0;
         
         const rTop = cTL.r * (1 - tx) + cTR.r * tx;
         const gTop = cTL.g * (1 - tx) + cTR.g * tx;
@@ -476,14 +501,20 @@ const OcrCanvas = forwardRef(({
         const gBot = cBL.g * (1 - tx) + cBR.g * tx;
         const bBot = cBL.b * (1 - tx) + cBR.b * tx;
 
-        const r = Math.round(rTop * (1 - ty) + rBot * ty);
-        const g = Math.round(gTop * (1 - ty) + gBot * ty);
-        const b = Math.round(bTop * (1 - ty) + bBot * ty);
-        
-        data[index] = r;
-        data[index + 1] = g;
-        data[index + 2] = b;
-        data[index + 3] = 255;
+        const bgR = rTop * (1 - ty) + rBot * ty;
+        const bgG = gTop * (1 - ty) + gBot * ty;
+        const bgB = bTop * (1 - ty) + bBot * ty;
+        const sourceLum = 0.299 * data[index] + 0.587 * data[index + 1] + 0.114 * data[index + 2];
+        const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+        const distance = Math.abs(data[index] - bgR) + Math.abs(data[index + 1] - bgG) + Math.abs(data[index + 2] - bgB);
+
+        // Replace only pixels that look like foreground glyphs. Pixels already
+        // matching the local background remain byte-for-byte from the source.
+        if (distance > 36 || Math.abs(sourceLum - bgLum) > 18) {
+          data[index] = Math.round(bgR);
+          data[index + 1] = Math.round(bgG);
+          data[index + 2] = Math.round(bgB);
+        }
       }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -496,8 +527,8 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  const addCoverPatch = async (textbox) => {
-    const patchInfo = createBilinearPatch(
+  const _addCoverPatch = async (textbox) => {
+    const patchInfo = createTextPatch(
       textbox.originalLeft, 
       textbox.originalTop, 
       textbox.originalWidth, 
@@ -664,7 +695,7 @@ const OcrCanvas = forwardRef(({
           });
         });
       } else {
-        // Apply preprocessing on the cropped area to improve accuracy with 2x supersampling and adaptive thresholding
+        // Preserve sparse diagram glyphs; Tesseract handles thresholding itself.
         const scaleFactor = 2;
         const preprocessCropCanvas = document.createElement('canvas');
         preprocessCropCanvas.width = imgWidth * scaleFactor;
@@ -673,14 +704,15 @@ const OcrCanvas = forwardRef(({
         preprocessCropCtx.imageSmoothingEnabled = true;
         preprocessCropCtx.imageSmoothingQuality = 'high';
         preprocessCropCtx.drawImage(cropCanvas, 0, 0, imgWidth * scaleFactor, imgHeight * scaleFactor);
-        adaptiveThreshold(preprocessCropCtx, preprocessCropCanvas.width, preprocessCropCanvas.height);
+        prepareTesseractImage(preprocessCropCtx, preprocessCropCanvas.width, preprocessCropCanvas.height);
 
         const result = await tesseractWorker.current.recognize(preprocessCropCanvas, {}, { blocks: true });
-        const lines = getLinesFromPage(result.data);
+        const lines = getRecognizedLines(result.data);
 
         lines.forEach((line, index) => {
           const rawText = line.text.trim();
-          if (!rawText) return;
+          const confidence = Number(line.confidence) / 100;
+          if (!rawText || !Number.isFinite(confidence) || confidence < 0.35) return;
 
           const correctedText = correctOcrText(rawText);
 
@@ -695,6 +727,7 @@ const OcrCanvas = forwardRef(({
             top: textboxTop,
             width: textboxWidth,
             height: textboxHeight,
+            confidence,
             id: `layer_${Date.now()}_${index}`
           });
         });
@@ -708,7 +741,9 @@ const OcrCanvas = forwardRef(({
           top: block.top,
           width: block.width,
           fontSize: regionalFontSize,
-          fill: '#000000',
+          // Keep OCR text visible for comparison while leaving the source image
+          // intact. A slight transparency makes disagreements easy to spot.
+          fill: 'rgba(0,0,0,0.78)',
           backgroundColor: 'transparent',
           id: block.id,
           fontFamily: fontToUse,
@@ -716,6 +751,7 @@ const OcrCanvas = forwardRef(({
           cornerColor: '#60CDFF',
           borderColor: '#60CDFF',
           transparentCorners: false,
+          isOcrReview: true,
 
           originalLeft: block.left,
           originalTop: block.top,
@@ -723,7 +759,6 @@ const OcrCanvas = forwardRef(({
           originalHeight: block.height
         });
 
-        await addCoverPatch(text);
         canvas.add(text);
       }
 
@@ -757,7 +792,7 @@ const OcrCanvas = forwardRef(({
       text: obj.text,
       isBold: obj.fontWeight === 'bold',
       isItalic: obj.fontStyle === 'italic',
-      fill: obj.fill
+      fill: obj.isOcrReview ? '#000000' : obj.fill
     }));
     
     if (onLayersUpdate) {
@@ -780,9 +815,12 @@ const OcrCanvas = forwardRef(({
     });
 
     const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+    const reviewBlocks = dedupeOcrBlocks(
+      sanitizeOcrBlocks(blocks, imageLayout.current)
+    );
 
-    for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i];
+    for (let i = 0; i < reviewBlocks.length; i++) {
+      const block = reviewBlocks[i];
       const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h);
 
       const text = new fabric.Textbox(block.text, {
@@ -790,7 +828,12 @@ const OcrCanvas = forwardRef(({
         top: block.bbox.y,
         width: block.bbox.w,
         fontSize: calculatedFontSize,
-        fill: '#000000',
+        // OCR output is a review layer, not an automatic destructive rewrite.
+        // The original image remains the visual source of truth until a user
+        // explicitly edits and approves a replacement.
+        // Keep OCR text visible for comparison while leaving the source image
+        // intact. A slight transparency makes disagreements easy to spot.
+        fill: 'rgba(0,0,0,0.78)',
         backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
         fontFamily: fontToUse,
@@ -798,6 +841,8 @@ const OcrCanvas = forwardRef(({
         cornerColor: '#60CDFF',
         borderColor: '#60CDFF',
         transparentCorners: false,
+        isOcrReview: true,
+        confidence: block.confidence,
 
         originalLeft: block.bbox.x,
         originalTop: block.bbox.y,
@@ -805,7 +850,6 @@ const OcrCanvas = forwardRef(({
         originalHeight: block.bbox.h
       });
       
-      await addCoverPatch(text);
       canvas.add(text);
     }
 
@@ -823,7 +867,7 @@ const OcrCanvas = forwardRef(({
         text: activeObject.text,
         isBold: activeObject.fontWeight === 'bold',
         isItalic: activeObject.fontStyle === 'italic',
-        fill: activeObject.fill,
+        fill: activeObject.isOcrReview ? '#000000' : activeObject.fill,
         fontFamily: activeObject.fontFamily
       });
       syncLayers();
@@ -831,6 +875,10 @@ const OcrCanvas = forwardRef(({
   };
 
   const handleEditingExited = () => {
+    const activeObject = fabricCanvas.current?.getActiveObject();
+    if (activeObject?.type === 'textbox' && activeObject.isOcrReview && activeObject.text?.trim()) {
+      void materializeReviewLayer(activeObject).then(() => fabricCanvas.current?.renderAll());
+    }
     saveHistory();
   };
 
@@ -842,10 +890,21 @@ const OcrCanvas = forwardRef(({
         text: activeObject.text,
         isBold: activeObject.fontWeight === 'bold',
         isItalic: activeObject.fontStyle === 'italic',
-        fill: activeObject.fill,
+        fill: activeObject.isOcrReview ? '#000000' : activeObject.fill,
         fontFamily: activeObject.fontFamily
       });
     }
+  };
+
+  const materializeReviewLayer = async (textbox) => {
+    if (!textbox?.isOcrReview) return;
+    textbox.set({
+      isOcrReview: false,
+      fill: '#000000'
+    });
+    // Background reconstruction is intentionally deferred until a user makes a
+    // real edit. OCR alone must never alter the source image.
+    await _addCoverPatch(textbox);
   };
 
   useImperativeHandle(ref, () => ({
@@ -854,7 +913,11 @@ const OcrCanvas = forwardRef(({
       if (!canvas) return;
       const obj = canvas.getObjects().find(o => o.id === id);
       if (obj) {
+        const needsReplacement = obj.isOcrReview && obj.text !== newText;
         obj.set('text', newText);
+        if (needsReplacement) {
+          void materializeReviewLayer(obj).then(() => canvas.renderAll());
+        }
         canvas.renderAll();
         saveHistory();
       }
@@ -865,6 +928,9 @@ const OcrCanvas = forwardRef(({
       const obj = canvas.getObjects().find(o => o.id === id);
       if (obj) {
         obj.set(styleObject);
+        if (obj.isOcrReview) {
+          void materializeReviewLayer(obj).then(() => canvas.renderAll());
+        }
         canvas.renderAll();
         saveHistory();
       }
@@ -1088,6 +1154,80 @@ const OcrCanvas = forwardRef(({
     }
   }));
 
+  const runTesseractOcr = async (sampleCanvas) => {
+    const worker = tesseractWorker.current;
+    if (!worker) throw new Error("OCR Engine is not initialized yet.");
+
+    const origWidth = sampleCanvas.width;
+    const origHeight = sampleCanvas.height;
+    const shouldTile = origWidth > 1200 || origHeight > 900;
+    const tileWidth = shouldTile ? Math.ceil(origWidth * 0.58) : origWidth;
+    const tileHeight = shouldTile ? Math.ceil(origHeight * 0.58) : origHeight;
+    const tileXs = shouldTile ? [0, origWidth - tileWidth] : [0];
+    const tileYs = shouldTile ? [0, origHeight - tileHeight] : [0];
+    const tiles = tileYs.flatMap(y => tileXs.map(x => ({ x, y, w: tileWidth, h: tileHeight })));
+    const scaleFactor = 2;
+    const recognizedBlocks = [];
+    const layout = imageLayout.current;
+
+    for (let tileIndex = 0; tileIndex < tiles.length; tileIndex++) {
+      const tile = tiles[tileIndex];
+      if (onWorkerStatusChange && tiles.length > 1) {
+        onWorkerStatusChange(`OCR ${tileIndex + 1}/${tiles.length}: analysing sparse text…`);
+      }
+
+      const preprocessCanvas = document.createElement('canvas');
+      preprocessCanvas.width = tile.w * scaleFactor;
+      preprocessCanvas.height = tile.h * scaleFactor;
+      const preprocessCtx = preprocessCanvas.getContext('2d');
+      preprocessCtx.imageSmoothingEnabled = true;
+      preprocessCtx.imageSmoothingQuality = 'high';
+      preprocessCtx.drawImage(
+        sampleCanvas,
+        tile.x, tile.y, tile.w, tile.h,
+        0, 0, preprocessCanvas.width, preprocessCanvas.height
+      );
+      prepareTesseractImage(preprocessCtx, preprocessCanvas.width, preprocessCanvas.height);
+
+      const result = await worker.recognize(preprocessCanvas, {}, { blocks: true });
+      const lines = getRecognizedLines(result.data);
+      lines.forEach((line, lineIndex) => {
+        const rawText = line.text.trim();
+        const confidence = Number(line.confidence) / 100;
+        if (!rawText || !Number.isFinite(confidence) || confidence < 0.45) return;
+
+        const x0 = tile.x + line.bbox.x0 / scaleFactor;
+        const y0 = tile.y + line.bbox.y0 / scaleFactor;
+        const width = (line.bbox.x1 - line.bbox.x0) / scaleFactor;
+        const height = (line.bbox.y1 - line.bbox.y0) / scaleFactor;
+        // Reject the giant synthetic lines that page segmentation occasionally
+        // creates when an infographic's connectors are mistaken for characters.
+        if (width < 2 || height < 2 || height > tile.h * 0.16 ||
+            (width > tile.w * 0.55 && height > tile.h * 0.02)) return;
+        if (tiles.length > 1) {
+          const centerX = x0 + width / 2;
+          const centerY = y0 + height / 2;
+          const owner = (centerY < origHeight / 2 ? 0 : 2) + (centerX < origWidth / 2 ? 0 : 1);
+          if (owner !== tileIndex) return;
+        }
+
+        recognizedBlocks.push({
+          id: `layer_${Date.now()}_${tileIndex}_${lineIndex}`,
+          text: correctOcrText(rawText),
+          confidence,
+          bbox: {
+            x: layout.left + x0 * layout.scale,
+            y: layout.top + y0 * layout.scale,
+            w: width * layout.scale,
+            h: height * layout.scale
+          }
+        });
+      });
+    }
+
+    return dedupeOcrBlocks(recognizedBlocks);
+  };
+
   // Run full-image OCR with the currently selected engine, using the stored
   // original-resolution image. Shared by the initial image load and the
   // "Re-run OCR" button (so switching engines doesn't require re-uploading).
@@ -1096,8 +1236,6 @@ const OcrCanvas = forwardRef(({
     if (!sampleCanvas) throw new Error("No image loaded yet.");
 
     const data = sampleCanvas.toDataURL('image/png');
-    const origWidth = sampleCanvas.width;
-    const origHeight = sampleCanvas.height;
     const blocks = [];
 
     if (ocrEngine === 'cloud') {
@@ -1105,7 +1243,7 @@ const OcrCanvas = forwardRef(({
         throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
       }
 
-      const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 3, geminiModel, geminiApiUrl);
+      const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 4, geminiModel, geminiApiUrl);
       const layout = imageLayout.current;
 
       geminiResult.forEach((item, index) => {
@@ -1117,6 +1255,7 @@ const OcrCanvas = forwardRef(({
         blocks.push({
           id: `layer_${Date.now()}_${index}`,
           text: item.text,
+          confidence: item.confidence ?? 0.7,
           bbox: {
             x: layout.left + (xmin / 1000) * layout.width,
             y: layout.top + (ymin / 1000) * layout.height,
@@ -1144,6 +1283,7 @@ const OcrCanvas = forwardRef(({
         blocks.push({
           id: `layer_${Date.now()}_${index}`,
           text: item.text,
+          confidence: item.confidence ?? 0,
           bbox: {
             x: layout.left + (xmin / 1000) * layout.width,
             y: layout.top + (ymin / 1000) * layout.height,
@@ -1153,43 +1293,7 @@ const OcrCanvas = forwardRef(({
         });
       });
     } else {
-      // Run full Tesseract OCR on a preprocessed canvas
-      // (2x supersampling + adaptive thresholding)
-      const worker = tesseractWorker.current;
-      if (!worker) throw new Error("OCR Engine is not initialized yet.");
-
-      const scaleFactor = 2;
-      const preprocessCanvas = document.createElement('canvas');
-      preprocessCanvas.width = origWidth * scaleFactor;
-      preprocessCanvas.height = origHeight * scaleFactor;
-      const preprocessCtx = preprocessCanvas.getContext('2d');
-      preprocessCtx.imageSmoothingEnabled = true;
-      preprocessCtx.imageSmoothingQuality = 'high';
-      preprocessCtx.drawImage(sampleCanvas, 0, 0, origWidth * scaleFactor, origHeight * scaleFactor);
-      adaptiveThreshold(preprocessCtx, preprocessCanvas.width, preprocessCanvas.height);
-
-      const result = await worker.recognize(preprocessCanvas, {}, { blocks: true });
-
-      const lines = getLinesFromPage(result.data);
-      lines.forEach((line, index) => {
-        const rawText = line.text.trim();
-        if (!rawText) return;
-
-        const correctedText = correctOcrText(rawText);
-
-        const layout = imageLayout.current;
-        blocks.push({
-          id: `layer_${Date.now()}_${index}`,
-          text: correctedText,
-          confidence: line.confidence / 100,
-          bbox: {
-            x: layout.left + (line.bbox.x0 / scaleFactor) * layout.scale,
-            y: layout.top + (line.bbox.y0 / scaleFactor) * layout.scale,
-            w: ((line.bbox.x1 - line.bbox.x0) / scaleFactor) * layout.scale,
-            h: ((line.bbox.y1 - line.bbox.y0) / scaleFactor) * layout.scale
-          }
-        });
-      });
+      blocks.push(...await runTesseractOcr(sampleCanvas));
     }
 
     await renderOcrResults(blocks);
