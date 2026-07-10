@@ -167,6 +167,9 @@ const OcrCanvas = forwardRef(({
   const sampleCanvasRef = useRef(null);
   const tesseractWorker = useRef(null);
   const originalDimensions = useRef({ width: 0, height: 0 });
+  // Where the background image actually sits on the canvas:
+  // canvas is sized to the visible workspace, the image is fit-scaled and centered inside it.
+  const imageLayout = useRef({ scale: 1, left: 0, top: 0, width: 0, height: 0 });
   
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -264,6 +267,7 @@ const OcrCanvas = forwardRef(({
       selection: true,
     });
     fabricCanvas.current = canvas;
+    if (import.meta.env.DEV) window.__fabricCanvas = canvas;
 
     canvas.on('selection:created', handleSelection);
     canvas.on('selection:updated', handleSelection);
@@ -320,7 +324,9 @@ const OcrCanvas = forwardRef(({
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (let entry of entries) {
-        if (!bgImage.current && fabricCanvas.current) {
+        // The canvas always spans the visible workspace, image or not;
+        // objects keep their coordinates (users can pan/zoom to re-frame).
+        if (fabricCanvas.current && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
            fabricCanvas.current.setDimensions({
              width: entry.contentRect.width,
              height: entry.contentRect.height
@@ -421,18 +427,13 @@ const OcrCanvas = forwardRef(({
     const canvas = fabricCanvas.current;
     if (!canvas) return null;
     
-    // Find the scale. Fall back to bgImage.scaleX if originalDimensions is not set
-    let scale = 1;
-    if (originalDimensions.current.width) {
-      scale = canvas.width / originalDimensions.current.width;
-    } else if (bgImage.current) {
-      scale = bgImage.current.scaleX;
-    } else {
-      return null;
-    }
-    
-    const imgLeft = Math.round(left / scale);
-    const imgTop = Math.round(top / scale);
+    const layout = imageLayout.current;
+    if (!layout.width || !bgImage.current) return null;
+    const scale = layout.scale;
+
+    // Convert from canvas space to image pixel space (image is centered on the canvas)
+    const imgLeft = Math.round((left - layout.left) / scale);
+    const imgTop = Math.round((top - layout.top) / scale);
     const imgWidth = Math.round(width / scale);
     const imgHeight = Math.round(height / scale);
     
@@ -488,8 +489,8 @@ const OcrCanvas = forwardRef(({
     ctx.putImageData(imgData, 0, 0);
     return {
       dataUrl: patchCanvas.toDataURL(),
-      patchLeft: patchLeft * scale,
-      patchTop: patchTop * scale,
+      patchLeft: layout.left + patchLeft * scale,
+      patchTop: layout.top + patchTop * scale,
       patchWidth: patchWidth * scale,
       patchHeight: patchHeight * scale
     };
@@ -592,9 +593,11 @@ const OcrCanvas = forwardRef(({
     if (!bgImage.current || !fabricCanvas.current) return;
     if (ocrEngine === 'local' && !tesseractWorker.current) return;
     
-    const scale = bgImage.current.scaleX;
-    const imgLeft = left / scale;
-    const imgTop = top / scale;
+    const layout = imageLayout.current;
+    const scale = layout.scale;
+    // Convert selection from canvas space to image pixel space (image is centered on the canvas)
+    const imgLeft = (left - layout.left) / scale;
+    const imgTop = (top - layout.top) / scale;
     const imgWidth = width / scale;
     const imgHeight = height / scale;
 
@@ -950,6 +953,7 @@ const OcrCanvas = forwardRef(({
       bgImage.current = null;
       sampleCanvasRef.current = null;
       originalDimensions.current = { width: 0, height: 0 };
+      imageLayout.current = { scale: 1, left: 0, top: 0, width: 0, height: 0 };
       setImageLoaded(false);
       if (onImageLoaded) onImageLoaded(false);
       if (onLayersUpdate) onLayersUpdate([]);
@@ -1007,11 +1011,15 @@ const OcrCanvas = forwardRef(({
       canvas.discardActiveObject();
       canvas.renderAll();
 
-      const scale = canvas.width / originalDimensions.current.width;
-      // Get data URL at original image resolution using multiplier
+      const layout = imageLayout.current;
+      // Crop to the image area and restore original image resolution
       const dataUrl = canvas.toDataURL({
         format: 'png',
-        multiplier: 1 / scale
+        left: layout.left,
+        top: layout.top,
+        width: layout.width,
+        height: layout.height,
+        multiplier: 1 / layout.scale
       });
 
       const link = document.createElement("a");
@@ -1028,11 +1036,16 @@ const OcrCanvas = forwardRef(({
       canvas.discardActiveObject();
       canvas.renderAll();
 
-      const scale = canvas.width / originalDimensions.current.width;
-      // Export full resolution image
+      const layout = imageLayout.current;
+      const scale = layout.scale;
+      // Crop to the image area and restore original image resolution
       const dataUrl = canvas.toDataURL({
         format: 'jpeg',
         quality: 1.0,
+        left: layout.left,
+        top: layout.top,
+        width: layout.width,
+        height: layout.height,
         multiplier: 1 / scale
       });
 
@@ -1053,8 +1066,8 @@ const OcrCanvas = forwardRef(({
       pdf.setFontSize(12);
 
       textLayers.forEach(layer => {
-         const origX = layer.left / scale;
-         const origY = (layer.top + layer.height) / scale; // jsPDF origin is bottom-left
+         const origX = (layer.left - layout.left) / scale;
+         const origY = (layer.top - layout.top + layer.height) / scale; // jsPDF origin is bottom-left
          pdf.text(layer.text, origX, origY);
       });
 
@@ -1068,49 +1081,71 @@ const OcrCanvas = forwardRef(({
 
     const reader = new FileReader();
     reader.onload = async (f) => {
-      const data = f.target.result;
+      const rawData = f.target.result;
       try {
-        const img = await fabric.FabricImage.fromURL(data);
-        const canvas = fabricCanvas.current;
-        
-        const containerWidth = containerRef.current.clientWidth;
-        const containerHeight = containerRef.current.clientHeight;
-        
-        const scale = Math.min(
-          containerWidth / img.width,
-          containerHeight / img.height
-        );
-        
-        canvas.setDimensions({
-          width: img.width * scale,
-          height: img.height * scale
+        // Composite the uploaded image onto a white background first: transparent
+        // PNGs otherwise become black in the OCR engines and in the cover patches.
+        const rawImgEl = await new Promise((resolve, reject) => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.onerror = reject;
+          el.src = rawData;
         });
-
-        canvas.clear(); 
-        img.scale(scale);
-        
-        canvas.backgroundImage = img;
-        canvas.backgroundImage.set({
-          originX: 'left',
-          originY: 'top',
-          left: 0,
-          top: 0
-        });
-        
-        bgImage.current = img;
-        canvas.renderAll();
-        
-        const imgElement = img.getElement();
-        const origWidth = imgElement.naturalWidth || imgElement.width || img.width;
-        const origHeight = imgElement.naturalHeight || imgElement.height || img.height;
-        originalDimensions.current = { width: origWidth, height: origHeight };
+        const origWidth = rawImgEl.naturalWidth;
+        const origHeight = rawImgEl.naturalHeight;
 
         const sampleCanvas = document.createElement('canvas');
         sampleCanvas.width = origWidth;
         sampleCanvas.height = origHeight;
         const sampleCtx = sampleCanvas.getContext('2d');
-        sampleCtx.drawImage(imgElement, 0, 0);
+        sampleCtx.fillStyle = '#ffffff';
+        sampleCtx.fillRect(0, 0, origWidth, origHeight);
+        sampleCtx.drawImage(rawImgEl, 0, 0);
         sampleCanvasRef.current = sampleCanvas;
+        const data = sampleCanvas.toDataURL('image/png');
+
+        const img = await fabric.FabricImage.fromURL(data);
+        const canvas = fabricCanvas.current;
+
+        // The canvas always spans the visible workspace; the image is fit-scaled
+        // and centered inside it.
+        const containerWidth = containerRef.current.clientWidth;
+        const containerHeight = containerRef.current.clientHeight;
+
+        const scale = Math.min(
+          containerWidth / origWidth,
+          containerHeight / origHeight
+        );
+        const imgLeft = (containerWidth - origWidth * scale) / 2;
+        const imgTop = (containerHeight - origHeight * scale) / 2;
+
+        canvas.setDimensions({
+          width: containerWidth,
+          height: containerHeight
+        });
+
+        canvas.clear();
+        img.scale(scale);
+
+        canvas.backgroundImage = img;
+        canvas.backgroundImage.set({
+          originX: 'left',
+          originY: 'top',
+          left: imgLeft,
+          top: imgTop
+        });
+
+        bgImage.current = img;
+        canvas.renderAll();
+
+        originalDimensions.current = { width: origWidth, height: origHeight };
+        imageLayout.current = {
+          scale,
+          left: imgLeft,
+          top: imgTop,
+          width: origWidth * scale,
+          height: origHeight * scale
+        };
 
         // Apply preprocessing using an off-screen canvas with 2x supersampling and adaptive thresholding
         const scaleFactor = 2;
@@ -1120,7 +1155,7 @@ const OcrCanvas = forwardRef(({
         const preprocessCtx = preprocessCanvas.getContext('2d');
         preprocessCtx.imageSmoothingEnabled = true;
         preprocessCtx.imageSmoothingQuality = 'high';
-        preprocessCtx.drawImage(imgElement, 0, 0, origWidth * scaleFactor, origHeight * scaleFactor);
+        preprocessCtx.drawImage(sampleCanvas, 0, 0, origWidth * scaleFactor, origHeight * scaleFactor);
         adaptiveThreshold(preprocessCtx, preprocessCanvas.width, preprocessCanvas.height);
 
         history.current = [];
@@ -1140,8 +1175,7 @@ const OcrCanvas = forwardRef(({
           }
           
           const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 3, geminiModel, geminiApiUrl);
-          const canvasWidth = canvas.width;
-          const canvasHeight = canvas.height;
+          const layout = imageLayout.current;
 
           geminiResult.forEach((item, index) => {
             const ymin = item.bbox[0];
@@ -1153,10 +1187,10 @@ const OcrCanvas = forwardRef(({
               id: `layer_${Date.now()}_${index}`,
               text: item.text,
               bbox: {
-                x: (xmin / 1000) * canvasWidth,
-                y: (ymin / 1000) * canvasHeight,
-                w: ((xmax - xmin) / 1000) * canvasWidth,
-                h: ((ymax - ymin) / 1000) * canvasHeight
+                x: layout.left + (xmin / 1000) * layout.width,
+                y: layout.top + (ymin / 1000) * layout.height,
+                w: ((xmax - xmin) / 1000) * layout.width,
+                h: ((ymax - ymin) / 1000) * layout.height
               }
             });
           });
@@ -1171,8 +1205,7 @@ const OcrCanvas = forwardRef(({
             throw new Error(`Local OCR server returned error: ${response.status}`);
           }
           const customResult = await response.json();
-          const canvasWidth = canvas.width;
-          const canvasHeight = canvas.height;
+          const layout = imageLayout.current;
 
           customResult.forEach((item, index) => {
             const [ymin, xmin, ymax, xmax] = item.bbox;
@@ -1181,10 +1214,10 @@ const OcrCanvas = forwardRef(({
               id: `layer_${Date.now()}_${index}`,
               text: item.text,
               bbox: {
-                x: (xmin / 1000) * canvasWidth,
-                y: (ymin / 1000) * canvasHeight,
-                w: ((xmax - xmin) / 1000) * canvasWidth,
-                h: ((ymax - ymin) / 1000) * canvasHeight
+                x: layout.left + (xmin / 1000) * layout.width,
+                y: layout.top + (ymin / 1000) * layout.height,
+                w: ((xmax - xmin) / 1000) * layout.width,
+                h: ((ymax - ymin) / 1000) * layout.height
               }
             });
           });
@@ -1202,15 +1235,16 @@ const OcrCanvas = forwardRef(({
             
             const correctedText = correctOcrText(rawText);
 
+            const layout = imageLayout.current;
             blocks.push({
               id: `layer_${Date.now()}_${index}`,
               text: correctedText,
               confidence: line.confidence / 100,
               bbox: {
-                x: (line.bbox.x0 / 2) * scale,
-                y: (line.bbox.y0 / 2) * scale,
-                w: ((line.bbox.x1 - line.bbox.x0) / 2) * scale,
-                h: ((line.bbox.y1 - line.bbox.y0) / 2) * scale
+                x: layout.left + (line.bbox.x0 / 2) * layout.scale,
+                y: layout.top + (line.bbox.y0 / 2) * layout.scale,
+                w: ((line.bbox.x1 - line.bbox.x0) / 2) * layout.scale,
+                h: ((line.bbox.y1 - line.bbox.y0) / 2) * layout.scale
               }
             });
           });

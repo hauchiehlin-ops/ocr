@@ -66,23 +66,25 @@ function App() {
   };
 
   const [localServerStatus, setLocalServerStatus] = useState('disconnected');
+  const [localServerEngine, setLocalServerEngine] = useState('');
 
   const testLocalServerConnection = async () => {
     setLocalServerStatus('checking');
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 2000);
-      
+
       const baseUrl = localServerUrl.replace(/\/ocr$/, '');
       const response = await fetch(`${baseUrl}/status`, {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.status === 'running') {
           setLocalServerStatus('connected');
+          setLocalServerEngine(data.engine || '');
           return;
         }
       }
@@ -103,7 +105,24 @@ function App() {
   const [englishFont, setEnglishFont] = useState('Century Gothic');
   const [forcePresetFont, setForcePresetFont] = useState(true);
 
-  const presetFontFamily = `'${englishFont}', '${chineseFont}', sans-serif`;
+  // Each choice carries cross-platform equivalents: the Windows names
+  // (JhengHei/DFKai-SB/PMingLiU) don't exist on macOS and vice versa,
+  // so a bare name silently falls back and font switching looks broken.
+  const CJK_FONT_STACKS = {
+    'Microsoft JhengHei': `'Microsoft JhengHei', '微軟正黑體', 'PingFang TC', 'Heiti TC'`,
+    'PingFang TC': `'PingFang TC', 'Microsoft JhengHei', 'Heiti TC'`,
+    'DFKai-SB': `'DFKai-SB', '標楷體', 'BiauKai', 'Kaiti TC', 'KaiTi'`,
+    'PMingLiU': `'PMingLiU', '新細明體', 'Songti TC', 'LiSong Pro', 'SimSun'`,
+    'sans-serif': 'sans-serif'
+  };
+  const EN_FONT_STACKS = {
+    'Century Gothic': `'Century Gothic', 'Avenir Next', 'Futura'`,
+    'Segoe UI': `'Segoe UI', 'Helvetica Neue', 'Arial'`,
+    'Arial': `'Arial', 'Helvetica'`,
+    'Courier New': `'Courier New', 'Courier', monospace`,
+    'Times New Roman': `'Times New Roman', 'Times', serif`
+  };
+  const presetFontFamily = `${EN_FONT_STACKS[englishFont] || `'${englishFont}'`}, ${CJK_FONT_STACKS[chineseFont] || `'${chineseFont}'`}, sans-serif`;
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
@@ -665,8 +684,8 @@ function App() {
                       display: 'inline-block'
                     }} />
                     <span style={{ opacity: 0.85 }}>
-                      {localServerStatus === 'connected' 
-                        ? (uiLanguage === '繁體中文' ? '已連接 (EasyOCR)' : 'Connected (EasyOCR)')
+                      {localServerStatus === 'connected'
+                        ? (uiLanguage === '繁體中文' ? `已連接 (${localServerEngine || 'OCR'})` : `Connected (${localServerEngine || 'OCR'})`)
                         : localServerStatus === 'checking'
                         ? (uiLanguage === '繁體中文' ? '正在檢測...' : 'Checking...')
                         : (uiLanguage === '繁體中文' ? '未偵測到伺服器' : '未偵測到伺服器')}
