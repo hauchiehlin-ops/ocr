@@ -1,131 +1,104 @@
-const translations = {
-  en: {
-    title: "AI OCR Pro Editor",
-    file: "File",
-    edit: "Edit",
-    view: "View",
-    settings: "Settings",
-    loadImage: "Load Image...",
-    closeImage: "Close Image",
-    saveImage: "Save Image",
-    exportCsv: "Export to CSV",
-    exportPdf: "Export to Searchable PDF",
-    insertText: "Insert Text",
-    applyFont: "Apply Default Font",
-    applyFontAll: "Apply Default Font to All",
-    undo: "Undo",
-    redo: "Redo",
-    showLeft: "Show Left Panel",
-    showRight: "Show Right Panel",
-    uiLang: "UI Language",
+/**
+ * Display names are intentionally kept as values because they are also what
+ * the user sees in the Settings menu.  Keep this list in sync with the native
+ * Windows editor's LocalizationManager supported-language list.
+ */
+export const SUPPORTED_UI_LANGUAGES = [
+  'English',
+  '繁體中文',
+  '简体中文',
+  '日本語',
+  '한국어',
+  'ไทย',
+  'Español',
+  'Português',
+  'Bahasa Melayu',
+  'Русский',
+  'Deutsch'
+];
 
-    zoom: "Zoom",
-    docStatus: "Document Status",
-    noImage: "No Image Loaded",
-    loaded: "✓ Image Loaded & Processed",
-    processingOcr: "Processing Local OCR...",
-    runningTess: "Running Tesseract.js",
-    layers: "Interactive Layers",
-    noLayers: "No layers detected yet.",
-    formatting: "Text Formatting",
-    editContent: "Edit Content",
-    placeholder: "Select a region first",
-    placeholderActive: "Edit text here...",
-    paragraph: "Paragraph Format",
-    bold: "Bold",
-    italic: "Italic",
-    color: "Color Presets",
-    aiOps: "AI Operations",
-    fixText: "Fix Text",
-    fixTextHelp: "Purpose: correct OCR typos and spacing in the selected text. Effect: replaces the selected layer with the locally generated corrected text.",
-    extract: "Extract Entities",
-    extractHelp: "Purpose: find names, organizations, concepts, metrics, dates and key terms. Effect: appends a Traditional Chinese bullet list while keeping the original text.",
-    translate: "Translate to ZH",
-    translateHelp: "Purpose: translate the selected text into Traditional Chinese. Effect: replaces the selected layer with the translation.",
-    ops: "Operations",
-    regionalOcr: "Regional OCR",
-    drawingMode: "Drawing Mode",
-    removeText: "Remove Text",
-    tessInit: "Initializing OCR Engine...",
-    tessReady: "OCR Engine Ready",
-    presetFonts: "Preset Fonts",
-    engFont: "English Font",
-    zhFont: "Chinese/System Font",
-    forceFont: "Force Apply Preset Fonts on Load",
-    applyFontAllPreset: "Apply Preset Fonts to All",
-    ocrEngine: "OCR Engine",
-    localEngine: "Local Engine (Tesseract.js)",
-    cloudEngine: "Cloud Engine (Gemini 2.0 Flash)",
-    geminiKey: "Gemini API Key",
-    keyRequiredPrompt: "Please enter your Gemini API Key in the Settings menu or sidebar to unlock the high-accuracy Cloud OCR engine.",
-    getKeyLink: "Get API Key (Google AI Studio)",
-    keyNeeded: "⚠️ Gemini API Key is required for Cloud OCR."
-  },
-  zh: {
-    title: "AI OCR Pro Editor",
-    file: "檔案",
-    edit: "編輯",
-    view: "檢視",
-    settings: "設定",
-    loadImage: "載入圖片...",
-    closeImage: "關閉圖片",
-    saveImage: "儲存圖片",
-    exportCsv: "匯出至 CSV",
-    exportPdf: "匯出至可搜尋 PDF",
-    insertText: "插入文字",
-    applyFont: "套用預設字型",
-    applyFontAll: "套用預設字型至全部",
-    undo: "復原",
-    redo: "重做",
-    showLeft: "顯示左側面板",
-    showRight: "顯示右側面板",
-    uiLang: "UI 介面語言",
+const english = {
+  title: 'AI OCR Pro Editor', file: 'File', edit: 'Edit', view: 'View', settings: 'Settings',
+  loadImage: 'Load Image...', closeImage: 'Close Image', saveImage: 'Save Image',
+  exportCsv: 'Export to CSV', exportPdf: 'Export to Searchable PDF', exportImage: 'Export Image',
+  insertText: 'Insert Text', applyFont: 'Apply Default Font', applyFontAll: 'Apply Default Font to All',
+  undo: 'Undo', redo: 'Redo', showLeft: 'Show Left Panel', showRight: 'Show Right Panel',
+  uiLang: 'UI Language', zoom: 'Zoom', docStatus: 'Document Status', noImage: 'No Image Loaded',
+  loaded: '✓ Image Loaded & Processed', processingOcr: 'Processing OCR...', runningTess: 'Running OCR engine...',
+  layers: 'Interactive Layers', noLayers: 'No layers detected yet.', emptyLayer: '[Empty Layer]',
+  formatting: 'Text Formatting', editContent: 'Edit Content', placeholder: 'Select a region first',
+  placeholderActive: 'Edit text here...', paragraph: 'Paragraph Format', bold: 'Bold', italic: 'Italic',
+  color: 'Color Presets', customColor: 'Custom Color', aiOps: 'AI Local Operations',
+  fixText: 'Proofread Text', fixTextHelp: 'Purpose: correct OCR typos and spacing in the selected text. Effect: replaces the selected layer with the locally generated corrected text.',
+  extract: 'Extract Entities', extractHelp: 'Purpose: find names, organizations, concepts, metrics, dates and key terms. Effect: appends a structured entity list while keeping the original text.',
+  ops: 'Common Operations', regionalOcr: 'Regional OCR', drawingMode: 'Drawing Mode', removeText: 'Remove Text',
+  tessInit: 'Initializing OCR Engine...', tessReady: 'OCR Engine Ready', presetFonts: 'Preset Fonts',
+  engFont: 'English/Number Font', zhFont: 'Chinese/System Font', forceFont: 'Force Apply on Image/OCR Load',
+  applyFontAllPreset: 'Apply Fonts to Entire File', localFontsHint: 'All fonts exposed by this device are included when the browser grants local-font permission; common fallbacks remain available otherwise.',
+  ocrEngine: 'OCR Engine', localEngine: 'Local (Tesseract)', cloudEngine: 'Cloud (Gemini AI)', nativeServerEngine: 'Local Server (Native OCR)',
+  localEngineHelp: 'Runs Tesseract in the browser; no local server is required.', cloudEngineHelp: 'Uses Gemini AI cloud OCR; an API key is required.', nativeServerEngineHelp: 'Uses Apple Vision, Windows OCR, or a custom OCR service through localhost.',
+  rerunOcr: '🔄 Re-run OCR (current engine)', recognizing: 'Recognizing…', cloudOcrHint: 'The image is split into regions and recognized sequentially…', ocrHint: 'OCR is running, please wait…',
+  geminiKey: 'Gemini API Key', cloudModel: 'Cloud Model', customBaseUrl: 'Custom Base URL (Optional)',
+  keyRequiredPrompt: 'Please enter your Gemini API Key in the Settings menu or sidebar to unlock the high-accuracy Cloud OCR engine.',
+  getKeyLink: 'Get API Key (Google AI Studio)', keyNeeded: '⚠️ Gemini API Key is required for Cloud OCR.',
+  localServerUrl: 'Local Server URL', connected: 'Connected', checking: 'Checking…', serverNotFound: 'Server not found',
+  testConnection: 'Test Connection', localServerPurpose: 'Purpose of the local server',
+  localServerPurposeDescription: 'Routes the image to native OS OCR: Apple Vision on macOS, Windows OCR on Windows, or a custom OCR service. It is not required when using browser Tesseract or Gemini.',
+  localServerCurrentDescription: 'Apple Vision is connected now; keep this engine for stronger Traditional Chinese recognition than browser Tesseract.',
+  initializingAi: 'Initializing AI Engine (first launch downloads ~950MB)...', initializingAiShort: 'Initializing AI Engine...',
+  textCorrected: 'Text corrected successfully!', entitiesExtracted: 'Entities extracted!', aiFailed: 'AI operation failed.',
+  noLayersExport: 'No layers to export.', loadImageFirst: 'Please load an image first.'
+};
 
-    zoom: "縮放",
-    docStatus: "文件狀態",
-    noImage: "尚未載入圖片",
-    loaded: "✓ 圖片已載入並處理完成",
-    processingOcr: "正在進行本地 OCR...",
-    runningTess: "執行 Tesseract.js 引擎中",
-    layers: "互動圖層",
-    noLayers: "尚未偵測到圖層",
-    formatting: "文字格式設定",
-    editContent: "編輯內容",
-    placeholder: "請先選擇一個文字區塊",
-    placeholderActive: "在此修改文字內容...",
-    paragraph: "段落格式",
-    bold: "粗體",
-    italic: "斜體",
-    color: "色彩預設",
-    aiOps: "AI 本地協同操作",
-    fixText: "智能校對",
-    fixTextHelp: "用途：修正選取文字中的 OCR 錯字與排版。作用：以本地模型產生校對結果並回寫目前文字圖層。",
-    extract: "擷取實體",
-    extractHelp: "用途：找出人名、組織、核心概念、指標、日期與關鍵詞。作用：保留原文，並在同一文字圖層附加繁體中文條列結果。",
-    translate: "翻譯至中文",
-    translateHelp: "用途：將選取文字翻譯成繁體中文。作用：以翻譯結果取代目前文字圖層。",
-    ops: "常用操作",
-    regionalOcr: "區域 OCR",
-    drawingMode: "框選繪圖模式",
-    removeText: "移除文字",
-    tessInit: "正在初始化 OCR 引擎...",
-    tessReady: "OCR 引擎已就緒",
-    presetFonts: "預設字型設定",
-    engFont: "英文/數字字型",
-    zhFont: "中文/系統字型",
-    forceFont: "圖片載入/OCR後強制套用",
-    applyFontAllPreset: "套用字型至全檔",
-    ocrEngine: "OCR 辨識引擎",
-    localEngine: "本地端引擎 (Tesseract.js)",
-    cloudEngine: "雲端 AI 引擎 (Gemini 2.0 Flash)",
-    geminiKey: "Gemini API 金鑰 (Key)",
-    keyRequiredPrompt: "請在設定選單或右側面板輸入您的 Gemini API 金鑰，以啟動近乎 100% 辨識率的雲端 AI 引擎。",
-    getKeyLink: "獲取免費金鑰 (Google AI Studio)",
-    keyNeeded: "⚠️ 雲端 OCR 必須輸入 Gemini API 金鑰。"
-  }
+const traditionalChinese = {
+  ...english,
+  file: '檔案', edit: '編輯', view: '檢視', settings: '設定', loadImage: '載入圖片...', closeImage: '關閉圖片',
+  saveImage: '儲存圖片', exportCsv: '匯出至 CSV', exportPdf: '匯出至可搜尋 PDF', exportImage: '匯出圖片', insertText: '插入文字',
+  applyFont: '套用預設字型', applyFontAll: '套用預設字型至全部', undo: '復原', redo: '重做', showLeft: '顯示左側面板', showRight: '顯示右側面板',
+  uiLang: 'UI 介面語言', zoom: '縮放', docStatus: '文件狀態', noImage: '尚未載入圖片', loaded: '✓ 圖片已載入並處理完成',
+  processingOcr: '正在進行 OCR...', runningTess: '執行 OCR 引擎中...', layers: '互動圖層', noLayers: '尚未偵測到圖層', emptyLayer: '[空白圖層]',
+  formatting: '文字格式設定', editContent: '編輯內容', placeholder: '請先選擇一個文字區塊', placeholderActive: '在此修改文字內容...', paragraph: '段落格式', bold: '粗體', italic: '斜體',
+  color: '色彩預設', customColor: '自訂色彩', aiOps: 'AI 本地協同操作', fixText: '智能校對',
+  fixTextHelp: '用途：修正選取文字中的 OCR 錯字與排版。作用：以本地模型產生校對結果並回寫目前文字圖層。',
+  extract: '擷取實體', extractHelp: '用途：找出人名、組織、核心概念、指標、日期與關鍵詞。作用：保留原文，並在同一文字圖層附加結構化條列結果。',
+  ops: '常用操作', regionalOcr: '區域 OCR', drawingMode: '框選繪圖模式', removeText: '移除文字', tessInit: '正在初始化 OCR 引擎...', tessReady: 'OCR 引擎已就緒',
+  presetFonts: '預設字型設定', engFont: '英文/數字字型', zhFont: '中文/系統字型', forceFont: '圖片載入/OCR 後強制套用', applyFontAllPreset: '套用字型至全檔',
+  localFontsHint: '瀏覽器取得本機字型權限後會納入裝置上的所有字型；若瀏覽器不支援，仍保留常用替代字型。', ocrEngine: 'OCR 辨識引擎', localEngine: '本地 (Tesseract)', cloudEngine: '雲端 (Gemini AI)', nativeServerEngine: '本地伺服器（原生 OCR）',
+  localEngineHelp: '直接在瀏覽器執行 Tesseract，不需要本地伺服器。', cloudEngineHelp: '使用 Gemini AI 雲端 OCR，需要 API 金鑰。', nativeServerEngineHelp: '透過 localhost 使用 Apple Vision、Windows OCR 或自訂 OCR 服務。',
+  rerunOcr: '🔄 重新辨識（套用目前引擎）', recognizing: '辨識中…', cloudOcrHint: '圖片已分割為多區域，依序透過佇列進行辨識…', ocrHint: 'OCR 辨識中，請稍候…',
+  geminiKey: 'Gemini API 金鑰 (Key)', cloudModel: '雲端模型', customBaseUrl: '自訂 API 節點 (選填)', getKeyLink: '獲取免費金鑰 (Google AI Studio)', keyNeeded: '⚠️ 雲端 OCR 必須輸入 Gemini API 金鑰。',
+  localServerUrl: '本地伺服器位址 (URL)', connected: '已連接', checking: '正在檢測...', serverNotFound: '未偵測到伺服器', testConnection: '測試連接', localServerPurpose: '本地伺服器的用途',
+  localServerPurposeDescription: '把圖片交給作業系統原生 OCR：macOS 使用 Apple Vision，Windows 使用 Windows OCR；伺服器也可替換成自訂 OCR。只使用瀏覽器 Tesseract 或 Gemini 時不需要啟動它。',
+  localServerCurrentDescription: '目前已連線 Apple Vision；保留此引擎可取得比瀏覽器 Tesseract 更好的繁中辨識。', initializingAi: '初始化 AI 引擎中（首次載入需下載約 950MB）...', initializingAiShort: '初始化 AI 引擎中...', textCorrected: '文字校對完成！', entitiesExtracted: '實體擷取完成！', aiFailed: 'AI 協同處理失敗。', noLayersExport: '無圖層可供匯出。', loadImageFirst: '請先載入一張圖片。'
+};
+
+// The native editor promises all eleven languages.  The dictionaries below
+// translate every visible control; technical model/font names intentionally
+// remain unchanged so they can be copied into configuration fields.
+const simplifiedChinese = { ...traditionalChinese, uiLang: 'UI 界面语言', file: '文件', edit: '编辑', view: '查看', settings: '设置', loadImage: '加载图片...', closeImage: '关闭图片', saveImage: '保存图片', exportCsv: '导出至 CSV', exportPdf: '导出为可搜索 PDF', exportImage: '导出图片', insertText: '插入文字', undo: '撤销', redo: '重做', showLeft: '显示左侧面板', showRight: '显示右侧面板', docStatus: '文件状态', noImage: '尚未加载图片', loaded: '✓ 图片已加载并处理完成', layers: '交互图层', noLayers: '尚未检测到图层', formatting: '文字格式设置', editContent: '编辑内容', placeholder: '请先选择一个文字区域', placeholderActive: '在此修改文字内容...', paragraph: '段落格式', bold: '粗体', italic: '斜体', color: '颜色预设', aiOps: 'AI 本地协同操作', fixText: '智能校对', extract: '提取实体', ops: '常用操作', regionalOcr: '区域 OCR', drawingMode: '框选绘图模式', removeText: '移除文字', presetFonts: '预设字体设置', engFont: '英文/数字字体', zhFont: '中文/系统字体', applyFontAllPreset: '应用字体至整个文件', localFontsHint: '浏览器获得本地字体权限后会纳入设备上的所有字体；不支持时仍保留常用替代字体。', ocrEngine: 'OCR 识别引擎', localEngine: '本地 (Tesseract)', cloudEngine: '云端 (Gemini AI)', nativeServerEngine: '本地服务器（原生 OCR）', rerunOcr: '🔄 重新识别（应用当前引擎）', recognizing: '识别中…', geminiKey: 'Gemini API 密钥', cloudModel: '云端模型', customBaseUrl: '自定义 API 节点（选填）', localServerUrl: '本地服务器地址 (URL)', connected: '已连接', checking: '正在检测...', serverNotFound: '未检测到服务器', testConnection: '测试连接', localServerPurpose: '本地服务器的用途', initializingAi: '正在初始化 AI 引擎（首次加载需下载约 950MB）...', initializingAiShort: '正在初始化 AI 引擎...', textCorrected: '文字校对完成！', entitiesExtracted: '实体提取完成！', aiFailed: 'AI 协同处理失败。', noLayersExport: '没有可导出的图层。', loadImageFirst: '请先加载一张图片。' };
+const japanese = { ...english, file: 'ファイル', edit: '編集', view: '表示', settings: '設定', loadImage: '画像を読み込む...', closeImage: '画像を閉じる', saveImage: '画像を保存', exportCsv: 'CSV にエクスポート', exportPdf: '検索可能な PDF にエクスポート', exportImage: '画像をエクスポート', insertText: 'テキストを挿入', undo: '元に戻す', redo: 'やり直す', showLeft: '左パネルを表示', showRight: '右パネルを表示', uiLang: 'UI 言語', docStatus: '文書の状態', noImage: '画像が読み込まれていません', loaded: '✓ 画像を読み込み処理しました', layers: 'インタラクティブレイヤー', noLayers: 'レイヤーはまだありません', formatting: 'テキスト書式', editContent: '内容を編集', placeholder: '領域を選択してください', paragraph: '段落書式', bold: '太字', italic: '斜体', color: 'カラープリセット', aiOps: 'AI ローカル操作', fixText: 'テキスト校正', extract: 'エンティティ抽出', ops: 'よく使う操作', regionalOcr: '領域 OCR', drawingMode: '描画モード', removeText: 'テキストを削除', presetFonts: 'プリセットフォント', engFont: '英数字フォント', zhFont: '中国語/システムフォント', applyFontAllPreset: 'ファイル全体に適用', ocrEngine: 'OCR エンジン', localEngine: 'ローカル (Tesseract)', cloudEngine: 'クラウド (Gemini AI)', nativeServerEngine: 'ローカルサーバー（ネイティブ OCR）', rerunOcr: '🔄 OCR を再実行', recognizing: '認識中…', geminiKey: 'Gemini API キー', cloudModel: 'クラウドモデル', localServerUrl: 'ローカルサーバー URL', connected: '接続済み', checking: '確認中…', serverNotFound: 'サーバーが見つかりません', testConnection: '接続をテスト', localServerPurpose: 'ローカルサーバーの用途', textCorrected: '校正が完了しました！', entitiesExtracted: 'エンティティを抽出しました！', aiFailed: 'AI 操作に失敗しました。', noLayersExport: 'エクスポートするレイヤーがありません。', loadImageFirst: '先に画像を読み込んでください。' };
+const korean = { ...english, file: '파일', edit: '편집', view: '보기', settings: '설정', loadImage: '이미지 불러오기...', closeImage: '이미지 닫기', saveImage: '이미지 저장', exportCsv: 'CSV로 내보내기', exportPdf: '검색 가능한 PDF로 내보내기', exportImage: '이미지 내보내기', insertText: '텍스트 삽입', undo: '실행 취소', redo: '다시 실행', showLeft: '왼쪽 패널 표시', showRight: '오른쪽 패널 표시', uiLang: 'UI 언어', docStatus: '문서 상태', noImage: '이미지가 로드되지 않음', loaded: '✓ 이미지 로드 및 처리 완료', layers: '대화형 레이어', noLayers: '레이어가 아직 없습니다', formatting: '텍스트 서식', editContent: '내용 편집', placeholder: '영역을 먼저 선택하세요', paragraph: '단락 서식', bold: '굵게', italic: '기울임꼴', color: '색상 프리셋', aiOps: 'AI 로컬 작업', fixText: '텍스트 교정', extract: '엔터티 추출', ops: '일반 작업', regionalOcr: '영역 OCR', drawingMode: '그리기 모드', removeText: '텍스트 제거', presetFonts: '글꼴 설정', engFont: '영문/숫자 글꼴', zhFont: '중국어/시스템 글꼴', applyFontAllPreset: '전체 파일에 글꼴 적용', ocrEngine: 'OCR 엔진', localEngine: '로컬 (Tesseract)', cloudEngine: '클라우드 (Gemini AI)', nativeServerEngine: '로컬 서버（네이티브 OCR）', rerunOcr: '🔄 OCR 다시 실행', recognizing: '인식 중…', geminiKey: 'Gemini API 키', cloudModel: '클라우드 모델', localServerUrl: '로컬 서버 URL', connected: '연결됨', checking: '확인 중…', serverNotFound: '서버를 찾을 수 없음', testConnection: '연결 테스트', localServerPurpose: '로컬 서버의 용도', textCorrected: '텍스트 교정 완료!', entitiesExtracted: '엔터티 추출 완료!', aiFailed: 'AI 작업에 실패했습니다.', noLayersExport: '내보낼 레이어가 없습니다.', loadImageFirst: '먼저 이미지를 불러오세요.' };
+const thai = { ...english, file: 'ไฟล์', edit: 'แก้ไข', view: 'มุมมอง', settings: 'การตั้งค่า', loadImage: 'โหลดรูปภาพ...', closeImage: 'ปิดรูปภาพ', saveImage: 'บันทึกรูปภาพ', exportCsv: 'ส่งออกเป็น CSV', exportPdf: 'ส่งออกเป็น PDF ที่ค้นหาได้', exportImage: 'ส่งออกรูปภาพ', insertText: 'แทรกข้อความ', undo: 'เลิกทำ', redo: 'ทำซ้ำ', showLeft: 'แสดงแผงซ้าย', showRight: 'แสดงแผงขวา', uiLang: 'ภาษาของ UI', docStatus: 'สถานะเอกสาร', noImage: 'ยังไม่ได้โหลดรูปภาพ', loaded: '✓ โหลดและประมวลผลรูปภาพแล้ว', layers: 'เลเยอร์แบบโต้ตอบ', noLayers: 'ยังไม่มีเลเยอร์', formatting: 'รูปแบบข้อความ', editContent: 'แก้ไขเนื้อหา', placeholder: 'เลือกพื้นที่ก่อน', paragraph: 'รูปแบบย่อหน้า', bold: 'ตัวหนา', italic: 'ตัวเอียง', color: 'ชุดสี', aiOps: 'การทำงาน AI ในเครื่อง', fixText: 'ตรวจแก้ข้อความ', extract: 'แยกเอนทิตี', ops: 'การทำงานทั่วไป', regionalOcr: 'OCR เฉพาะพื้นที่', drawingMode: 'โหมดวาด', removeText: 'ลบข้อความ', presetFonts: 'แบบอักษรล่วงหน้า', engFont: 'แบบอักษรอังกฤษ/ตัวเลข', zhFont: 'แบบอักษรจีน/ระบบ', applyFontAllPreset: 'ใช้แบบอักษรกับทั้งไฟล์', ocrEngine: 'เครื่องมือ OCR', localEngine: 'ในเครื่อง (Tesseract)', cloudEngine: 'คลาวด์ (Gemini AI)', nativeServerEngine: 'เซิร์ฟเวอร์ในเครื่อง (OCR ระบบ)', rerunOcr: '🔄 รัน OCR อีกครั้ง', recognizing: 'กำลังรู้จำ…', geminiKey: 'คีย์ Gemini API', cloudModel: 'โมเดลคลาวด์', localServerUrl: 'URL เซิร์ฟเวอร์ในเครื่อง', connected: 'เชื่อมต่อแล้ว', checking: 'กำลังตรวจสอบ…', serverNotFound: 'ไม่พบเซิร์ฟเวอร์', testConnection: 'ทดสอบการเชื่อมต่อ', localServerPurpose: 'วัตถุประสงค์ของเซิร์ฟเวอร์ในเครื่อง', textCorrected: 'แก้ไขข้อความแล้ว!', entitiesExtracted: 'แยกเอนทิตีแล้ว!', aiFailed: 'การทำงานของ AI ล้มเหลว', noLayersExport: 'ไม่มีเลเยอร์ให้ส่งออก', loadImageFirst: 'โปรดโหลดรูปภาพก่อน' };
+const spanish = { ...english, file: 'Archivo', edit: 'Editar', view: 'Ver', settings: 'Configuración', loadImage: 'Cargar imagen...', closeImage: 'Cerrar imagen', saveImage: 'Guardar imagen', exportCsv: 'Exportar a CSV', exportPdf: 'Exportar a PDF con búsqueda', exportImage: 'Exportar imagen', insertText: 'Insertar texto', undo: 'Deshacer', redo: 'Rehacer', showLeft: 'Mostrar panel izquierdo', showRight: 'Mostrar panel derecho', uiLang: 'Idioma de la interfaz', docStatus: 'Estado del documento', noImage: 'No hay imagen cargada', loaded: '✓ Imagen cargada y procesada', layers: 'Capas interactivas', noLayers: 'Aún no hay capas', formatting: 'Formato de texto', editContent: 'Editar contenido', placeholder: 'Selecciona una región primero', paragraph: 'Formato de párrafo', bold: 'Negrita', italic: 'Cursiva', color: 'Colores predefinidos', aiOps: 'Operaciones locales de IA', fixText: 'Corregir texto', extract: 'Extraer entidades', ops: 'Operaciones comunes', regionalOcr: 'OCR regional', drawingMode: 'Modo de dibujo', removeText: 'Eliminar texto', presetFonts: 'Fuentes predefinidas', engFont: 'Fuente inglesa/números', zhFont: 'Fuente china/sistema', applyFontAllPreset: 'Aplicar fuentes a todo el archivo', ocrEngine: 'Motor OCR', localEngine: 'Local (Tesseract)', cloudEngine: 'Nube (Gemini AI)', nativeServerEngine: 'Servidor local (OCR nativo)', rerunOcr: '🔄 Volver a ejecutar OCR', recognizing: 'Reconociendo…', geminiKey: 'Clave de API de Gemini', cloudModel: 'Modelo en la nube', localServerUrl: 'URL del servidor local', connected: 'Conectado', checking: 'Comprobando…', serverNotFound: 'Servidor no encontrado', testConnection: 'Probar conexión', localServerPurpose: 'Uso del servidor local', textCorrected: '¡Texto corregido!', entitiesExtracted: '¡Entidades extraídas!', aiFailed: 'La operación de IA falló.', noLayersExport: 'No hay capas para exportar.', loadImageFirst: 'Carga una imagen primero.' };
+const portuguese = { ...english, file: 'Arquivo', edit: 'Editar', view: 'Exibir', settings: 'Configurações', loadImage: 'Carregar imagem...', closeImage: 'Fechar imagem', saveImage: 'Salvar imagem', exportCsv: 'Exportar para CSV', exportPdf: 'Exportar para PDF pesquisável', exportImage: 'Exportar imagem', insertText: 'Inserir texto', undo: 'Desfazer', redo: 'Refazer', showLeft: 'Mostrar painel esquerdo', showRight: 'Mostrar painel direito', uiLang: 'Idioma da interface', docStatus: 'Status do documento', noImage: 'Nenhuma imagem carregada', loaded: '✓ Imagem carregada e processada', layers: 'Camadas interativas', noLayers: 'Nenhuma camada detectada', formatting: 'Formatação de texto', editContent: 'Editar conteúdo', placeholder: 'Selecione uma região primeiro', paragraph: 'Formato do parágrafo', bold: 'Negrito', italic: 'Itálico', color: 'Cores predefinidas', aiOps: 'Operações locais de IA', fixText: 'Corrigir texto', extract: 'Extrair entidades', ops: 'Operações comuns', regionalOcr: 'OCR regional', drawingMode: 'Modo de desenho', removeText: 'Remover texto', presetFonts: 'Fontes predefinidas', engFont: 'Fonte inglesa/números', zhFont: 'Fonte chinesa/sistema', applyFontAllPreset: 'Aplicar fontes ao arquivo inteiro', ocrEngine: 'Mecanismo OCR', localEngine: 'Local (Tesseract)', cloudEngine: 'Nuvem (Gemini AI)', nativeServerEngine: 'Servidor local (OCR nativo)', rerunOcr: '🔄 Executar OCR novamente', recognizing: 'Reconhecendo…', geminiKey: 'Chave da API Gemini', cloudModel: 'Modelo na nuvem', localServerUrl: 'URL do servidor local', connected: 'Conectado', checking: 'Verificando…', serverNotFound: 'Servidor não encontrado', testConnection: 'Testar conexão', localServerPurpose: 'Finalidade do servidor local', textCorrected: 'Texto corrigido!', entitiesExtracted: 'Entidades extraídas!', aiFailed: 'A operação de IA falhou.', noLayersExport: 'Não há camadas para exportar.', loadImageFirst: 'Carregue uma imagem primeiro.' };
+const malay = { ...english, file: 'Fail', edit: 'Edit', view: 'Paparan', settings: 'Tetapan', loadImage: 'Muatkan Imej...', closeImage: 'Tutup Imej', saveImage: 'Simpan Imej', exportCsv: 'Eksport ke CSV', exportPdf: 'Eksport ke PDF Boleh Cari', exportImage: 'Eksport Imej', insertText: 'Sisip Teks', undo: 'Buat asal', redo: 'Buat semula', showLeft: 'Tunjukkan Panel Kiri', showRight: 'Tunjukkan Panel Kanan', uiLang: 'Bahasa UI', docStatus: 'Status Dokumen', noImage: 'Tiada Imej Dimuatkan', loaded: '✓ Imej Dimuatkan dan Diproses', layers: 'Lapisan Interaktif', noLayers: 'Tiada lapisan dikesan', formatting: 'Format Teks', editContent: 'Edit Kandungan', placeholder: 'Pilih rantau dahulu', paragraph: 'Format Perenggan', bold: 'Tebal', italic: 'Italik', color: 'Pratetap Warna', aiOps: 'Operasi AI Setempat', fixText: 'Semak Teks', extract: 'Ekstrak Entiti', ops: 'Operasi Biasa', regionalOcr: 'OCR Rantau', drawingMode: 'Mod Lukisan', removeText: 'Buang Teks', presetFonts: 'Fon Pratetap', engFont: 'Fon Inggeris/Nombor', zhFont: 'Fon Cina/Sistem', applyFontAllPreset: 'Gunakan Fon pada Semua Fail', ocrEngine: 'Enjin OCR', localEngine: 'Setempat (Tesseract)', cloudEngine: 'Awan (Gemini AI)', nativeServerEngine: 'Pelayan Setempat (OCR Asli)', rerunOcr: '🔄 Jalankan Semula OCR', recognizing: 'Mengecam…', geminiKey: 'Kunci API Gemini', cloudModel: 'Model Awan', localServerUrl: 'URL Pelayan Setempat', connected: 'Disambungkan', checking: 'Memeriksa…', serverNotFound: 'Pelayan tidak ditemui', testConnection: 'Uji Sambungan', localServerPurpose: 'Tujuan pelayan setempat', textCorrected: 'Teks berjaya dibetulkan!', entitiesExtracted: 'Entiti diekstrak!', aiFailed: 'Operasi AI gagal.', noLayersExport: 'Tiada lapisan untuk dieksport.', loadImageFirst: 'Muatkan imej dahulu.' };
+const russian = { ...english, file: 'Файл', edit: 'Правка', view: 'Вид', settings: 'Настройки', loadImage: 'Загрузить изображение...', closeImage: 'Закрыть изображение', saveImage: 'Сохранить изображение', exportCsv: 'Экспорт в CSV', exportPdf: 'Экспорт в PDF с поиском', exportImage: 'Экспорт изображения', insertText: 'Вставить текст', undo: 'Отменить', redo: 'Повторить', showLeft: 'Показать левую панель', showRight: 'Показать правую панель', uiLang: 'Язык интерфейса', docStatus: 'Состояние документа', noImage: 'Изображение не загружено', loaded: '✓ Изображение загружено и обработано', layers: 'Интерактивные слои', noLayers: 'Слои ещё не обнаружены', formatting: 'Форматирование текста', editContent: 'Редактировать содержимое', placeholder: 'Сначала выберите область', paragraph: 'Формат абзаца', bold: 'Жирный', italic: 'Курсив', color: 'Цветовые пресеты', aiOps: 'Локальные операции ИИ', fixText: 'Коррекция текста', extract: 'Извлечь сущности', ops: 'Обычные операции', regionalOcr: 'Региональный OCR', drawingMode: 'Режим рисования', removeText: 'Удалить текст', presetFonts: 'Предустановленные шрифты', engFont: 'Шрифт английских/цифровых символов', zhFont: 'Китайский/системный шрифт', applyFontAllPreset: 'Применить шрифты ко всему файлу', ocrEngine: 'Движок OCR', localEngine: 'Локальный (Tesseract)', cloudEngine: 'Облачный (Gemini AI)', nativeServerEngine: 'Локальный сервер (системный OCR)', rerunOcr: '🔄 Запустить OCR снова', recognizing: 'Распознавание…', geminiKey: 'API-ключ Gemini', cloudModel: 'Облачная модель', localServerUrl: 'URL локального сервера', connected: 'Подключено', checking: 'Проверка…', serverNotFound: 'Сервер не найден', testConnection: 'Проверить соединение', localServerPurpose: 'Назначение локального сервера', textCorrected: 'Текст исправлен!', entitiesExtracted: 'Сущности извлечены!', aiFailed: 'Операция ИИ не выполнена.', noLayersExport: 'Нет слоёв для экспорта.', loadImageFirst: 'Сначала загрузите изображение.' };
+const german = { ...english, file: 'Datei', edit: 'Bearbeiten', view: 'Ansicht', settings: 'Einstellungen', loadImage: 'Bild laden...', closeImage: 'Bild schließen', saveImage: 'Bild speichern', exportCsv: 'Als CSV exportieren', exportPdf: 'Als durchsuchbares PDF exportieren', exportImage: 'Bild exportieren', insertText: 'Text einfügen', undo: 'Rückgängig', redo: 'Wiederholen', showLeft: 'Linkes Bedienfeld anzeigen', showRight: 'Rechtes Bedienfeld anzeigen', uiLang: 'Oberflächensprache', docStatus: 'Dokumentstatus', noImage: 'Kein Bild geladen', loaded: '✓ Bild geladen und verarbeitet', layers: 'Interaktive Ebenen', noLayers: 'Noch keine Ebenen erkannt', formatting: 'Textformatierung', editContent: 'Inhalt bearbeiten', placeholder: 'Zuerst einen Bereich auswählen', paragraph: 'Absatzformat', bold: 'Fett', italic: 'Kursiv', color: 'Farbvorlagen', aiOps: 'Lokale KI-Operationen', fixText: 'Text korrigieren', extract: 'Entitäten extrahieren', ops: 'Häufige Operationen', regionalOcr: 'Bereichs-OCR', drawingMode: 'Zeichenmodus', removeText: 'Text entfernen', presetFonts: 'Schriftvorlagen', engFont: 'Englische/Ziffern-Schrift', zhFont: 'Chinesische/Systemschrift', applyFontAllPreset: 'Schriften auf gesamte Datei anwenden', ocrEngine: 'OCR-Engine', localEngine: 'Lokal (Tesseract)', cloudEngine: 'Cloud (Gemini AI)', nativeServerEngine: 'Lokaler Server (native OCR)', rerunOcr: '🔄 OCR erneut ausführen', recognizing: 'Erkennung läuft…', geminiKey: 'Gemini-API-Schlüssel', cloudModel: 'Cloud-Modell', localServerUrl: 'URL des lokalen Servers', connected: 'Verbunden', checking: 'Wird geprüft…', serverNotFound: 'Server nicht gefunden', testConnection: 'Verbindung testen', localServerPurpose: 'Zweck des lokalen Servers', textCorrected: 'Text erfolgreich korrigiert!', entitiesExtracted: 'Entitäten extrahiert!', aiFailed: 'KI-Operation fehlgeschlagen.', noLayersExport: 'Keine Ebenen zum Exportieren.', loadImageFirst: 'Bitte zuerst ein Bild laden.' };
+
+export const translations = {
+  English: english,
+  '繁體中文': traditionalChinese,
+  '简体中文': simplifiedChinese,
+  '日本語': japanese,
+  '한국어': korean,
+  'ไทย': thai,
+  'Español': spanish,
+  'Português': portuguese,
+  'Bahasa Melayu': malay,
+  'Русский': russian,
+  'Deutsch': german
 };
 
 export function getTranslation(lang, key) {
-  const code = lang === 'English' ? 'en' : 'zh';
-  return translations[code][key] || translations['zh'][key] || key;
+  return (translations[lang] || traditionalChinese)[key] || english[key] || key;
 }

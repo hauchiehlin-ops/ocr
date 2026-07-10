@@ -65,17 +65,6 @@ export async function initLLM(onProgress) {
                   }
                 }]
               };
-            } else if (prompt.includes("Translate")) {
-              const match = prompt.match(/"([^"]+)"/);
-              const text = match ? match[1] : "";
-              // Simple mock translation
-              return {
-                choices: [{
-                  message: {
-                    content: `[翻譯] ${text}`
-                  }
-                }]
-              };
             } else {
               return {
                 choices: [{
@@ -99,17 +88,6 @@ export async function fixText(originalText, onProgress) {
   const llm = await initLLM(onProgress);
   const prompt = `你是一個 OCR 文字校對助手。請修正以下文字中的辨識錯誤、錯別字並還原正確的排版（通常是繁體中文）。請只輸出校對後的文字，不要包含任何額外說明、解釋或引號。需要校對的文字如下：
 "${originalText}"`;
-  
-  const reply = await llm.chat.completions.create({
-    messages: [{ role: "user", content: prompt }],
-  });
-  
-  return reply.choices[0].message.content.replace(/^"|"$/g, '').trim();
-}
-
-export async function translateText(originalText, onProgress, targetLang = "Traditional Chinese") {
-  const llm = await initLLM(onProgress);
-  const prompt = `Translate the following text to ${targetLang}. Only output the translation, nothing else, no quotes, no explanations. Text: "${originalText}"`;
   
   const reply = await llm.chat.completions.create({
     messages: [{ role: "user", content: prompt }],

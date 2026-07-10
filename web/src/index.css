@@ -108,6 +108,8 @@ body {
   flex-direction: column;
   padding: 6px 0;
   padding-top: 10px;   /* visual gap — replaces margin-top so hover zone is continuous */
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
   backdrop-filter: blur(12px);
 }
 

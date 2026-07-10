@@ -1,8 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import OcrCanvas from './components/OcrCanvas';
-import { fixText, translateText, extractEntities } from './utils/llm';
-import { getTranslation } from './utils/i18n';
+import { fixText, extractEntities } from './utils/llm';
+import { getTranslation, SUPPORTED_UI_LANGUAGES } from './utils/i18n';
 import './index.css';
+
+const FALLBACK_FONT_FAMILIES = [
+  'Century Gothic', 'Arial', 'Segoe UI', 'Courier New', 'Times New Roman',
+  'Microsoft JhengHei', 'PingFang TC', 'DFKai-SB', 'PMingLiU', 'sans-serif'
+];
 
 function App() {
   const [selectedRegion, setSelectedRegion] = useState(null);
@@ -21,8 +26,12 @@ function App() {
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
 
-  // Settings States (Default to English UI to match native settings)
-  const [uiLanguage, setUiLanguage] = useState('繁體中文');
+  // Settings States. Keep the selected language between visits and use the
+  // same eleven-language list as the native editor.
+  const [uiLanguage, setUiLanguage] = useState(() => {
+    const saved = localStorage.getItem('ui_language');
+    return SUPPORTED_UI_LANGUAGES.includes(saved) ? saved : '繁體中文';
+  });
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
 
   // OCR Engine (local Tesseract vs cloud Gemini vs custom local server)
@@ -65,6 +74,11 @@ function App() {
     localStorage.setItem('local_server_url', url);
   };
 
+  const handleUiLanguageChange = (language) => {
+    setUiLanguage(language);
+    localStorage.setItem('ui_language', language);
+  };
+
   const [localServerStatus, setLocalServerStatus] = useState('disconnected');
   const [localServerEngine, setLocalServerEngine] = useState('');
 
@@ -89,7 +103,7 @@ function App() {
         }
       }
       setLocalServerStatus('disconnected');
-    } catch (e) {
+    } catch {
       setLocalServerStatus('disconnected');
     }
   };
@@ -125,6 +139,33 @@ function App() {
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
   const [englishFont, setEnglishFont] = useState('Century Gothic');
   const [forcePresetFont, setForcePresetFont] = useState(true);
+  const [availableFontFamilies, setAvailableFontFamilies] = useState(FALLBACK_FONT_FAMILIES);
+
+  // Chromium exposes the Local Font Access API behind a permission prompt.
+  // Enumerate it when available, but always retain a useful cross-platform
+  // fallback list for Safari, Firefox, and denied permissions.
+  useEffect(() => {
+    let cancelled = false;
+    const loadLocalFonts = async () => {
+      const families = new Set(FALLBACK_FONT_FAMILIES);
+      if (typeof window !== 'undefined' && typeof window.queryLocalFonts === 'function') {
+        try {
+          const localFonts = await window.queryLocalFonts();
+          localFonts.forEach((font) => {
+            if (font?.family) families.add(font.family);
+          });
+        } catch (error) {
+          // Permission is optional; the fallback list remains fully usable.
+          console.info('Local font enumeration unavailable:', error);
+        }
+      }
+      if (!cancelled) {
+        setAvailableFontFamilies([...families].sort((a, b) => a.localeCompare(b)));
+      }
+    };
+    loadLocalFonts();
+    return () => { cancelled = true; };
+  }, []);
 
   // Each choice carries cross-platform equivalents: the Windows names
   // (JhengHei/DFKai-SB/PMingLiU) don't exist on macOS and vice versa,
@@ -143,7 +184,8 @@ function App() {
     'Courier New': `'Courier New', 'Courier', monospace`,
     'Times New Roman': `'Times New Roman', 'Times', serif`
   };
-  const presetFontFamily = `${EN_FONT_STACKS[englishFont] || `'${englishFont}'`}, ${CJK_FONT_STACKS[chineseFont] || `'${chineseFont}'`}, sans-serif`;
+  const quoteFontFamily = (family) => `'${String(family).replace(/'/g, "\\'")}'`;
+  const presetFontFamily = `${EN_FONT_STACKS[englishFont] || quoteFontFamily(englishFont)}, ${CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont)}, sans-serif`;
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
@@ -157,36 +199,17 @@ function App() {
   const handleFixText = async () => {
     if (!selectedRegion) return;
     setIsLoadingLLM(true);
-    setLlmProgress(uiLanguage === '繁體中文' ? '初始化 AI 引擎中 (首次載入需下載 ~950MB)...' : 'Initializing AI Engine (first launch downloads ~950MB)...');
+    setLlmProgress(t('initializingAi'));
     try {
       const fixed = await fixText(selectedRegion.text, (prog) => {
          setLlmProgress(prog);
       });
       setSelectedRegion(prev => ({ ...prev, text: fixed }));
       if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, fixed);
-      setLlmProgress(uiLanguage === '繁體中文' ? '文字校對完成！' : 'Text corrected successfully!');
+      setLlmProgress(t('textCorrected'));
     } catch (e) {
-      alert("Error fixing text: " + e.message);
-      setLlmProgress(uiLanguage === '繁體中文' ? 'AI 協同處理失敗。' : 'AI operation failed.');
-    } finally {
-      setIsLoadingLLM(false);
-    }
-  };
-
-  const handleTranslate = async () => {
-    if (!selectedRegion) return;
-    setIsLoadingLLM(true);
-    setLlmProgress(uiLanguage === '繁體中文' ? '初始化 AI 引擎中...' : 'Initializing AI Engine...');
-    try {
-      const translated = await translateText(selectedRegion.text, (prog) => {
-         setLlmProgress(prog);
-      });
-      setSelectedRegion(prev => ({ ...prev, text: translated }));
-      if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, translated);
-      setLlmProgress(uiLanguage === '繁體中文' ? '翻譯完成！' : 'Translated successfully!');
-    } catch (e) {
-      alert("Error translating text: " + e.message);
-      setLlmProgress(uiLanguage === '繁體中文' ? 'AI 協同處理失敗。' : 'AI operation failed.');
+      alert(`${t('fixText')}: ${e.message}`);
+      setLlmProgress(t('aiFailed'));
     } finally {
       setIsLoadingLLM(false);
     }
@@ -195,7 +218,7 @@ function App() {
   const handleExtractEntities = async () => {
     if (!selectedRegion) return;
     setIsLoadingLLM(true);
-    setLlmProgress(uiLanguage === '繁體中文' ? '初始化 AI 引擎中...' : 'Initializing AI Engine...');
+    setLlmProgress(t('initializingAiShort'));
     try {
       const entities = await extractEntities(selectedRegion.text, (prog) => {
          setLlmProgress(prog);
@@ -203,10 +226,10 @@ function App() {
       const combined = `【Entities】\n${entities}\n\n【Original】\n${selectedRegion.text}`;
       setSelectedRegion(prev => ({ ...prev, text: combined }));
       if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, combined);
-      setLlmProgress(uiLanguage === '繁體中文' ? '實體擷取完成！' : 'Entities extracted!');
+      setLlmProgress(t('entitiesExtracted'));
     } catch (e) {
-      alert("Error extracting entities: " + e.message);
-      setLlmProgress(uiLanguage === '繁體中文' ? 'AI 協同處理失敗。' : 'AI operation failed.');
+      alert(`${t('extract')}: ${e.message}`);
+      setLlmProgress(t('aiFailed'));
     } finally {
       setIsLoadingLLM(false);
     }
@@ -250,7 +273,7 @@ function App() {
 
   const handleExportCSV = () => {
     if (layers.length === 0) {
-      alert(uiLanguage === '繁體中文' ? "無圖層可供匯出。" : "No layers to export.");
+      alert(t('noLayersExport'));
       return;
     }
     let csv = "ID,Text\n";
@@ -273,7 +296,7 @@ function App() {
   };
 
   const handleInsertText = () => {
-     if (!imageLoaded) return alert(uiLanguage === '繁體中文' ? "請先載入一張圖片。" : "Please load an image first.");
+     if (!imageLoaded) return alert(t('loadImageFirst'));
      canvasRef.current?.insertText();
   };
 
@@ -335,14 +358,12 @@ function App() {
                 <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
                   <span>{t('uiLang')}</span>
                 </div>
-                <div className="dropdown-item" onClick={() => setUiLanguage('繁體中文')}>
-                  <span>繁體中文</span>
-                  <span>{uiLanguage === '繁體中文' ? '✓' : ''}</span>
-                </div>
-                <div className="dropdown-item" onClick={() => setUiLanguage('English')}>
-                  <span>English</span>
-                  <span>{uiLanguage === 'English' ? '✓' : ''}</span>
-                </div>
+                {SUPPORTED_UI_LANGUAGES.map((language) => (
+                  <div className="dropdown-item" key={language} onClick={() => handleUiLanguageChange(language)}>
+                    <span>{language}</span>
+                    <span>{uiLanguage === language ? '✓' : ''}</span>
+                  </div>
+                ))}
 
               </div>
             </div>
@@ -366,7 +387,7 @@ function App() {
             <button className="btn btn-secondary" style={{padding: '2px 8px'}} onClick={() => setZoom(1)}>100%</button>
           </div>
           <button className="btn btn-primary" onClick={handleExport} style={{marginLeft: '8px'}} disabled={!imageLoaded}>
-            Export Image
+            {t('exportImage')}
           </button>
         </div>
       </header>
@@ -405,7 +426,7 @@ function App() {
               >
                 <span>📄</span>
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '180px' }}>
-                  {layer.text || "[Empty Layer]"}
+                  {layer.text || t('emptyLayer')}
                 </span>
               </div>
             ))}
@@ -480,9 +501,7 @@ function App() {
                 fontSize: '12px',
                 textAlign: 'center',
               }}>
-                {ocrEngine === 'cloud'
-                  ? '圖片已分割為多區域，依序透過佇列進行辨識…'
-                  : 'OCR 辨識中，請稍候…'}
+                {ocrEngine === 'cloud' ? t('cloudOcrHint') : t('ocrHint')}
               </div>
             </div>
           )}
@@ -560,7 +579,7 @@ function App() {
                 position: 'relative',
                 opacity: selectedRegion ? 1 : 0.5
               }}
-              title="Custom Color"
+              title={t('customColor')}
             >
               <input 
                 type="color" 
@@ -582,26 +601,26 @@ function App() {
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
                 style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                title={uiLanguage === '繁體中文' ? '瀏覽器內直接執行 Tesseract，不需要本地伺服器。' : 'Runs Tesseract in the browser; no local server is required.'}
+                title={t('localEngineHelp')}
                 onClick={() => handleOcrEngineChange('local')}
               >
-                {uiLanguage === '繁體中文' ? '本地 (Tesseract)' : 'Local (Tesseract)'}
+                {t('localEngine')}
               </button>
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
                 style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                title={uiLanguage === '繁體中文' ? '使用 Gemini AI 雲端 OCR，需要 API 金鑰。' : 'Uses Gemini AI cloud OCR; an API key is required.'}
+                title={t('cloudEngineHelp')}
                 onClick={() => handleOcrEngineChange('cloud')}
               >
-                {uiLanguage === '繁體中文' ? '雲端 (Gemini AI)' : 'Cloud (Gemini AI)'}
+                {t('cloudEngine')}
               </button>
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'custom' ? 'active' : ''}`}
                 style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                title={uiLanguage === '繁體中文' ? '透過 localhost 使用 Apple Vision、Windows OCR 或自訂 OCR 伺服器。' : 'Uses Apple Vision, Windows OCR, or a custom OCR server through localhost.'}
+                title={t('nativeServerEngineHelp')}
                 onClick={() => handleOcrEngineChange('custom')}
               >
-                {uiLanguage === '繁體中文' ? '本地伺服器（原生 OCR）' : 'Local Server (Native OCR)'}
+                {t('nativeServerEngine')}
               </button>
             </div>
 
@@ -611,9 +630,7 @@ function App() {
               disabled={!imageLoaded || isOcrProcessing}
               onClick={() => canvasRef.current?.rerunOcr()}
             >
-              {uiLanguage === '繁體中文'
-                ? (isOcrProcessing ? '辨識中…' : '🔄 重新辨識（套用目前引擎）')
-                : (isOcrProcessing ? 'Recognizing…' : '🔄 Re-run OCR (current engine)')}
+              {isOcrProcessing ? t('recognizing') : t('rerunOcr')}
             </button>
 
             {ocrEngine === 'cloud' && (
@@ -636,7 +653,7 @@ function App() {
                 />
 
                 <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
-                  {uiLanguage === '繁體中文' ? '雲端模型:' : 'Cloud Model:'}
+                  {t('cloudModel')}:
                 </span>
                 <select
                   value={geminiModel}
@@ -659,7 +676,7 @@ function App() {
                 </select>
 
                 <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
-                  {uiLanguage === '繁體中文' ? '自訂 API 節點 (選填):' : 'Custom Base URL (Optional):'}
+                  {t('customBaseUrl')}:
                 </span>
                 <input 
                   type="text"
@@ -691,7 +708,7 @@ function App() {
             {ocrEngine === 'custom' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
                 <span style={{ fontSize: '11px', opacity: 0.8 }}>
-                  {uiLanguage === '繁體中文' ? '本地伺服器位址 (URL):' : 'Local Server URL:'}
+                  {t('localServerUrl')}:
                 </span>
                 <input 
                   type="text"
@@ -720,10 +737,10 @@ function App() {
                     }} />
                     <span style={{ opacity: 0.85 }}>
                       {localServerStatus === 'connected'
-                        ? (uiLanguage === '繁體中文' ? `已連接 (${localServerEngine || 'OCR'})` : `Connected (${localServerEngine || 'OCR'})`)
+                        ? `${t('connected')} (${localServerEngine || 'OCR'})`
                         : localServerStatus === 'checking'
-                        ? (uiLanguage === '繁體中文' ? '正在檢測...' : 'Checking...')
-                        : (uiLanguage === '繁體中文' ? '未偵測到伺服器' : '未偵測到伺服器')}
+                        ? t('checking')
+                        : t('serverNotFound')}
                     </span>
                   </span>
                   <button
@@ -738,7 +755,7 @@ function App() {
                       cursor: 'pointer'
                     }}
                   >
-                    {uiLanguage === '繁體中文' ? '測試連接' : 'Test Conn'}
+                    {t('testConnection')}
                   </button>
                 </div>
 
@@ -753,17 +770,13 @@ function App() {
                   color: 'rgba(255,255,255,0.78)'
                 }}>
                   <strong style={{ color: '#60CDFF' }}>
-                    {uiLanguage === '繁體中文' ? '本地伺服器的用途' : 'Purpose of the local server'}
+                    {t('localServerPurpose')}
                   </strong>
                   <div style={{ marginTop: '4px' }}>
-                    {uiLanguage === '繁體中文'
-                      ? '把圖片交給作業系統原生 OCR：macOS 使用 Apple Vision，Windows 使用 Windows OCR；伺服器也可替換成自訂 OCR。只使用瀏覽器 Tesseract 或 Gemini 時不需要啟動它。'
-                      : 'Routes the image to native OS OCR: Apple Vision on macOS, Windows OCR on Windows, or a custom OCR service. It is not required when using browser Tesseract or Gemini.'}
+                    {t('localServerPurposeDescription')}
                   </div>
                   <div style={{ marginTop: '5px', color: '#FBBF24' }}>
-                    {uiLanguage === '繁體中文'
-                      ? '目前已連線 Apple Vision；保留此引擎可取得比瀏覽器 Tesseract 更好的繁中辨識。'
-                      : 'Apple Vision is connected now; keep this engine for stronger Traditional Chinese recognition than browser Tesseract.'}
+                    {t('localServerCurrentDescription')}
                   </div>
                 </div>
               </div>
@@ -787,11 +800,9 @@ function App() {
                   width: '180px'
                 }}
               >
-                <option value="Century Gothic">Century Gothic</option>
-                <option value="Arial">Arial</option>
-                <option value="Segoe UI">Segoe UI</option>
-                <option value="Courier New">Courier New</option>
-                <option value="Times New Roman">Times New Roman</option>
+                {availableFontFamilies.map((family) => (
+                  <option value={family} key={`english-${family}`}>{family}</option>
+                ))}
               </select>
             </div>
             
@@ -810,11 +821,9 @@ function App() {
                   width: '180px'
                 }}
               >
-                <option value="Microsoft JhengHei">微軟正黑體 (JhengHei)</option>
-                <option value="PingFang TC">蘋方 (PingFang TC)</option>
-                <option value="DFKai-SB">標楷體 (DFKai-SB)</option>
-                <option value="PMingLiU">新細明體 (PMingLiU)</option>
-                <option value="sans-serif">通用無襯線字 (Sans-serif)</option>
+                {availableFontFamilies.map((family) => (
+                  <option value={family} key={`cjk-${family}`}>{family}</option>
+                ))}
               </select>
             </div>
 
@@ -832,6 +841,10 @@ function App() {
               >
                 {t('forceFont')}
               </label>
+            </div>
+
+            <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
+              {t('localFontsHint')}
             </div>
           </div>
 
@@ -883,25 +896,6 @@ function App() {
               </button>
             </div>
           </div>
-          <div className="ai-operation-item ai-operation-item-wide">
-            <button 
-              className="btn btn-secondary" 
-              disabled={!selectedRegion || isLoadingLLM} 
-              onClick={handleTranslate}
-            >
-              {t('translate')}
-            </button>
-            <button
-              type="button"
-              className="ai-help-icon"
-              aria-label={t('translateHelp')}
-              title={t('translateHelp')}
-              data-tooltip={t('translateHelp')}
-            >
-              ⓘ
-            </button>
-          </div>
-
           {/* WebLLM Load Progress Output */}
           {llmProgress && (
             <div style={{
