@@ -357,8 +357,42 @@ body {
   color: rgba(255, 255, 255, 0.78);
 }
 
+.native-ocr-purpose summary {
+  cursor: pointer;
+  color: #60CDFF;
+  font-weight: 700;
+  list-style: none;
+  user-select: none;
+}
+
+.native-ocr-purpose summary::-webkit-details-marker {
+  display: none;
+}
+
+.native-ocr-purpose summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 5px;
+  transition: transform 0.15s ease;
+}
+
+.native-ocr-purpose[open] summary::before {
+  content: '▾';
+}
+
+.native-ocr-purpose-body {
+  margin-top: 6px;
+}
+
 .native-ocr-purpose strong {
   color: #60CDFF;
+}
+
+.font-load-status {
+  font-size: 10px;
+  line-height: 1.4;
+  color: #60CDFF;
+  opacity: 0.82;
 }
 
 .native-ocr-warning {

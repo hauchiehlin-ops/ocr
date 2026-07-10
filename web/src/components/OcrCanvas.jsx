@@ -11,6 +11,9 @@ import { getNativeOcrEngineLabel, isNativeOcrAvailable, runNativeOcr } from '../
 // The whole pipeline (OCR bboxes, patches, exports) works in top-left space.
 fabric.FabricObject.ownDefaults.originX = 'left';
 fabric.FabricObject.ownDefaults.originY = 'top';
+fabric.FabricObject.ownDefaults.cornerSize = 8;
+fabric.FabricObject.ownDefaults.touchCornerSize = 18;
+fabric.FabricObject.ownDefaults.transparentCorners = true;
 
 // Typo correction dictionary from WPF project to achieve 99%+ accuracy for target mindmap
 const ocrCorrectionDict = {
@@ -246,6 +249,7 @@ const OcrCanvas = forwardRef(({
   onOcrProcessing, 
   zoomLevel = 1,
   isRegionalOcrActive = false,
+  regionalAction = 'ocr',
   onRegionalOcrComplete,
   onHistoryStatusChange,
   onWorkerStatusChange,
@@ -275,11 +279,16 @@ const OcrCanvas = forwardRef(({
   const isDrawing = useRef(false);
   const startPoint = useRef({ x: 0, y: 0 });
   const activeRect = useRef(null);
+  const pendingInsertText = useRef(false);
 
   const isRegionalOcrActiveRef = useRef(isRegionalOcrActive);
   useEffect(() => {
     isRegionalOcrActiveRef.current = isRegionalOcrActive;
   }, [isRegionalOcrActive]);
+  const regionalActionRef = useRef(regionalAction);
+  useEffect(() => {
+    regionalActionRef.current = regionalAction;
+  }, [regionalAction]);
 
   // History stack for Undo/Redo
   const history = useRef([]);
@@ -292,7 +301,7 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     const json = JSON.stringify(canvas.toJSON([
-      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch', 'sourceLayerId', 'isOcrReview', 'confidence',
+      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'confidence',
       'selectable', 'evented'
     ]));
 
@@ -384,10 +393,25 @@ const OcrCanvas = forwardRef(({
     canvas.on('selection:cleared', () => onRegionSelect(null));
 
     canvas.on('text:changed', handleTextChanged);
+    canvas.on('text:editing:entered', handleEditingEntered);
     canvas.on('text:editing:exited', handleEditingExited);
 
     // Viewport drag-to-pan support
     canvas.on('mouse:down', (opt) => {
+      if (pendingInsertText.current) {
+        const pointer = typeof canvas.getScenePoint === 'function'
+          ? canvas.getScenePoint(opt.e)
+          : canvas.getPointer(opt.e);
+        pendingInsertText.current = false;
+        canvas.defaultCursor = 'default';
+        canvas.hoverCursor = 'move';
+        if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'default';
+        addManualTextBox(pointer.x, pointer.y, t('manualRegionText'));
+        opt.e?.preventDefault?.();
+        opt.e?.stopPropagation?.();
+        return;
+      }
+
       const evt = opt.e;
       const target = opt.target;
       if (!isRegionalOcrActiveRef.current && (!target || target === bgImage.current)) {
@@ -422,12 +446,12 @@ const OcrCanvas = forwardRef(({
 
     canvas.on('object:modified', saveHistory);
     canvas.on('object:added', (e) => {
-      if (e.target && e.target !== bgImage.current && !e.target.isPatch) {
+      if (e.target && e.target !== bgImage.current && !e.target.isPatch && !e.target.isSelectionRect) {
         saveHistory();
       }
     });
     canvas.on('object:removed', (e) => {
-      if (e.target && e.target !== bgImage.current && !e.target.isPatch) {
+      if (e.target && e.target !== bgImage.current && !e.target.isPatch && !e.target.isSelectionRect) {
         saveHistory();
       }
     });
@@ -464,15 +488,17 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     if (isRegionalOcrActive) {
+      pendingInsertText.current = false;
       canvas.forEachObject(obj => {
          obj.selectable = false;
          obj.evented = false;
       });
       canvas.selection = false;
       canvas.skipTargetFind = true;
-      canvas.defaultCursor = 'crosshair';
-      canvas.hoverCursor = 'crosshair';
-      if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'crosshair';
+      const cursor = regionalAction === 'erase' ? 'cell' : 'crosshair';
+      canvas.defaultCursor = cursor;
+      canvas.hoverCursor = cursor;
+      if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = cursor;
       canvas.discardActiveObject();
       canvas.renderAll();
 
@@ -503,7 +529,7 @@ const OcrCanvas = forwardRef(({
       canvas.off('mouse:move', handleMouseMove);
       canvas.off('mouse:up', handleMouseUp);
     };
-  }, [isRegionalOcrActive]);
+  }, [isRegionalOcrActive, regionalAction]);
 
   // Pixel Color Sampler
   const getAverageCornerColor = (cx, cy) => {
@@ -561,6 +587,12 @@ const OcrCanvas = forwardRef(({
     const imgTop = Math.max(0, Math.min(imgHeightMax - 1, Math.round((top - layout.top) / scale)));
     const imgWidth = Math.max(1, Math.min(imgWidthMax - imgLeft, Math.round(width / scale)));
     const imgHeight = Math.max(1, Math.min(imgHeightMax - imgTop, Math.round(height / scale)));
+    const sourceArea = imgWidthMax * imgHeightMax;
+    const boxArea = imgWidth * imgHeight;
+    // Automatic masking must be conservative. When an OCR engine returns a
+    // broad/uncertain box, covering it can create the dark rectangles reported
+    // by the user. Explicit regional erase handles large destructive edits.
+    if (sourceArea > 0 && boxArea / sourceArea > 0.08) return null;
     
     // Include a small margin to cover anti-aliased glyph edges and the common
     // one-pixel difference between OCR and canvas bounding boxes.
@@ -589,45 +621,83 @@ const OcrCanvas = forwardRef(({
     const data = imgData.data;
     const glyphMask = new Uint8Array(patchWidth * patchHeight);
     const expandedMask = new Uint8Array(patchWidth * patchHeight);
+    const getInterpolatedBackground = (imageX, imageY) => {
+      const tx = imgWidth > 1 ? (imageX - imgLeft) / (imgWidth - 1) : 0;
+      const ty = imgHeight > 1 ? (imageY - imgTop) / (imgHeight - 1) : 0;
+      const clampedTx = Math.max(0, Math.min(1, tx));
+      const clampedTy = Math.max(0, Math.min(1, ty));
+      const rTop = cTL.r * (1 - clampedTx) + cTR.r * clampedTx;
+      const gTop = cTL.g * (1 - clampedTx) + cTR.g * clampedTx;
+      const bTop = cTL.b * (1 - clampedTx) + cTR.b * clampedTx;
+      const rBot = cBL.r * (1 - clampedTx) + cBR.r * clampedTx;
+      const gBot = cBL.g * (1 - clampedTx) + cBR.g * clampedTx;
+      const bBot = cBL.b * (1 - clampedTx) + cBR.b * clampedTx;
+      return {
+        r: rTop * (1 - clampedTy) + rBot * clampedTy,
+        g: gTop * (1 - clampedTy) + gBot * clampedTy,
+        b: bTop * (1 - clampedTy) + bBot * clampedTy
+      };
+    };
+
+    let glyphPixels = 0;
 
     for (let y = 0; y < patchHeight; y++) {
       for (let x = 0; x < patchWidth; x++) {
         const index = (y * patchWidth + x) * 4;
         const imageX = patchLeft + x;
         const imageY = patchTop + y;
-        const tx = imgWidth > 1 ? (imageX - imgLeft) / (imgWidth - 1) : 0;
-        const ty = imgHeight > 1 ? (imageY - imgTop) / (imgHeight - 1) : 0;
-        const clampedTx = Math.max(0, Math.min(1, tx));
-        const clampedTy = Math.max(0, Math.min(1, ty));
-        
-        const rTop = cTL.r * (1 - clampedTx) + cTR.r * clampedTx;
-        const gTop = cTL.g * (1 - clampedTx) + cTR.g * clampedTx;
-        const bTop = cTL.b * (1 - clampedTx) + cTR.b * clampedTx;
-
-        const rBot = cBL.r * (1 - clampedTx) + cBR.r * clampedTx;
-        const gBot = cBL.g * (1 - clampedTx) + cBR.g * clampedTx;
-        const bBot = cBL.b * (1 - clampedTx) + cBR.b * clampedTx;
-
-        const bgR = rTop * (1 - clampedTy) + rBot * clampedTy;
-        const bgG = gTop * (1 - clampedTy) + gBot * clampedTy;
-        const bgB = bTop * (1 - clampedTy) + bBot * clampedTy;
+        if (
+          imageX < imgLeft ||
+          imageX > imgLeft + imgWidth - 1 ||
+          imageY < imgTop ||
+          imageY > imgTop + imgHeight - 1
+        ) {
+          continue;
+        }
         const srcR = data[index];
         const srcG = data[index + 1];
         const srcB = data[index + 2];
         const srcLum = 0.299 * srcR + 0.587 * srcG + 0.114 * srcB;
-        const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
-        const colorDistance = Math.hypot(srcR - bgR, srcG - bgG, srcB - bgB);
-        const lumDistance = Math.abs(srcLum - bgLum);
-        const isDarkGlyph = bgLum > 145 && srcLum < bgLum - 15;
-        const isLightGlyph = bgLum < 130 && srcLum > bgLum + 15;
-        const isContrastingGlyph = colorDistance > 32 && lumDistance > 14;
-        if (isDarkGlyph || isLightGlyph || isContrastingGlyph) {
+        const saturation = Math.max(srcR, srcG, srcB) - Math.min(srcR, srcG, srcB);
+
+        let localLumSum = 0;
+        let localCount = 0;
+        let strongestLocalEdge = 0;
+        for (let dy = -2; dy <= 2; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= patchHeight) continue;
+          for (let dx = -2; dx <= 2; dx++) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= patchWidth || (dx === 0 && dy === 0)) continue;
+            const nIndex = (ny * patchWidth + nx) * 4;
+            const nLum = 0.299 * data[nIndex] + 0.587 * data[nIndex + 1] + 0.114 * data[nIndex + 2];
+            localLumSum += nLum;
+            localCount += 1;
+            strongestLocalEdge = Math.max(strongestLocalEdge, Math.abs(srcLum - nLum));
+          }
+        }
+
+        if (!localCount) continue;
+        const localLum = localLumSum / localCount;
+        const isNeutralInk = saturation < 96;
+        const isDarkStroke = srcLum < 175 && localLum > srcLum + 10;
+        const isLightStroke = srcLum > 95 && localLum < srcLum - 10;
+        const looksLikeGlyphStroke = isNeutralInk &&
+          (isDarkStroke || isLightStroke) &&
+          strongestLocalEdge > 18;
+
+        if (looksLikeGlyphStroke) {
           glyphMask[y * patchWidth + x] = 1;
+          glyphPixels += 1;
         }
       }
     }
 
-    const dilationRadius = 1;
+    const minGlyphPixels = Math.max(2, Math.floor(patchWidth * patchHeight * 0.001));
+    if (glyphPixels < minGlyphPixels) return null;
+
+    const dilationRadius = 2;
+    let expandedPixels = 0;
     for (let y = 0; y < patchHeight; y++) {
       for (let x = 0; x < patchWidth; x++) {
         if (!glyphMask[y * patchWidth + x]) continue;
@@ -637,10 +707,21 @@ const OcrCanvas = forwardRef(({
           for (let dx = -dilationRadius; dx <= dilationRadius; dx++) {
             const nx = x + dx;
             if (nx < 0 || nx >= patchWidth) continue;
-            expandedMask[ny * patchWidth + nx] = 1;
+            const expandedIndex = ny * patchWidth + nx;
+            if (!expandedMask[expandedIndex]) {
+              expandedMask[expandedIndex] = 1;
+              expandedPixels += 1;
+            }
           }
         }
       }
+    }
+
+    const expandedRatio = expandedPixels / Math.max(1, patchWidth * patchHeight);
+    // A high mask ratio almost always means the engine boxed a coloured label,
+    // icon, divider, or background block rather than just glyph strokes.
+    if (expandedRatio > 0.42 || (patchWidth * patchHeight > 5000 && expandedRatio > 0.30)) {
+      return null;
     }
 
     for (let y = 0; y < patchHeight; y++) {
@@ -649,19 +730,10 @@ const OcrCanvas = forwardRef(({
         const index = (y * patchWidth + x) * 4;
         const imageX = patchLeft + x;
         const imageY = patchTop + y;
-        const tx = imgWidth > 1 ? (imageX - imgLeft) / (imgWidth - 1) : 0;
-        const ty = imgHeight > 1 ? (imageY - imgTop) / (imgHeight - 1) : 0;
-        const clampedTx = Math.max(0, Math.min(1, tx));
-        const clampedTy = Math.max(0, Math.min(1, ty));
-        const rTop = cTL.r * (1 - clampedTx) + cTR.r * clampedTx;
-        const gTop = cTL.g * (1 - clampedTx) + cTR.g * clampedTx;
-        const bTop = cTL.b * (1 - clampedTx) + cTR.b * clampedTx;
-        const rBot = cBL.r * (1 - clampedTx) + cBR.r * clampedTx;
-        const gBot = cBL.g * (1 - clampedTx) + cBR.g * clampedTx;
-        const bBot = cBL.b * (1 - clampedTx) + cBR.b * clampedTx;
-        data[index] = clampByte(rTop * (1 - clampedTy) + rBot * clampedTy);
-        data[index + 1] = clampByte(gTop * (1 - clampedTy) + gBot * clampedTy);
-        data[index + 2] = clampByte(bTop * (1 - clampedTy) + bBot * clampedTy);
+        const bg = getInterpolatedBackground(imageX, imageY);
+        data[index] = clampByte(bg.r);
+        data[index + 1] = clampByte(bg.g);
+        data[index + 2] = clampByte(bg.b);
         data[index + 3] = 255;
       }
     }
@@ -675,14 +747,79 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  const _addCoverPatch = async (textbox) => {
+  const createRegionErasePatch = (left, top, width, height) => {
+    const layout = imageLayout.current;
+    if (!layout.width || !sampleCanvasRef.current || layout.scale <= 0) return null;
+
+    const scale = layout.scale;
+    const imgWidthMax = sampleCanvasRef.current.width;
+    const imgHeightMax = sampleCanvasRef.current.height;
+    const rawLeft = (left - layout.left) / scale;
+    const rawTop = (top - layout.top) / scale;
+    const rawRight = (left + width - layout.left) / scale;
+    const rawBottom = (top + height - layout.top) / scale;
+    const imgLeft = Math.max(0, Math.min(imgWidthMax - 1, Math.floor(Math.min(rawLeft, rawRight))));
+    const imgTop = Math.max(0, Math.min(imgHeightMax - 1, Math.floor(Math.min(rawTop, rawBottom))));
+    const imgRight = Math.max(imgLeft + 1, Math.min(imgWidthMax, Math.ceil(Math.max(rawLeft, rawRight))));
+    const imgBottom = Math.max(imgTop + 1, Math.min(imgHeightMax, Math.ceil(Math.max(rawTop, rawBottom))));
+    const imgWidth = imgRight - imgLeft;
+    const imgHeight = imgBottom - imgTop;
+    if (imgWidth <= 1 || imgHeight <= 1) return null;
+
+    const offset = Math.max(4, Math.min(12, Math.round(Math.min(imgWidth, imgHeight) * 0.12)));
+    const cTL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.max(0, imgTop - offset));
+    const cTR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgRight - 1 + offset), Math.max(0, imgTop - offset));
+    const cBL = getAverageCornerColor(Math.max(0, imgLeft - offset), Math.min(imgHeightMax - 1, imgBottom - 1 + offset));
+    const cBR = getAverageCornerColor(Math.min(imgWidthMax - 1, imgRight - 1 + offset), Math.min(imgHeightMax - 1, imgBottom - 1 + offset));
+
+    const patchCanvas = document.createElement('canvas');
+    patchCanvas.width = imgWidth;
+    patchCanvas.height = imgHeight;
+    const ctx = patchCanvas.getContext('2d');
+    const imgData = ctx.createImageData(imgWidth, imgHeight);
+    const data = imgData.data;
+
+    for (let y = 0; y < imgHeight; y++) {
+      const ty = imgHeight > 1 ? y / (imgHeight - 1) : 0;
+      for (let x = 0; x < imgWidth; x++) {
+        const tx = imgWidth > 1 ? x / (imgWidth - 1) : 0;
+        const rTop = cTL.r * (1 - tx) + cTR.r * tx;
+        const gTop = cTL.g * (1 - tx) + cTR.g * tx;
+        const bTop = cTL.b * (1 - tx) + cTR.b * tx;
+        const rBot = cBL.r * (1 - tx) + cBR.r * tx;
+        const gBot = cBL.g * (1 - tx) + cBR.g * tx;
+        const bBot = cBL.b * (1 - tx) + cBR.b * tx;
+        const index = (y * imgWidth + x) * 4;
+        data[index] = clampByte(rTop * (1 - ty) + rBot * ty);
+        data[index + 1] = clampByte(gTop * (1 - ty) + gBot * ty);
+        data[index + 2] = clampByte(bTop * (1 - ty) + bBot * ty);
+        data[index + 3] = 255;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    return {
+      dataUrl: patchCanvas.toDataURL(),
+      patchLeft: layout.left + imgLeft * scale,
+      patchTop: layout.top + imgTop * scale,
+      patchWidth: imgWidth * scale,
+      patchHeight: imgHeight * scale
+    };
+  };
+
+  const _addCoverPatch = async (textbox, { force = false } = {}) => {
+    if (!textbox || textbox.manual || textbox.isManualText) return false;
+    if (!force && !textbox.isOcrReview) return false;
+    const confidence = Number(textbox.confidence);
+    if (Number.isFinite(confidence) && confidence > 0 && confidence < 0.2) return false;
+
     const patchInfo = createTextPatch(
       textbox.originalLeft, 
       textbox.originalTop, 
       textbox.originalWidth, 
       textbox.originalHeight
     );
-    if (!patchInfo) return;
+    if (!patchInfo) return false;
     
     const patchImg = await fabric.FabricImage.fromURL(patchInfo.dataUrl);
     // Fabric images treat width/height as a source crop, not a resize: the
@@ -702,6 +839,60 @@ const OcrCanvas = forwardRef(({
     const canvas = fabricCanvas.current;
     canvas.add(patchImg);
     canvas.sendObjectToBack(patchImg);
+    return true;
+  };
+
+  const eraseRegion = async (left, top, width, height) => {
+    const canvas = fabricCanvas.current;
+    if (!canvas) return;
+    const patchInfo = createRegionErasePatch(left, top, width, height);
+    if (!patchInfo) return;
+
+    isHistoryDisabled.current = true;
+    const patchImg = await fabric.FabricImage.fromURL(patchInfo.dataUrl);
+    patchImg.set({
+      left: patchInfo.patchLeft,
+      top: patchInfo.patchTop,
+      scaleX: patchInfo.patchWidth / patchImg.width,
+      scaleY: patchInfo.patchHeight / patchImg.height,
+      selectable: false,
+      evented: false,
+      isPatch: true,
+      isErasePatch: true,
+      sourceLayerId: null
+    });
+    canvas.add(patchImg);
+    canvas.sendObjectToBack(patchImg);
+
+    const region = {
+      x: Math.min(left, left + width),
+      y: Math.min(top, top + height),
+      w: Math.abs(width),
+      h: Math.abs(height)
+    };
+    const textboxesToRemove = canvas.getObjects().filter(obj => {
+      if (obj.type !== 'textbox') return false;
+      const bounds = obj.getBoundingRect();
+      const rect = { x: bounds.left, y: bounds.top, w: bounds.width, h: bounds.height };
+      const centerX = rect.x + rect.w / 2;
+      const centerY = rect.y + rect.h / 2;
+      const centerInside = centerX >= region.x && centerX <= region.x + region.w &&
+        centerY >= region.y && centerY <= region.y + region.h;
+      return centerInside || overlapRatio(region, rect) > 0.12;
+    });
+
+    textboxesToRemove.forEach(textbox => {
+      canvas.getObjects()
+        .filter(obj => obj.isPatch && obj.sourceLayerId === textbox.id)
+        .forEach(obj => canvas.remove(obj));
+      canvas.remove(textbox);
+    });
+
+    canvas.discardActiveObject();
+    isHistoryDisabled.current = false;
+    saveHistory();
+    canvas.renderAll();
+    syncLayers();
   };
 
   // Mouse Events for Drawing Area
@@ -725,7 +916,8 @@ const OcrCanvas = forwardRef(({
       strokeWidth: 2,
       strokeDashArray: [5, 5],
       selectable: false,
-      evented: false
+      evented: false,
+      isSelectionRect: true
     });
     canvas.add(activeRect.current);
     canvas.renderAll();
@@ -758,13 +950,25 @@ const OcrCanvas = forwardRef(({
 
     const rect = activeRect.current;
     const canvas = fabricCanvas.current;
+    const rectState = {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height
+    };
+    if (canvas && rect) canvas.remove(rect);
+    activeRect.current = null;
+
     try {
-      if (rect.width > 5 && rect.height > 5) {
-        await runRegionalOcr(rect.left, rect.top, rect.width, rect.height);
+      if (rectState.width > 5 && rectState.height > 5) {
+        if (regionalActionRef.current === 'erase') {
+          if (onWorkerStatusChange) onWorkerStatusChange(t('eraseRegionRunning'));
+          await eraseRegion(rectState.left, rectState.top, rectState.width, rectState.height);
+        } else {
+          await runRegionalOcr(rectState.left, rectState.top, rectState.width, rectState.height);
+        }
       }
     } finally {
-      if (canvas && rect) canvas.remove(rect);
-      activeRect.current = null;
       canvas?.renderAll();
       if (onRegionalOcrComplete) onRegionalOcrComplete();
     }
@@ -823,6 +1027,7 @@ const OcrCanvas = forwardRef(({
             top: canvasTop,
             width: canvasWidth,
             height: canvasHeight,
+            confidence: 0.7,
             id: `layer_${Date.now()}_0`
           });
         }
@@ -860,6 +1065,7 @@ const OcrCanvas = forwardRef(({
             top: blockTop,
             width: blockWidth,
             height: blockHeight,
+            confidence: item.confidence ?? 0,
             id: `layer_${Date.now()}_${index}`
           });
         });
@@ -928,11 +1134,15 @@ const OcrCanvas = forwardRef(({
           backgroundColor: 'transparent',
           id: block.id,
           fontFamily: fontToUse,
-          padding: 1,
+          padding: 4,
           cornerColor: '#60CDFF',
           borderColor: '#60CDFF',
-          transparentCorners: false,
+          cornerSize: 8,
+          touchCornerSize: 18,
+          transparentCorners: true,
           isOcrReview: !block.manual,
+          isManualText: Boolean(block.manual),
+          confidence: block.confidence,
 
           originalLeft: block.left,
           originalTop: block.top,
@@ -942,13 +1152,20 @@ const OcrCanvas = forwardRef(({
 
         // Replace the source glyphs after the OCR box is accepted. The patch is
         // pixel-masked, so surrounding diagram lines and colours remain intact.
-        await _addCoverPatch(text);
+        if (!block.manual) await _addCoverPatch(text);
         canvas.add(text);
         addedTextboxes.push(text);
       }
 
       if (addedTextboxes.length > 0) {
         canvas.setActiveObject(addedTextboxes[0]);
+        if (addedTextboxes[0].isManualText) {
+          requestAnimationFrame(() => {
+            addedTextboxes[0].enterEditing?.();
+            addedTextboxes[0].selectAll?.();
+            canvas.renderAll();
+          });
+        }
       }
       isHistoryDisabled.current = false;
       saveHistory();
@@ -1023,10 +1240,12 @@ const OcrCanvas = forwardRef(({
         backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
         fontFamily: fontToUse,
-        padding: 1,
+        padding: 4,
         cornerColor: '#60CDFF',
         borderColor: '#60CDFF',
-        transparentCorners: false,
+        cornerSize: 8,
+        touchCornerSize: 18,
+        transparentCorners: true,
         isOcrReview: true,
         confidence: block.confidence,
 
@@ -1063,8 +1282,25 @@ const OcrCanvas = forwardRef(({
     }
   };
 
-  const handleEditingExited = () => {
-    const activeObject = fabricCanvas.current?.getActiveObject();
+  const setTextboxEditingChrome = (textbox, isEditing) => {
+    if (!textbox || textbox.type !== 'textbox') return;
+    textbox.set({
+      hasControls: !isEditing,
+      hasBorders: !isEditing,
+      transparentCorners: true,
+      cornerSize: 8,
+      touchCornerSize: 18
+    });
+    fabricCanvas.current?.renderAll();
+  };
+
+  const handleEditingEntered = (e) => {
+    setTextboxEditingChrome(e?.target, true);
+  };
+
+  const handleEditingExited = (e) => {
+    const activeObject = e?.target || fabricCanvas.current?.getActiveObject();
+    setTextboxEditingChrome(activeObject, false);
     if (activeObject?.type === 'textbox' && activeObject.isOcrReview && activeObject.text?.trim()) {
       void materializeReviewLayer(activeObject).then(() => fabricCanvas.current?.renderAll());
     }
@@ -1087,15 +1323,15 @@ const OcrCanvas = forwardRef(({
 
   const materializeReviewLayer = async (textbox) => {
     if (!textbox?.isOcrReview) return;
-    textbox.set({
-      isOcrReview: false,
-      fill: '#000000'
-    });
     const canvas = fabricCanvas.current;
     const alreadyPatched = canvas?.getObjects().some(obj =>
       obj.isPatch && obj.sourceLayerId === textbox.id
     );
-    if (!alreadyPatched) await _addCoverPatch(textbox);
+    if (!alreadyPatched) await _addCoverPatch(textbox, { force: true });
+    textbox.set({
+      isOcrReview: false,
+      fill: '#000000'
+    });
   };
 
   const centerCanvasOnObject = (obj) => {
@@ -1119,9 +1355,56 @@ const OcrCanvas = forwardRef(({
       if (obj.isPatch) {
         obj.set({ selectable: false, evented: false });
       } else if (obj.type === 'textbox') {
-        obj.set({ selectable: true, evented: true });
+        obj.set({ selectable: true, evented: true, hasControls: true, hasBorders: true });
       }
     });
+  };
+
+  const addManualTextBox = (left, top, initialText = t('manualRegionText'), width = 140) => {
+    const canvas = fabricCanvas.current;
+    if (!canvas) return null;
+
+    const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+    isHistoryDisabled.current = true;
+    const text = new fabric.Textbox(initialText, {
+      left,
+      top,
+      width,
+      fontSize: 16,
+      fill: '#000000',
+      backgroundColor: 'transparent',
+      id: `layer_${Date.now()}`,
+      fontFamily: fontToUse,
+      padding: 4,
+      cornerColor: '#60CDFF',
+      borderColor: '#60CDFF',
+      cornerSize: 8,
+      touchCornerSize: 18,
+      transparentCorners: true,
+      isManualText: true,
+      isOcrReview: false,
+
+      originalLeft: left,
+      originalTop: top,
+      originalWidth: width,
+      originalHeight: 24
+    });
+
+    canvas.add(text);
+    canvas.setActiveObject(text);
+    isHistoryDisabled.current = false;
+    saveHistory();
+    canvas.renderAll();
+    syncLayers();
+
+    requestAnimationFrame(() => {
+      canvas.setActiveObject(text);
+      text.enterEditing?.();
+      text.selectAll?.();
+      canvas.renderAll();
+    });
+
+    return text;
   };
 
   useImperativeHandle(ref, () => ({
@@ -1266,39 +1549,12 @@ const OcrCanvas = forwardRef(({
     insertText: () => {
       const canvas = fabricCanvas.current;
       if (!canvas) return;
-      
-      isHistoryDisabled.current = true;
-      const textboxLeft = canvas.width / 2 - 50;
-      const textboxTop = canvas.height / 2 - 15;
-      const textboxWidth = 100;
-      const textboxHeight = 24;
-
-      const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
-
-      const text = new fabric.Textbox("New Text", {
-        left: textboxLeft,
-        top: textboxTop,
-        width: textboxWidth,
-        fontSize: 16,
-        fill: '#000000',
-        backgroundColor: 'transparent',
-        id: `layer_${Date.now()}`,
-        fontFamily: fontToUse,
-        padding: 1,
-        cornerColor: '#60CDFF',
-        borderColor: '#60CDFF',
-        transparentCorners: false,
-
-        originalLeft: textboxLeft,
-        originalTop: textboxTop,
-        originalWidth: textboxWidth,
-        originalHeight: textboxHeight
-      });
-      
-      canvas.add(text);
-      canvas.setActiveObject(text);
-      isHistoryDisabled.current = false;
-      saveHistory();
+      pendingInsertText.current = true;
+      canvas.discardActiveObject();
+      canvas.defaultCursor = 'text';
+      canvas.hoverCursor = 'text';
+      if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'text';
+      if (onWorkerStatusChange) onWorkerStatusChange(t('clickCanvasToInsertText'));
       canvas.renderAll();
     },
     exportImage: () => {

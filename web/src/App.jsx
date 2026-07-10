@@ -7,7 +7,10 @@ import './index.css';
 
 const FALLBACK_FONT_FAMILIES = [
   'Century Gothic', 'Arial', 'Segoe UI', 'Courier New', 'Times New Roman',
-  'Microsoft JhengHei', 'PingFang TC', 'DFKai-SB', 'PMingLiU', 'sans-serif'
+  'Helvetica Neue', 'Helvetica', 'Avenir Next', 'Avenir', 'Futura', 'Menlo', 'Monaco',
+  'Microsoft JhengHei', 'PingFang TC', 'PingFang SC', 'PingFang HK', 'Heiti TC',
+  'Songti TC', 'Kaiti TC', 'Hiragino Sans', 'Noto Sans TC', 'Noto Serif TC',
+  'Apple SD Gothic Neo', 'PMingLiU', 'DFKai-SB', 'sans-serif', 'serif', 'monospace'
 ];
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
 
@@ -20,6 +23,7 @@ function App() {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [isRegionalOcrActive, setIsRegionalOcrActive] = useState(false);
+  const [regionalAction, setRegionalAction] = useState('ocr');
 
   const [isLoadingLLM, setIsLoadingLLM] = useState(false);
   const [llmProgress, setLlmProgress] = useState('');
@@ -141,29 +145,73 @@ function App() {
   // Preset Fonts
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
   const [englishFont, setEnglishFont] = useState('Century Gothic');
-  const [forcePresetFont, setForcePresetFont] = useState(true);
+  const [forcePresetFont, setForcePresetFont] = useState(() => localStorage.getItem('force_preset_font') === 'true');
   const [availableFontFamilies, setAvailableFontFamilies] = useState(FALLBACK_FONT_FAMILIES);
+  const [fontLoadStatus, setFontLoadStatus] = useState('');
+
+  const mergeFontFamilies = (fonts = []) => {
+    const families = new Set(FALLBACK_FONT_FAMILIES);
+    fonts.forEach((font) => {
+      if (font?.family) families.add(font.family);
+      if (font?.fullName) families.add(font.fullName);
+    });
+    return [...families].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  };
+
+  const queryDeviceFonts = async ({ requireGrantedPermission = false } = {}) => {
+    if (typeof window === 'undefined' || typeof window.queryLocalFonts !== 'function') {
+      return { supported: false, fonts: [] };
+    }
+
+    if (requireGrantedPermission && navigator.permissions?.query) {
+      try {
+        const permission = await navigator.permissions.query({ name: 'local-fonts' });
+        if (permission?.state !== 'granted') {
+          return { supported: true, fonts: [] };
+        }
+      } catch {
+        // Some Chromium builds do not expose the permission descriptor yet.
+      }
+    }
+
+    const fonts = await window.queryLocalFonts();
+    return { supported: true, fonts };
+  };
+
+  const handleLoadLocalFonts = async () => {
+    setFontLoadStatus('fontLoading');
+    try {
+      const result = await queryDeviceFonts();
+      if (!result.supported) {
+        setFontLoadStatus('fontUnsupported');
+        setAvailableFontFamilies(mergeFontFamilies());
+        return;
+      }
+      const merged = mergeFontFamilies(result.fonts);
+      setAvailableFontFamilies(merged);
+      setFontLoadStatus(result.fonts.length > 0 ? 'fontLoaded' : 'fontPermissionNeeded');
+    } catch (error) {
+      console.info('Local font enumeration unavailable:', error);
+      setAvailableFontFamilies(mergeFontFamilies());
+      setFontLoadStatus('fontPermissionDenied');
+    }
+  };
 
   // Chromium exposes the Local Font Access API behind a permission prompt.
-  // Enumerate it when available, but always retain a useful cross-platform
-  // fallback list for Safari, Firefox, and denied permissions.
+  // On first render, only enumerate when permission is already granted; the
+  // explicit button below provides the required user gesture for the full list.
   useEffect(() => {
     let cancelled = false;
     const loadLocalFonts = async () => {
-      const families = new Set(FALLBACK_FONT_FAMILIES);
-      if (typeof window !== 'undefined' && typeof window.queryLocalFonts === 'function') {
-        try {
-          const localFonts = await window.queryLocalFonts();
-          localFonts.forEach((font) => {
-            if (font?.family) families.add(font.family);
-          });
-        } catch (error) {
-          // Permission is optional; the fallback list remains fully usable.
-          console.info('Local font enumeration unavailable:', error);
-        }
+      let merged = mergeFontFamilies();
+      try {
+        const result = await queryDeviceFonts({ requireGrantedPermission: true });
+        if (result.supported && result.fonts.length > 0) merged = mergeFontFamilies(result.fonts);
+      } catch (error) {
+        console.info('Initial local font enumeration unavailable:', error);
       }
       if (!cancelled) {
-        setAvailableFontFamilies([...families].sort((a, b) => a.localeCompare(b)));
+        setAvailableFontFamilies(merged);
       }
     };
     loadLocalFonts();
@@ -301,6 +349,13 @@ function App() {
   const handleInsertText = () => {
      if (!imageLoaded) return alert(t('loadImageFirst'));
      canvasRef.current?.insertText();
+  };
+
+  const handleRegionTool = (action) => {
+    if (!imageLoaded) return;
+    const shouldTurnOff = isRegionalOcrActive && regionalAction === action;
+    setRegionalAction(action);
+    setIsRegionalOcrActive(!shouldTurnOff);
   };
 
   const t = (key) => getTranslation(uiLanguage, key);
@@ -443,6 +498,7 @@ function App() {
             ref={canvasRef}
             zoomLevel={zoom}
             isRegionalOcrActive={isRegionalOcrActive}
+            regionalAction={regionalAction}
 
             onWorkerStatusChange={setWorkerStatus}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
@@ -683,20 +739,22 @@ function App() {
                 </button>
               </div>
 
-              <div className="native-ocr-purpose">
-                <strong>{mobileNativeOcrAvailable ? t('onDeviceOcrPurpose') : t('localServerPurpose')}</strong>
-                <div>
-                  {mobileNativeOcrAvailable ? t('onDeviceOcrPurposeDescription') : t('localServerPurposeDescription')}
+              <details className="native-ocr-purpose">
+                <summary>{mobileNativeOcrAvailable ? t('onDeviceOcrPurpose') : t('localServerPurpose')}</summary>
+                <div className="native-ocr-purpose-body">
+                  <div>
+                    {mobileNativeOcrAvailable ? t('onDeviceOcrPurposeDescription') : t('localServerPurposeDescription')}
+                  </div>
+                  <div className="native-ocr-warning">
+                    {mobileNativeOcrAvailable ? t('onDeviceOcrOfflineNote') : t('mobileNativeOcrNote')}
+                  </div>
+                  <div className="native-ocr-current">
+                    {mobileNativeOcrAvailable
+                      ? `${t('onDeviceOcrCurrentEngine')} ${localServerEngine || getNativeOcrEngineLabel()}`
+                      : t('localServerCurrentDescription')}
+                  </div>
                 </div>
-                <div className="native-ocr-warning">
-                  {mobileNativeOcrAvailable ? t('onDeviceOcrOfflineNote') : t('mobileNativeOcrNote')}
-                </div>
-                <div className="native-ocr-current">
-                  {mobileNativeOcrAvailable
-                    ? `${t('onDeviceOcrCurrentEngine')} ${localServerEngine || getNativeOcrEngineLabel()}`
-                    : t('localServerCurrentDescription')}
-                </div>
-              </div>
+              </details>
             </div>
 
             <button
@@ -853,7 +911,10 @@ function App() {
                 type="checkbox"
                 id="forcePresetFontCheckbox"
                 checked={forcePresetFont}
-                onChange={(e) => setForcePresetFont(e.target.checked)}
+                onChange={(e) => {
+                  setForcePresetFont(e.target.checked);
+                  localStorage.setItem('force_preset_font', String(e.target.checked));
+                }}
                 style={{ cursor: 'pointer' }}
               />
               <label
@@ -867,6 +928,19 @@ function App() {
             <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
               {t('localFontsHint')}
             </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '6px', fontSize: '11px' }}
+              onClick={handleLoadLocalFonts}
+            >
+              {t('loadDeviceFonts')} ({availableFontFamilies.length})
+            </button>
+            {fontLoadStatus && (
+              <div className="font-load-status">
+                {t(fontLoadStatus)}
+              </div>
+            )}
           </div>
 
           <button
@@ -935,14 +1009,22 @@ function App() {
           )}
 
           <h2 className="panel-title" style={{marginTop: '24px'}}>{t('ops')}</h2>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
-              className={`btn btn-secondary ${isRegionalOcrActive ? 'active' : ''}`}
+              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'ocr' ? 'active' : ''}`}
               style={{flex: 1}}
               disabled={!imageLoaded}
-              onClick={() => setIsRegionalOcrActive(!isRegionalOcrActive)}
+              onClick={() => handleRegionTool('ocr')}
             >
-              {isRegionalOcrActive ? t('drawingMode') : t('regionalOcr')}
+              {isRegionalOcrActive && regionalAction === 'ocr' ? t('drawingMode') : t('regionalOcr')}
+            </button>
+            <button
+              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'erase' ? 'active' : ''}`}
+              style={{flex: 1}}
+              disabled={!imageLoaded}
+              onClick={() => handleRegionTool('erase')}
+            >
+              {isRegionalOcrActive && regionalAction === 'erase' ? t('eraseDrawingMode') : t('eraseRegion')}
             </button>
             <button
               className="btn btn-secondary"
