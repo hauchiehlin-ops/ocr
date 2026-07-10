@@ -1,0 +1,10 @@
+{
+  "appId": "com.ocreditor.app",
+  "appName": "AI OCR Pro Editor",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

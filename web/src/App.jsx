@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import { fixText, extractEntities } from './utils/llm';
 import { getTranslation, SUPPORTED_UI_LANGUAGES } from './utils/i18n';
+import { getNativeOcrEngineLabel, isNativeOcrAvailable } from './utils/nativeOcr';
 import './index.css';
 
 const FALLBACK_FONT_FAMILIES = [
@@ -11,6 +12,7 @@ const FALLBACK_FONT_FAMILIES = [
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
 
 function App() {
+  const nativeOcrAvailableAtStartup = isNativeOcrAvailable();
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [layers, setLayers] = useState([]);
   const canvasRef = useRef(null);
@@ -90,10 +92,17 @@ function App() {
     localStorage.setItem('ui_language', language);
   };
 
-  const [localServerStatus, setLocalServerStatus] = useState('disconnected');
-  const [localServerEngine, setLocalServerEngine] = useState('');
+  const [localServerStatus, setLocalServerStatus] = useState(() => nativeOcrAvailableAtStartup ? 'connected' : 'disconnected');
+  const [localServerEngine, setLocalServerEngine] = useState(() => nativeOcrAvailableAtStartup ? getNativeOcrEngineLabel() : '');
+  const [mobileNativeOcrAvailable] = useState(nativeOcrAvailableAtStartup);
 
   const testLocalServerConnection = async () => {
+    if (mobileNativeOcrAvailable) {
+      setLocalServerStatus('connected');
+      setLocalServerEngine(getNativeOcrEngineLabel());
+      return;
+    }
+
     setLocalServerStatus('checking');
     try {
       const controller = new AbortController();
@@ -123,7 +132,7 @@ function App() {
     if (ocrEngine === 'custom') {
       testLocalServerConnection();
     }
-  }, [ocrEngine, localServerUrl]);
+  }, [ocrEngine, localServerUrl, mobileNativeOcrAvailable]);
 
   // The default is now deliberately simple: native OCR is the primary workflow.
   // Tesseract/Gemini are kept as opt-in fallback engines when localhost native
@@ -616,24 +625,28 @@ function App() {
                 </button>
               </div>
 
-              <span style={{ fontSize: '11px', opacity: 0.8 }}>
-                {t('localServerUrl')}:
-              </span>
-              <input
-                type="text"
-                value={localServerUrl}
-                onChange={(e) => handleLocalServerUrlChange(e.target.value)}
-                placeholder="http://localhost:5001/ocr"
-                style={{
-                  background: '#111111',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '4px',
-                  padding: '6px 8px',
-                  fontSize: '12px',
-                  width: '100%'
-                }}
-              />
+              {!mobileNativeOcrAvailable && (
+                <>
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                    {t('localServerUrl')}:
+                  </span>
+                  <input
+                    type="text"
+                    value={localServerUrl}
+                    onChange={(e) => handleLocalServerUrlChange(e.target.value)}
+                    placeholder="http://localhost:5001/ocr"
+                    style={{
+                      background: '#111111',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      padding: '6px 8px',
+                      fontSize: '12px',
+                      width: '100%'
+                    }}
+                  />
+                </>
+              )}
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
                 <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -654,6 +667,7 @@ function App() {
                 </span>
                 <button
                   onClick={testLocalServerConnection}
+                  disabled={mobileNativeOcrAvailable}
                   style={{
                     background: 'rgba(255,255,255,0.08)',
                     border: '1px solid rgba(255,255,255,0.12)',
@@ -661,7 +675,8 @@ function App() {
                     color: '#fff',
                     padding: '2px 6px',
                     fontSize: '10px',
-                    cursor: 'pointer'
+                    cursor: mobileNativeOcrAvailable ? 'default' : 'pointer',
+                    opacity: mobileNativeOcrAvailable ? 0.55 : 1
                   }}
                 >
                   {t('testConnection')}
@@ -669,10 +684,18 @@ function App() {
               </div>
 
               <div className="native-ocr-purpose">
-                <strong>{t('localServerPurpose')}</strong>
-                <div>{t('localServerPurposeDescription')}</div>
-                <div className="native-ocr-warning">{t('mobileNativeOcrNote')}</div>
-                <div className="native-ocr-current">{t('localServerCurrentDescription')}</div>
+                <strong>{mobileNativeOcrAvailable ? t('onDeviceOcrPurpose') : t('localServerPurpose')}</strong>
+                <div>
+                  {mobileNativeOcrAvailable ? t('onDeviceOcrPurposeDescription') : t('localServerPurposeDescription')}
+                </div>
+                <div className="native-ocr-warning">
+                  {mobileNativeOcrAvailable ? t('onDeviceOcrOfflineNote') : t('mobileNativeOcrNote')}
+                </div>
+                <div className="native-ocr-current">
+                  {mobileNativeOcrAvailable
+                    ? `${t('onDeviceOcrCurrentEngine')} ${localServerEngine || getNativeOcrEngineLabel()}`
+                    : t('localServerCurrentDescription')}
+                </div>
               </div>
             </div>
 

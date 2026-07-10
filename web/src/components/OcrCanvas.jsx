@@ -3,6 +3,7 @@ import * as fabric from 'fabric';
 import Tesseract from 'tesseract.js';
 import { jsPDF } from 'jspdf';
 import { runGeminiOcrTiled, runGeminiRegionalOcr } from '../utils/geminiOcr';
+import { getNativeOcrEngineLabel, isNativeOcrAvailable, runNativeOcr } from '../utils/nativeOcr';
 
 // Fabric v7 changed the default object origin from left/top to center, so every
 // object placed by (left, top) rendered shifted up-left by half its size: cover
@@ -197,6 +198,44 @@ function dedupeOcrBlocks(blocks) {
             (text.includes(existingText) || existingText.includes(text))));
         return sameText && overlapRatio(block.bbox, existing.bbox) > 0.35;
       });
+    });
+}
+
+function bboxToRect(bbox) {
+  const [ymin, xmin, ymax, xmax] = bbox;
+  return { x: xmin, y: ymin, w: xmax - xmin, h: ymax - ymin };
+}
+
+function normalizeCustomOcrItems(result) {
+  const rawItems = Array.isArray(result)
+    ? result
+    : Array.isArray(result?.results)
+      ? result.results
+      : [];
+
+  const normalizedItems = rawItems.flatMap(item => {
+    const bbox = Array.isArray(item?.bbox) ? item.bbox.map(Number) : null;
+    if (!item?.text?.trim() || !bbox || bbox.length !== 4 || bbox.some(value => !Number.isFinite(value))) {
+      return [];
+    }
+    const [ymin, xmin, ymax, xmax] = bbox;
+    if (xmax <= xmin || ymax <= ymin) return [];
+    return [{
+      text: item.text.trim(),
+      bbox: [ymin, xmin, ymax, xmax],
+      confidence: Number.isFinite(Number(item.confidence)) ? Number(item.confidence) : 0
+    }];
+  });
+
+  return [...normalizedItems]
+    .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))
+    .filter((item, index, sorted) => {
+      const text = normalizedText(item.text);
+      return !sorted.slice(0, index).some(existing =>
+        text &&
+        normalizedText(existing.text) === text &&
+        overlapRatio(bboxToRect(item.bbox), bboxToRect(existing.bbox)) > 0.45
+      );
     });
 }
 
@@ -789,18 +828,26 @@ const OcrCanvas = forwardRef(({
         }
       } else if (ocrEngine === 'custom') {
         const cropDataUrl = createEnhancedOcrCanvas(cropCanvas, 3).toDataURL('image/png');
-        if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
-        const response = await fetch(localServerUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: cropDataUrl })
-        });
-        if (!response.ok) {
-          throw new Error(`Local OCR server returned error: ${response.status}`);
+        if (onWorkerStatusChange) {
+          onWorkerStatusChange(isNativeOcrAvailable()
+            ? `Running on-device OCR (${getNativeOcrEngineLabel()})...`
+            : 'Calling Local OCR Server...');
         }
-        const customResult = await response.json();
+        const customResult = isNativeOcrAvailable()
+          ? await runNativeOcr(cropDataUrl)
+          : await (async () => {
+            const response = await fetch(localServerUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image: cropDataUrl })
+            });
+            if (!response.ok) {
+              throw new Error(`Local OCR server returned error: ${response.status}`);
+            }
+            return response.json();
+          })();
         
-        customResult.forEach((item, index) => {
+        normalizeCustomOcrItems(customResult).forEach((item, index) => {
           const [ymin, xmin, ymax, xmax] = item.bbox;
           const blockLeft = canvasLeft + (xmin / 1000) * canvasWidth;
           const blockTop = canvasTop + (ymin / 1000) * canvasHeight;
@@ -1449,20 +1496,28 @@ const OcrCanvas = forwardRef(({
         });
       });
     } else if (ocrEngine === 'custom') {
-      if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
       const enhancedData = createEnhancedOcrCanvas(sampleCanvas, 2.5).toDataURL('image/png');
-      const response = await fetch(localServerUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: enhancedData })
-      });
-      if (!response.ok) {
-        throw new Error(`Local OCR server returned error: ${response.status}`);
+      if (onWorkerStatusChange) {
+        onWorkerStatusChange(isNativeOcrAvailable()
+          ? `Running on-device OCR (${getNativeOcrEngineLabel()})...`
+          : 'Calling Local OCR Server...');
       }
-      const customResult = await response.json();
+      const customResult = isNativeOcrAvailable()
+        ? await runNativeOcr(enhancedData)
+        : await (async () => {
+          const response = await fetch(localServerUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: enhancedData })
+          });
+          if (!response.ok) {
+            throw new Error(`Local OCR server returned error: ${response.status}`);
+          }
+          return response.json();
+        })();
       const layout = imageLayout.current;
 
-      customResult.forEach((item, index) => {
+      normalizeCustomOcrItems(customResult).forEach((item, index) => {
         const [ymin, xmin, ymax, xmax] = item.bbox;
 
           blocks.push({
