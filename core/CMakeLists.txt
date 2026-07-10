@@ -211,7 +211,7 @@ endif()
 
 # ---- Compiler Flags ----
 if(MSVC)
-    target_compile_options(ocr_core PRIVATE /W4 /O2 /utf-8)
+    target_compile_options(ocr_core PRIVATE /W4 /utf-8)
 else()
     target_compile_options(ocr_core PRIVATE -Wall -Wextra -O2)
     if(OCR_MOBILE)

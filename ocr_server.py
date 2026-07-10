@@ -55,16 +55,26 @@ def perform_ocr():
             return jsonify({"error": "Failed to decode image"}), 400
             
         h, w, _ = img.shape
-        results = reader.readtext(img)
-        
+        results = reader.readtext(
+            img,
+            canvas_size=2560,   # raise the detection canvas so dense screenshots are not downscaled
+            mag_ratio=1.5,      # upscale before detection so small text survives
+            text_threshold=0.6,
+            low_text=0.3,
+        )
+
         blocks = []
         for (bbox, text, prob) in results:
+            # Drop low-confidence garbage and empty reads
+            if prob < 0.25 or not text.strip():
+                continue
             xs = [pt[0] for pt in bbox]
             ys = [pt[1] for pt in bbox]
             xmin, xmax = min(xs), max(xs)
             ymin, ymax = min(ys), max(ys)
             blocks.append({
                 "text": text,
+                "confidence": round(float(prob), 3),
                 "bbox": [
                     int(ymin / h * 1000),
                     int(xmin / w * 1000),
