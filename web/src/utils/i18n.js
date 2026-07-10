@@ -47,7 +47,8 @@ const english = {
   localServerCurrentDescription: 'Apple Vision is connected now; keep this engine for stronger Traditional Chinese recognition than browser Tesseract.',
   initializingAi: 'Initializing AI Engine (first launch downloads ~950MB)...', initializingAiShort: 'Initializing AI Engine...',
   textCorrected: 'Text corrected successfully!', entitiesExtracted: 'Entities extracted!', aiFailed: 'AI operation failed.',
-  noLayersExport: 'No layers to export.', loadImageFirst: 'Please load an image first.'
+  noLayersExport: 'No layers to export.', loadImageFirst: 'Please load an image first.',
+  manualRegionText: 'Enter text'
 };
 
 const traditionalChinese = {
@@ -69,7 +70,7 @@ const traditionalChinese = {
   geminiKey: 'Gemini API 金鑰 (Key)', cloudModel: '雲端模型', customBaseUrl: '自訂 API 節點 (選填)', getKeyLink: '獲取免費金鑰 (Google AI Studio)', keyNeeded: '⚠️ 雲端 OCR 必須輸入 Gemini API 金鑰。',
   localServerUrl: '本地伺服器位址 (URL)', connected: '已連接', checking: '正在檢測...', serverNotFound: '未偵測到伺服器', testConnection: '測試連接', localServerPurpose: '本地伺服器的用途',
   localServerPurposeDescription: '把圖片交給作業系統原生 OCR：macOS 使用 Apple Vision，Windows 使用 Windows OCR；伺服器也可替換成自訂 OCR。只使用瀏覽器 Tesseract 或 Gemini 時不需要啟動它。',
-  localServerCurrentDescription: '目前已連線 Apple Vision；保留此引擎可取得比瀏覽器 Tesseract 更好的繁中辨識。', initializingAi: '初始化 AI 引擎中（首次載入需下載約 950MB）...', initializingAiShort: '初始化 AI 引擎中...', textCorrected: '文字校對完成！', entitiesExtracted: '實體擷取完成！', aiFailed: 'AI 協同處理失敗。', noLayersExport: '無圖層可供匯出。', loadImageFirst: '請先載入一張圖片。'
+  localServerCurrentDescription: '目前已連線 Apple Vision；保留此引擎可取得比瀏覽器 Tesseract 更好的繁中辨識。', initializingAi: '初始化 AI 引擎中（首次載入需下載約 950MB）...', initializingAiShort: '初始化 AI 引擎中...', textCorrected: '文字校對完成！', entitiesExtracted: '實體擷取完成！', aiFailed: 'AI 協同處理失敗。', noLayersExport: '無圖層可供匯出。', loadImageFirst: '請先載入一張圖片。', manualRegionText: '請輸入文字'
 };
 
 // The native editor promises all eleven languages.  The dictionaries below

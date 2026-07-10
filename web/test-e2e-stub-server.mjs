@@ -4,7 +4,7 @@
 // the synthetic test image drawn by the browser-side test script.
 import http from 'http';
 
-const PORT = 5001;
+const PORT = Number(process.env.PORT || 5001);
 
 // Test image is 1000x700. Text lines drawn at:
 //  line1: x 100..420, y 100..150  -> ymin 143, xmin 100, ymax 214, xmax 420

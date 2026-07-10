@@ -513,13 +513,15 @@ function App() {
           
           <div className="panel-subtitle">{t('editContent')}</div>
           <textarea
-            className="textarea"
+            className="textarea inspector-textarea"
+            rows={3}
+            aria-label={t('editContent')}
             value={selectedRegion?.text || ''}
             disabled={!selectedRegion}
             onChange={(e) => {
               const newText = e.target.value;
               setSelectedRegion(prev => ({ ...prev, text: newText }));
-              if (canvasRef.current) {
+              if (canvasRef.current && selectedRegion?.id) {
                 canvasRef.current.updateRegionText(selectedRegion.id, newText);
               }
             }}

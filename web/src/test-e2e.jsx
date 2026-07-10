@@ -10,6 +10,7 @@ import './index.css';
 const params = new URLSearchParams(location.search);
 const W = Number(params.get('w') || 1200);
 const H = Number(params.get('h') || 800);
+const OCR_URL = params.get('ocrUrl') || 'http://localhost:5001/ocr';
 
 const IMG_W = 1000;
 const IMG_H = 700;
@@ -179,7 +180,7 @@ function App() {
         onWorkerStatusChange={() => {}}
         onHistoryStatusChange={() => {}}
         ocrEngine="custom"
-        localServerUrl="http://localhost:5001/ocr"
+        localServerUrl={OCR_URL}
       />
     </div>
   );

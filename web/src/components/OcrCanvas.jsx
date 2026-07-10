@@ -85,6 +85,52 @@ function prepareTesseractImage(ctx, width, height) {
   ctx.putImageData(imgData, 0, 0);
 }
 
+function clampByte(value) {
+  return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function createEnhancedOcrCanvas(sourceCanvas, preferredScale = 2.5) {
+  const maxSide = 3600;
+  const longestSide = Math.max(sourceCanvas.width, sourceCanvas.height);
+  const scale = Math.max(1, Math.min(preferredScale, maxSide / Math.max(1, longestSide)));
+  const targetWidth = Math.max(1, Math.round(sourceCanvas.width * scale));
+  const targetHeight = Math.max(1, Math.round(sourceCanvas.height * scale));
+  const enhancedCanvas = document.createElement('canvas');
+  enhancedCanvas.width = targetWidth;
+  enhancedCanvas.height = targetHeight;
+
+  const ctx = enhancedCanvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(sourceCanvas, 0, 0, targetWidth, targetHeight);
+
+  const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+  const source = imgData.data;
+  const output = new Uint8ClampedArray(source);
+
+  for (let y = 1; y < targetHeight - 1; y++) {
+    for (let x = 1; x < targetWidth - 1; x++) {
+      const idx = (y * targetWidth + x) * 4;
+      for (let channel = 0; channel < 3; channel++) {
+        const center = source[idx + channel];
+        const north = source[idx - targetWidth * 4 + channel];
+        const south = source[idx + targetWidth * 4 + channel];
+        const west = source[idx - 4 + channel];
+        const east = source[idx + 4 + channel];
+        const sharpened = center * 5 - north - south - west - east;
+        const boosted = ((center * 0.7 + sharpened * 0.3) - 128) * 1.08 + 128;
+        output[idx + channel] = clampByte(boosted);
+      }
+      output[idx + 3] = 255;
+    }
+  }
+
+  ctx.putImageData(new ImageData(output, targetWidth, targetHeight), 0, 0);
+  return enhancedCanvas;
+}
+
 // Font size constrained by BOTH box height (per line) and box width (per character):
 // loose bounding boxes from cloud OCR would otherwise produce oversized text.
 function calcOcrFontSize(text, boxW, boxH, maxSize = 32) {
@@ -210,6 +256,11 @@ const OcrCanvas = forwardRef(({
       'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch', 'sourceLayerId', 'isOcrReview', 'confidence',
       'selectable', 'evented'
     ]));
+
+    if (history.current[historyIndex.current] === json) {
+      syncLayers();
+      return;
+    }
     
     history.current = history.current.slice(0, historyIndex.current + 1);
     history.current.push(json);
@@ -450,11 +501,10 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  // Build an opaque replacement patch for every OCR box. Leaving the original
-  // pixels visible underneath a semi-transparent text layer creates the exact
-  // doubled-glyph effect users see after recognition. The patch uses the four
-  // surrounding edge colours to continue a local gradient, so the original
-  // glyphs are fully covered without introducing a flat grey rectangle.
+  // Build a source-aware replacement patch for every OCR box. Only pixels that
+  // look like original glyph strokes are inpainted; untouched pixels stay
+  // identical to the source image, so the patch hides doubled text without
+  // leaving visible grey/dark rectangles around labels.
   const createTextPatch = (left, top, width, height) => {
     const canvas = fabricCanvas.current;
     if (!canvas) return null;
@@ -498,6 +548,8 @@ const OcrCanvas = forwardRef(({
     const sourceData = sourceCtx.getImageData(patchLeft, patchTop, patchWidth, patchHeight);
     const imgData = new ImageData(new Uint8ClampedArray(sourceData.data), patchWidth, patchHeight);
     const data = imgData.data;
+    const glyphMask = new Uint8Array(patchWidth * patchHeight);
+    const expandedMask = new Uint8Array(patchWidth * patchHeight);
 
     for (let y = 0; y < patchHeight; y++) {
       for (let x = 0; x < patchWidth; x++) {
@@ -520,12 +572,57 @@ const OcrCanvas = forwardRef(({
         const bgR = rTop * (1 - clampedTy) + rBot * clampedTy;
         const bgG = gTop * (1 - clampedTy) + gBot * clampedTy;
         const bgB = bTop * (1 - clampedTy) + bBot * clampedTy;
-        // Replace every pixel inside the OCR box. This is deliberate: a
-        // foreground-only mask leaves anti-aliased source glyphs behind the
-        // replacement text and produces visible double text.
-        data[index] = Math.round(bgR);
-        data[index + 1] = Math.round(bgG);
-        data[index + 2] = Math.round(bgB);
+        const srcR = data[index];
+        const srcG = data[index + 1];
+        const srcB = data[index + 2];
+        const srcLum = 0.299 * srcR + 0.587 * srcG + 0.114 * srcB;
+        const bgLum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+        const colorDistance = Math.hypot(srcR - bgR, srcG - bgG, srcB - bgB);
+        const lumDistance = Math.abs(srcLum - bgLum);
+        const isDarkGlyph = bgLum > 145 && srcLum < bgLum - 15;
+        const isLightGlyph = bgLum < 130 && srcLum > bgLum + 15;
+        const isContrastingGlyph = colorDistance > 32 && lumDistance > 14;
+        if (isDarkGlyph || isLightGlyph || isContrastingGlyph) {
+          glyphMask[y * patchWidth + x] = 1;
+        }
+      }
+    }
+
+    const dilationRadius = 1;
+    for (let y = 0; y < patchHeight; y++) {
+      for (let x = 0; x < patchWidth; x++) {
+        if (!glyphMask[y * patchWidth + x]) continue;
+        for (let dy = -dilationRadius; dy <= dilationRadius; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= patchHeight) continue;
+          for (let dx = -dilationRadius; dx <= dilationRadius; dx++) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= patchWidth) continue;
+            expandedMask[ny * patchWidth + nx] = 1;
+          }
+        }
+      }
+    }
+
+    for (let y = 0; y < patchHeight; y++) {
+      for (let x = 0; x < patchWidth; x++) {
+        if (!expandedMask[y * patchWidth + x]) continue;
+        const index = (y * patchWidth + x) * 4;
+        const imageX = patchLeft + x;
+        const imageY = patchTop + y;
+        const tx = imgWidth > 1 ? (imageX - imgLeft) / (imgWidth - 1) : 0;
+        const ty = imgHeight > 1 ? (imageY - imgTop) / (imgHeight - 1) : 0;
+        const clampedTx = Math.max(0, Math.min(1, tx));
+        const clampedTy = Math.max(0, Math.min(1, ty));
+        const rTop = cTL.r * (1 - clampedTx) + cTR.r * clampedTx;
+        const gTop = cTL.g * (1 - clampedTx) + cTR.g * clampedTx;
+        const bTop = cTL.b * (1 - clampedTx) + cTR.b * clampedTx;
+        const rBot = cBL.r * (1 - clampedTx) + cBR.r * clampedTx;
+        const gBot = cBL.g * (1 - clampedTx) + cBR.g * clampedTx;
+        const bBot = cBL.b * (1 - clampedTx) + cBR.b * clampedTx;
+        data[index] = clampByte(rTop * (1 - clampedTy) + rBot * clampedTy);
+        data[index + 1] = clampByte(gTop * (1 - clampedTy) + gBot * clampedTy);
+        data[index + 2] = clampByte(bTop * (1 - clampedTy) + bBot * clampedTy);
         data[index + 3] = 255;
       }
     }
@@ -635,16 +732,27 @@ const OcrCanvas = forwardRef(({
   };
 
   const runRegionalOcr = async (left, top, width, height) => {
-    if (!bgImage.current || !fabricCanvas.current) return;
+    if (!bgImage.current || !fabricCanvas.current || !sampleCanvasRef.current) return;
     if (ocrEngine === 'local' && !tesseractWorker.current) return;
     
     const layout = imageLayout.current;
     const scale = layout.scale;
-    // Convert selection from canvas space to image pixel space (image is centered on the canvas)
-    const imgLeft = (left - layout.left) / scale;
-    const imgTop = (top - layout.top) / scale;
-    const imgWidth = width / scale;
-    const imgHeight = height / scale;
+    const imageMaxWidth = sampleCanvasRef.current.width;
+    const imageMaxHeight = sampleCanvasRef.current.height;
+    const rawLeft = (left - layout.left) / scale;
+    const rawTop = (top - layout.top) / scale;
+    const rawRight = (left + width - layout.left) / scale;
+    const rawBottom = (top + height - layout.top) / scale;
+    const imgLeft = Math.max(0, Math.min(imageMaxWidth - 1, Math.floor(Math.min(rawLeft, rawRight))));
+    const imgTop = Math.max(0, Math.min(imageMaxHeight - 1, Math.floor(Math.min(rawTop, rawBottom))));
+    const imgRight = Math.max(imgLeft + 1, Math.min(imageMaxWidth, Math.ceil(Math.max(rawLeft, rawRight))));
+    const imgBottom = Math.max(imgTop + 1, Math.min(imageMaxHeight, Math.ceil(Math.max(rawTop, rawBottom))));
+    const imgWidth = imgRight - imgLeft;
+    const imgHeight = imgBottom - imgTop;
+    const canvasLeft = layout.left + imgLeft * scale;
+    const canvasTop = layout.top + imgTop * scale;
+    const canvasWidth = imgWidth * scale;
+    const canvasHeight = imgHeight * scale;
 
     const cropCanvas = document.createElement('canvas');
     cropCanvas.width = imgWidth;
@@ -652,7 +760,7 @@ const OcrCanvas = forwardRef(({
     const ctx = cropCanvas.getContext('2d');
 
     try {
-      ctx.drawImage(bgImage.current.getElement(), imgLeft, imgTop, imgWidth, imgHeight, 0, 0, imgWidth, imgHeight);
+      ctx.drawImage(sampleCanvasRef.current, imgLeft, imgTop, imgWidth, imgHeight, 0, 0, imgWidth, imgHeight);
       
       if (onOcrProcessing) onOcrProcessing(true);
 
@@ -666,21 +774,21 @@ const OcrCanvas = forwardRef(({
           throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
         }
         
-        const cropDataUrl = cropCanvas.toDataURL();
+        const cropDataUrl = cropCanvas.toDataURL('image/png');
         const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey, onWorkerStatusChange, geminiModel, geminiApiUrl);
 
         if (textResult) {
           blocks.push({
-            text: textResult,
-            left: left,
-            top: top,
-            width: width,
-            height: height,
+            text: correctOcrText(textResult),
+            left: canvasLeft,
+            top: canvasTop,
+            width: canvasWidth,
+            height: canvasHeight,
             id: `layer_${Date.now()}_0`
           });
         }
       } else if (ocrEngine === 'custom') {
-        const cropDataUrl = cropCanvas.toDataURL();
+        const cropDataUrl = createEnhancedOcrCanvas(cropCanvas, 3).toDataURL('image/png');
         if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
         const response = await fetch(localServerUrl, {
           method: 'POST',
@@ -694,13 +802,13 @@ const OcrCanvas = forwardRef(({
         
         customResult.forEach((item, index) => {
           const [ymin, xmin, ymax, xmax] = item.bbox;
-          const blockLeft = left + (xmin / 1000) * width;
-          const blockTop = top + (ymin / 1000) * height;
-          const blockWidth = ((xmax - xmin) / 1000) * width;
-          const blockHeight = ((ymax - ymin) / 1000) * height || 16;
+          const blockLeft = canvasLeft + (xmin / 1000) * canvasWidth;
+          const blockTop = canvasTop + (ymin / 1000) * canvasHeight;
+          const blockWidth = ((xmax - xmin) / 1000) * canvasWidth;
+          const blockHeight = ((ymax - ymin) / 1000) * canvasHeight || 16;
 
           blocks.push({
-            text: item.text,
+            text: correctOcrText(item.text),
             left: blockLeft,
             top: blockTop,
             width: blockWidth,
@@ -730,8 +838,8 @@ const OcrCanvas = forwardRef(({
 
           const correctedText = correctOcrText(rawText);
 
-          const textboxLeft = left + (line.bbox.x0 / scaleFactor) * scale;
-          const textboxTop = top + (line.bbox.y0 / scaleFactor) * scale;
+          const textboxLeft = canvasLeft + (line.bbox.x0 / scaleFactor) * scale;
+          const textboxTop = canvasTop + (line.bbox.y0 / scaleFactor) * scale;
           const textboxWidth = ((line.bbox.x1 - line.bbox.x0) / scaleFactor) * scale;
           const textboxHeight = ((line.bbox.y1 - line.bbox.y0) / scaleFactor) * scale || 16;
 
@@ -747,6 +855,20 @@ const OcrCanvas = forwardRef(({
         });
       }
 
+      if (blocks.length === 0) {
+        blocks.push({
+          text: t('manualRegionText'),
+          left: canvasLeft,
+          top: canvasTop,
+          width: canvasWidth,
+          height: Math.max(18, canvasHeight),
+          confidence: 0,
+          id: `layer_${Date.now()}_manual`,
+          manual: true
+        });
+      }
+
+      const addedTextboxes = [];
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
         const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height);
@@ -755,9 +877,7 @@ const OcrCanvas = forwardRef(({
           top: block.top,
           width: block.width,
           fontSize: regionalFontSize,
-          // Keep OCR text visible for comparison while the surrounding source
-          // pixels remain intact. A slight transparency makes disagreements easy to spot.
-          fill: 'rgba(0,0,0,0.78)',
+          fill: block.manual ? '#000000' : 'rgba(0,0,0,0.78)',
           backgroundColor: 'transparent',
           id: block.id,
           fontFamily: fontToUse,
@@ -765,7 +885,7 @@ const OcrCanvas = forwardRef(({
           cornerColor: '#60CDFF',
           borderColor: '#60CDFF',
           transparentCorners: false,
-          isOcrReview: true,
+          isOcrReview: !block.manual,
 
           originalLeft: block.left,
           originalTop: block.top,
@@ -777,8 +897,12 @@ const OcrCanvas = forwardRef(({
         // pixel-masked, so surrounding diagram lines and colours remain intact.
         await _addCoverPatch(text);
         canvas.add(text);
+        addedTextboxes.push(text);
       }
 
+      if (addedTextboxes.length > 0) {
+        canvas.setActiveObject(addedTextboxes[0]);
+      }
       isHistoryDisabled.current = false;
       saveHistory();
       canvas.renderAll();
@@ -927,6 +1051,32 @@ const OcrCanvas = forwardRef(({
     if (!alreadyPatched) await _addCoverPatch(textbox);
   };
 
+  const centerCanvasOnObject = (obj) => {
+    const canvas = fabricCanvas.current;
+    if (!canvas || !obj) return;
+    obj.setCoords();
+    const zoom = canvas.getZoom() || 1;
+    const center = typeof obj.getCenterPoint === 'function'
+      ? obj.getCenterPoint()
+      : { x: obj.left + (obj.width || 0) / 2, y: obj.top + (obj.height || 0) / 2 };
+    const vpt = canvas.viewportTransform || [zoom, 0, 0, zoom, 0, 0];
+    vpt[0] = zoom;
+    vpt[3] = zoom;
+    vpt[4] = canvas.getWidth() / 2 - center.x * zoom;
+    vpt[5] = canvas.getHeight() / 2 - center.y * zoom;
+    canvas.setViewportTransform(vpt);
+  };
+
+  const restoreObjectInteractivity = (canvas) => {
+    canvas.getObjects().forEach(obj => {
+      if (obj.isPatch) {
+        obj.set({ selectable: false, evented: false });
+      } else if (obj.type === 'textbox') {
+        obj.set({ selectable: true, evented: true });
+      }
+    });
+  };
+
   useImperativeHandle(ref, () => ({
     updateRegionText: (id, newText) => {
       const canvas = fabricCanvas.current;
@@ -961,6 +1111,15 @@ const OcrCanvas = forwardRef(({
       const obj = canvas.getObjects().find(o => o.id === id);
       if (obj) {
         canvas.setActiveObject(obj);
+        centerCanvasOnObject(obj);
+        onRegionSelect({
+          id: obj.id,
+          text: obj.text,
+          isBold: obj.fontWeight === 'bold',
+          isItalic: obj.fontStyle === 'italic',
+          fill: obj.isOcrReview ? '#000000' : obj.fill,
+          fontFamily: obj.fontFamily
+        });
         canvas.renderAll();
       }
     },
@@ -969,6 +1128,9 @@ const OcrCanvas = forwardRef(({
       if (!canvas) return;
       const activeObj = canvas.getActiveObject();
       if (activeObj) {
+        canvas.getObjects()
+          .filter(obj => obj.isPatch && obj.sourceLayerId === activeObj.id)
+          .forEach(obj => canvas.remove(obj));
         canvas.remove(activeObj);
         canvas.discardActiveObject();
         canvas.renderAll();
@@ -997,6 +1159,7 @@ const OcrCanvas = forwardRef(({
       const state = history.current[historyIndex.current];
       canvas.loadFromJSON(JSON.parse(state)).then(() => {
         bgImage.current = canvas.backgroundImage;
+        restoreObjectInteractivity(canvas);
         canvas.renderAll();
         isHistoryDisabled.current = false;
         if (onHistoryStatusChange) {
@@ -1017,6 +1180,7 @@ const OcrCanvas = forwardRef(({
       const state = history.current[historyIndex.current];
       canvas.loadFromJSON(JSON.parse(state)).then(() => {
         bgImage.current = canvas.backgroundImage;
+        restoreObjectInteractivity(canvas);
         canvas.renderAll();
         isHistoryDisabled.current = false;
         if (onHistoryStatusChange) {
@@ -1272,10 +1436,10 @@ const OcrCanvas = forwardRef(({
         const ymax = item.bbox[2];
         const xmax = item.bbox[3];
 
-        blocks.push({
-          id: `layer_${Date.now()}_${index}`,
-          text: item.text,
-          confidence: item.confidence ?? 0.7,
+          blocks.push({
+            id: `layer_${Date.now()}_${index}`,
+            text: correctOcrText(item.text),
+            confidence: item.confidence ?? 0.7,
           bbox: {
             x: layout.left + (xmin / 1000) * layout.width,
             y: layout.top + (ymin / 1000) * layout.height,
@@ -1286,10 +1450,11 @@ const OcrCanvas = forwardRef(({
       });
     } else if (ocrEngine === 'custom') {
       if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
+      const enhancedData = createEnhancedOcrCanvas(sampleCanvas, 2.5).toDataURL('image/png');
       const response = await fetch(localServerUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: data })
+        body: JSON.stringify({ image: enhancedData })
       });
       if (!response.ok) {
         throw new Error(`Local OCR server returned error: ${response.status}`);
@@ -1300,10 +1465,10 @@ const OcrCanvas = forwardRef(({
       customResult.forEach((item, index) => {
         const [ymin, xmin, ymax, xmax] = item.bbox;
 
-        blocks.push({
-          id: `layer_${Date.now()}_${index}`,
-          text: item.text,
-          confidence: item.confidence ?? 0,
+          blocks.push({
+            id: `layer_${Date.now()}_${index}`,
+            text: correctOcrText(item.text),
+            confidence: item.confidence ?? 0,
           bbox: {
             x: layout.left + (xmin / 1000) * layout.width,
             y: layout.top + (ymin / 1000) * layout.height,
@@ -1395,6 +1560,7 @@ const OcrCanvas = forwardRef(({
         historyIndex.current = -1;
 
         canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        saveHistory();
         setImageLoaded(true);
         if (onImageLoaded) onImageLoaded(true);
 
