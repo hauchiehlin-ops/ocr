@@ -100,6 +100,27 @@ function App() {
     }
   }, [ocrEngine, localServerUrl]);
 
+  // Smart engine default: when the user has never explicitly chosen an engine,
+  // probe the local OCR server once on startup — if it's reachable, prefer it
+  // (native-engine accuracy, no quota). Otherwise stay on Tesseract, the only
+  // engine guaranteed to work on every platform (including mobile, where a
+  // localhost server can never exist). Not persisted, so it re-probes next visit.
+  useEffect(() => {
+    if (localStorage.getItem('ocr_engine')) return; // respect the user's explicit choice
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const baseUrl = localServerUrl.replace(/\/ocr$/, '');
+    fetch(`${baseUrl}/status`, { signal: controller.signal })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data?.status === 'running') {
+          setOcrEngine('custom');
+        }
+      })
+      .catch(() => { /* no local server (e.g. mobile / Safari mixed-content) — keep Tesseract */ })
+      .finally(() => clearTimeout(timeoutId));
+  }, []);
+
   // Preset Fonts
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
   const [englishFont, setEnglishFont] = useState('Century Gothic');
@@ -580,7 +601,18 @@ function App() {
                 {uiLanguage === '繁體中文' ? '本地伺服器' : 'Local Server'}
               </button>
             </div>
-            
+
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', padding: '8px', fontSize: '12px', fontWeight: 'bold' }}
+              disabled={!imageLoaded || isOcrProcessing}
+              onClick={() => canvasRef.current?.rerunOcr()}
+            >
+              {uiLanguage === '繁體中文'
+                ? (isOcrProcessing ? '辨識中…' : '🔄 重新辨識（套用目前引擎）')
+                : (isOcrProcessing ? 'Recognizing…' : '🔄 Re-run OCR (current engine)')}
+            </button>
+
             {ocrEngine === 'cloud' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
                 <span style={{ fontSize: '11px', opacity: 0.8 }}>{t('geminiKey')}:</span>

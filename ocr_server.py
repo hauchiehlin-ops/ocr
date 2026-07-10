@@ -87,7 +87,75 @@ def vision_ocr(img_bytes):
 
 
 # ---------------------------------------------------------------------------
-# Engine 2 — EasyOCR (cross-platform fallback)
+# Engine 2 — Windows OCR (Windows.Media.Ocr native engine via winocr)
+# ---------------------------------------------------------------------------
+IS_WINDOWS = platform.system() == "Windows"
+winocr_available = False
+if IS_WINDOWS:
+    try:
+        import winocr
+        winocr_available = True
+    except ImportError:
+        print("winocr not found. Installing (enables the native Windows OCR engine)...")
+        import subprocess
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "winocr", "Pillow"])
+            import winocr
+            winocr_available = True
+        except Exception as e:
+            print(f"Could not install winocr ({e}); falling back to EasyOCR.")
+
+
+def windows_ocr(img_bytes):
+    """Run Windows.Media.Ocr via winocr. Returns list of block dicts."""
+    import io
+    from PIL import Image
+    img = Image.open(io.BytesIO(img_bytes))
+    # Composite transparent images onto white — same reason as EasyOCR below
+    if img.mode in ("RGBA", "LA", "P"):
+        img = img.convert("RGBA")
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[-1])
+        img = bg
+    else:
+        img = img.convert("RGB")
+    w, h = img.size
+
+    # Prefer Traditional Chinese; fall back to the system default language
+    # if the zh-Hant language pack is not installed.
+    try:
+        result = winocr.recognize_pil_sync(img, 'zh-Hant')
+    except Exception:
+        result = winocr.recognize_pil_sync(img)
+
+    blocks = []
+    for line in result.get('lines', []):
+        text = (line.get('text') or '').strip()
+        words = line.get('words') or []
+        if not text or not words:
+            continue
+        rects = [wd['bounding_rect'] for wd in words if wd.get('bounding_rect')]
+        if not rects:
+            continue
+        xmin = min(r['x'] for r in rects)
+        ymin = min(r['y'] for r in rects)
+        xmax = max(r['x'] + r['width'] for r in rects)
+        ymax = max(r['y'] + r['height'] for r in rects)
+        blocks.append({
+            "text": text,
+            "confidence": 1.0,  # Windows OCR does not expose per-line confidence
+            "bbox": [
+                int(ymin / h * 1000),
+                int(xmin / w * 1000),
+                int(ymax / h * 1000),
+                int(xmax / w * 1000)
+            ]
+        })
+    return blocks
+
+
+# ---------------------------------------------------------------------------
+# Engine 3 — EasyOCR (cross-platform fallback)
 # ---------------------------------------------------------------------------
 easyocr_reader = None
 
@@ -160,12 +228,19 @@ def easyocr_ocr(img_bytes):
     return blocks
 
 
-ACTIVE_ENGINE = "AppleVision" if vision_available else "EasyOCR"
+if vision_available:
+    ACTIVE_ENGINE = "AppleVision"
+elif winocr_available:
+    ACTIVE_ENGINE = "WindowsOCR"
+else:
+    ACTIVE_ENGINE = "EasyOCR"
 
 if ACTIVE_ENGINE == "EasyOCR":
     # Warm up EasyOCR at startup so the first request isn't slow
     get_easyocr_reader()
     print("EasyOCR Engine initialized successfully!")
+elif ACTIVE_ENGINE == "WindowsOCR":
+    print("Using Windows native OCR engine (Windows.Media.Ocr via winocr).")
 else:
     print("Using macOS native Vision OCR engine (best Traditional Chinese accuracy).")
 
@@ -186,6 +261,8 @@ def perform_ocr():
 
         if ACTIVE_ENGINE == "AppleVision":
             blocks = vision_ocr(img_bytes)
+        elif ACTIVE_ENGINE == "WindowsOCR":
+            blocks = windows_ocr(img_bytes)
         else:
             blocks = easyocr_ocr(img_bytes)
         return jsonify(blocks)

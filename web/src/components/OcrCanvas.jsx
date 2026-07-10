@@ -1072,8 +1072,128 @@ const OcrCanvas = forwardRef(({
       });
 
       pdf.save("ocr-exported.pdf");
+    },
+    rerunOcr: async () => {
+      if (!sampleCanvasRef.current) return;
+      if (onOcrProcessing) onOcrProcessing(true);
+      try {
+        await runFullOcr();
+      } catch (error) {
+        console.error("Error re-running OCR:", error);
+        alert("OCR Failed: " + error.message);
+      } finally {
+        if (onOcrProcessing) onOcrProcessing(false);
+        if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
+      }
     }
   }));
+
+  // Run full-image OCR with the currently selected engine, using the stored
+  // original-resolution image. Shared by the initial image load and the
+  // "Re-run OCR" button (so switching engines doesn't require re-uploading).
+  const runFullOcr = async () => {
+    const sampleCanvas = sampleCanvasRef.current;
+    if (!sampleCanvas) throw new Error("No image loaded yet.");
+
+    const data = sampleCanvas.toDataURL('image/png');
+    const origWidth = sampleCanvas.width;
+    const origHeight = sampleCanvas.height;
+    const blocks = [];
+
+    if (ocrEngine === 'cloud') {
+      if (!geminiApiKey) {
+        throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
+      }
+
+      const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 3, geminiModel, geminiApiUrl);
+      const layout = imageLayout.current;
+
+      geminiResult.forEach((item, index) => {
+        const ymin = item.bbox[0];
+        const xmin = item.bbox[1];
+        const ymax = item.bbox[2];
+        const xmax = item.bbox[3];
+
+        blocks.push({
+          id: `layer_${Date.now()}_${index}`,
+          text: item.text,
+          bbox: {
+            x: layout.left + (xmin / 1000) * layout.width,
+            y: layout.top + (ymin / 1000) * layout.height,
+            w: ((xmax - xmin) / 1000) * layout.width,
+            h: ((ymax - ymin) / 1000) * layout.height
+          }
+        });
+      });
+    } else if (ocrEngine === 'custom') {
+      if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
+      const response = await fetch(localServerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: data })
+      });
+      if (!response.ok) {
+        throw new Error(`Local OCR server returned error: ${response.status}`);
+      }
+      const customResult = await response.json();
+      const layout = imageLayout.current;
+
+      customResult.forEach((item, index) => {
+        const [ymin, xmin, ymax, xmax] = item.bbox;
+
+        blocks.push({
+          id: `layer_${Date.now()}_${index}`,
+          text: item.text,
+          bbox: {
+            x: layout.left + (xmin / 1000) * layout.width,
+            y: layout.top + (ymin / 1000) * layout.height,
+            w: ((xmax - xmin) / 1000) * layout.width,
+            h: ((ymax - ymin) / 1000) * layout.height
+          }
+        });
+      });
+    } else {
+      // Run full Tesseract OCR on a preprocessed canvas
+      // (2x supersampling + adaptive thresholding)
+      const worker = tesseractWorker.current;
+      if (!worker) throw new Error("OCR Engine is not initialized yet.");
+
+      const scaleFactor = 2;
+      const preprocessCanvas = document.createElement('canvas');
+      preprocessCanvas.width = origWidth * scaleFactor;
+      preprocessCanvas.height = origHeight * scaleFactor;
+      const preprocessCtx = preprocessCanvas.getContext('2d');
+      preprocessCtx.imageSmoothingEnabled = true;
+      preprocessCtx.imageSmoothingQuality = 'high';
+      preprocessCtx.drawImage(sampleCanvas, 0, 0, origWidth * scaleFactor, origHeight * scaleFactor);
+      adaptiveThreshold(preprocessCtx, preprocessCanvas.width, preprocessCanvas.height);
+
+      const result = await worker.recognize(preprocessCanvas, {}, { blocks: true });
+
+      const lines = getLinesFromPage(result.data);
+      lines.forEach((line, index) => {
+        const rawText = line.text.trim();
+        if (!rawText) return;
+
+        const correctedText = correctOcrText(rawText);
+
+        const layout = imageLayout.current;
+        blocks.push({
+          id: `layer_${Date.now()}_${index}`,
+          text: correctedText,
+          confidence: line.confidence / 100,
+          bbox: {
+            x: layout.left + (line.bbox.x0 / scaleFactor) * layout.scale,
+            y: layout.top + (line.bbox.y0 / scaleFactor) * layout.scale,
+            w: ((line.bbox.x1 - line.bbox.x0) / scaleFactor) * layout.scale,
+            h: ((line.bbox.y1 - line.bbox.y0) / scaleFactor) * layout.scale
+          }
+        });
+      });
+    }
+
+    await renderOcrResults(blocks);
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
@@ -1147,17 +1267,6 @@ const OcrCanvas = forwardRef(({
           height: origHeight * scale
         };
 
-        // Apply preprocessing using an off-screen canvas with 2x supersampling and adaptive thresholding
-        const scaleFactor = 2;
-        const preprocessCanvas = document.createElement('canvas');
-        preprocessCanvas.width = origWidth * scaleFactor;
-        preprocessCanvas.height = origHeight * scaleFactor;
-        const preprocessCtx = preprocessCanvas.getContext('2d');
-        preprocessCtx.imageSmoothingEnabled = true;
-        preprocessCtx.imageSmoothingQuality = 'high';
-        preprocessCtx.drawImage(sampleCanvas, 0, 0, origWidth * scaleFactor, origHeight * scaleFactor);
-        adaptiveThreshold(preprocessCtx, preprocessCanvas.width, preprocessCanvas.height);
-
         history.current = [];
         historyIndex.current = -1;
 
@@ -1167,90 +1276,7 @@ const OcrCanvas = forwardRef(({
 
         if (onOcrProcessing) onOcrProcessing(true);
 
-        const blocks = [];
-
-        if (ocrEngine === 'cloud') {
-          if (!geminiApiKey) {
-            throw new Error("Gemini API Key is missing. Please enter your API Key in the Settings or Right Sidebar.");
-          }
-          
-          const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 3, geminiModel, geminiApiUrl);
-          const layout = imageLayout.current;
-
-          geminiResult.forEach((item, index) => {
-            const ymin = item.bbox[0];
-            const xmin = item.bbox[1];
-            const ymax = item.bbox[2];
-            const xmax = item.bbox[3];
-
-            blocks.push({
-              id: `layer_${Date.now()}_${index}`,
-              text: item.text,
-              bbox: {
-                x: layout.left + (xmin / 1000) * layout.width,
-                y: layout.top + (ymin / 1000) * layout.height,
-                w: ((xmax - xmin) / 1000) * layout.width,
-                h: ((ymax - ymin) / 1000) * layout.height
-              }
-            });
-          });
-        } else if (ocrEngine === 'custom') {
-          if (onWorkerStatusChange) onWorkerStatusChange('Calling Local OCR Server...');
-          const response = await fetch(localServerUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: data })
-          });
-          if (!response.ok) {
-            throw new Error(`Local OCR server returned error: ${response.status}`);
-          }
-          const customResult = await response.json();
-          const layout = imageLayout.current;
-
-          customResult.forEach((item, index) => {
-            const [ymin, xmin, ymax, xmax] = item.bbox;
-
-            blocks.push({
-              id: `layer_${Date.now()}_${index}`,
-              text: item.text,
-              bbox: {
-                x: layout.left + (xmin / 1000) * layout.width,
-                y: layout.top + (ymin / 1000) * layout.height,
-                w: ((xmax - xmin) / 1000) * layout.width,
-                h: ((ymax - ymin) / 1000) * layout.height
-              }
-            });
-          });
-        } else {
-          // Run full Tesseract OCR on preprocessed canvas
-          const worker = tesseractWorker.current;
-          if (!worker) throw new Error("OCR Engine is not initialized yet.");
-          
-          const result = await worker.recognize(preprocessCanvas, {}, { blocks: true });
-          
-          const lines = getLinesFromPage(result.data);
-          lines.forEach((line, index) => {
-            const rawText = line.text.trim();
-            if (!rawText) return;
-            
-            const correctedText = correctOcrText(rawText);
-
-            const layout = imageLayout.current;
-            blocks.push({
-              id: `layer_${Date.now()}_${index}`,
-              text: correctedText,
-              confidence: line.confidence / 100,
-              bbox: {
-                x: layout.left + (line.bbox.x0 / 2) * layout.scale,
-                y: layout.top + (line.bbox.y0 / 2) * layout.scale,
-                w: ((line.bbox.x1 - line.bbox.x0) / 2) * layout.scale,
-                h: ((line.bbox.y1 - line.bbox.y0) / 2) * layout.scale
-              }
-            });
-          });
-        }
-
-        await renderOcrResults(blocks);
+        await runFullOcr();
       } catch (error) {
         console.error("Error loading image / running OCR:", error);
         alert("OCR Failed: " + error.message);

@@ -69,3 +69,8 @@ AuthKey_*.p8
 *.log
 rewrite_main.py
 add_*.rb
+
+# Python virtual environment (local OCR server dependencies)
+venv/
+.venv/
+__pycache__/
