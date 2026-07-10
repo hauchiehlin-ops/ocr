@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import { fixText, translateText, extractEntities } from './utils/llm';
 import { getTranslation } from './utils/i18n';
