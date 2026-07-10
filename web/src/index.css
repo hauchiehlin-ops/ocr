@@ -226,6 +226,78 @@ body {
   margin-top: 16px;
 }
 
+.ai-operation-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-operation-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.ai-operation-item-wide {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.ai-operation-item .btn {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ai-help-icon {
+  position: relative;
+  flex: 0 0 24px;
+  width: 24px;
+  padding: 0;
+  border: 1px solid rgba(96, 205, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(96, 205, 255, 0.08);
+  color: #60CDFF;
+  cursor: help;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.ai-help-icon:hover,
+.ai-help-icon:focus-visible {
+  background: rgba(96, 205, 255, 0.2);
+  outline: none;
+}
+
+.ai-help-icon::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  z-index: 1300;
+  display: none;
+  width: 260px;
+  padding: 8px 10px;
+  border: 1px solid rgba(96, 205, 255, 0.45);
+  border-radius: 5px;
+  background: #202020;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.ai-help-icon:hover::after,
+.ai-help-icon:focus-visible::after {
+  display: block;
+}
+
 .status-box {
   background: var(--bg-tertiary);
   border-radius: 4px;

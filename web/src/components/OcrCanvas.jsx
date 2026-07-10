@@ -372,6 +372,10 @@ const OcrCanvas = forwardRef(({
          obj.evented = false;
       });
       canvas.selection = false;
+      canvas.skipTargetFind = true;
+      canvas.defaultCursor = 'crosshair';
+      canvas.hoverCursor = 'crosshair';
+      if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'crosshair';
       canvas.discardActiveObject();
       canvas.renderAll();
 
@@ -390,6 +394,10 @@ const OcrCanvas = forwardRef(({
         }
       });
       canvas.selection = true;
+      canvas.skipTargetFind = false;
+      canvas.defaultCursor = 'default';
+      canvas.hoverCursor = 'move';
+      if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'default';
       canvas.renderAll();
     }
 
@@ -559,7 +567,9 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
     
     isDrawing.current = true;
-    const pointer = canvas.getPointer(opt.e);
+    const pointer = typeof canvas.getScenePoint === 'function'
+      ? canvas.getScenePoint(opt.e)
+      : canvas.getPointer(opt.e);
     startPoint.current = { x: pointer.x, y: pointer.y };
 
     activeRect.current = new fabric.Rect({
@@ -583,21 +593,19 @@ const OcrCanvas = forwardRef(({
     const canvas = fabricCanvas.current;
     if (!canvas) return;
 
-    const pointer = canvas.getPointer(opt.e);
+    const pointer = typeof canvas.getScenePoint === 'function'
+      ? canvas.getScenePoint(opt.e)
+      : canvas.getPointer(opt.e);
     const startX = startPoint.current.x;
     const startY = startPoint.current.y;
-
-    if (startX > pointer.x) {
-      activeRect.current.set({ left: pointer.x });
-    }
-    if (startY > pointer.y) {
-      activeRect.current.set({ top: pointer.y });
-    }
-
+    const left = Math.min(startX, pointer.x);
+    const top = Math.min(startY, pointer.y);
     activeRect.current.set({
+      left,
+      top,
       width: Math.abs(startX - pointer.x),
       height: Math.abs(startY - pointer.y)
-    });
+    }).setCoords();
     canvas.renderAll();
   };
 
@@ -607,17 +615,15 @@ const OcrCanvas = forwardRef(({
 
     const rect = activeRect.current;
     const canvas = fabricCanvas.current;
-    
-    if (rect.width > 5 && rect.height > 5) {
-      await runRegionalOcr(rect.left, rect.top, rect.width, rect.height);
-    }
-
-    canvas.remove(rect);
-    activeRect.current = null;
-    canvas.renderAll();
-
-    if (onRegionalOcrComplete) {
-      onRegionalOcrComplete();
+    try {
+      if (rect.width > 5 && rect.height > 5) {
+        await runRegionalOcr(rect.left, rect.top, rect.width, rect.height);
+      }
+    } finally {
+      if (canvas && rect) canvas.remove(rect);
+      activeRect.current = null;
+      canvas?.renderAll();
+      if (onRegionalOcrComplete) onRegionalOcrComplete();
     }
   };
 

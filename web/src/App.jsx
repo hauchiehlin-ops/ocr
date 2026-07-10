@@ -582,6 +582,7 @@ function App() {
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
                 style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                title={uiLanguage === '繁體中文' ? '瀏覽器內直接執行 Tesseract，不需要本地伺服器。' : 'Runs Tesseract in the browser; no local server is required.'}
                 onClick={() => handleOcrEngineChange('local')}
               >
                 {uiLanguage === '繁體中文' ? '本地 (Tesseract)' : 'Local (Tesseract)'}
@@ -589,6 +590,7 @@ function App() {
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
                 style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                title={uiLanguage === '繁體中文' ? '使用 Gemini AI 雲端 OCR，需要 API 金鑰。' : 'Uses Gemini AI cloud OCR; an API key is required.'}
                 onClick={() => handleOcrEngineChange('cloud')}
               >
                 {uiLanguage === '繁體中文' ? '雲端 (Gemini AI)' : 'Cloud (Gemini AI)'}
@@ -596,9 +598,10 @@ function App() {
               <button 
                 className={`btn btn-secondary ${ocrEngine === 'custom' ? 'active' : ''}`}
                 style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                title={uiLanguage === '繁體中文' ? '透過 localhost 使用 Apple Vision、Windows OCR 或自訂 OCR 伺服器。' : 'Uses Apple Vision, Windows OCR, or a custom OCR server through localhost.'}
                 onClick={() => handleOcrEngineChange('custom')}
               >
-                {uiLanguage === '繁體中文' ? '本地伺服器' : 'Local Server'}
+                {uiLanguage === '繁體中文' ? '本地伺服器（原生 OCR）' : 'Local Server (Native OCR)'}
               </button>
             </div>
 
@@ -739,102 +742,30 @@ function App() {
                   </button>
                 </div>
 
-                <details style={{
+                <div style={{
                   marginTop: '8px',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  padding: '8px',
+                  background: 'rgba(96, 205, 255, 0.08)',
+                  border: '1px solid rgba(96, 205, 255, 0.22)',
                   borderRadius: '4px',
-                  padding: '6px 8px'
+                  fontSize: '11px',
+                  lineHeight: '1.5',
+                  color: 'rgba(255,255,255,0.78)'
                 }}>
-                  <summary style={{ fontSize: '11px', color: '#60CDFF', cursor: 'pointer', outline: 'none', userSelect: 'none' }}>
-                    {uiLanguage === '繁體中文' ? '如何建置強大本地 OCR 伺服器？' : 'How to set up Local OCR Server?'}
-                  </summary>
-                  <div style={{ fontSize: '11px', opacity: 0.85, marginTop: '6px', lineHeight: '1.5' }}>
-                    <p style={{ margin: '0 0 4px 0' }}>
-                      {uiLanguage === '繁體中文' 
-                        ? '1. 安裝環境所需的 Python 套件：' 
-                        : '1. Install required Python packages:'}
-                    </p>
-                    <pre style={{
-                      background: '#111111',
-                      padding: '4px 6px',
-                      borderRadius: '3px',
-                      overflowX: 'auto',
-                      fontSize: '10px',
-                      color: '#4ADE80',
-                      margin: '0 0 8px 0'
-                    }}>
-                      pip install flask flask-cors easyocr opencv-python numpy
-                    </pre>
-                    <p style={{ margin: '0 0 4px 0' }}>
-                      {uiLanguage === '繁體中文' 
-                        ? '2. 複製並啟動以下 Python 腳本 (app.py)：' 
-                        : '2. Copy and run the Python script (app.py):'}
-                    </p>
-                    <textarea 
-                      readOnly 
-                      value={`from flask import Flask, request, jsonify
-from flask_cors import CORS
-import base64, cv2, numpy as np, easyocr
-
-app = Flask(__name__)
-CORS(app)
-# ch_tra = 繁體中文, en = 英文
-reader = easyocr.Reader(['ch_tra', 'en'])
-
-@app.route('/ocr', methods=['POST'])
-def perform_ocr():
-    data = request.json
-    img_bytes = base64.b64decode(data['image'].split(',')[1])
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    h, w, _ = img.shape
-    
-    results = reader.readtext(img)
-    blocks = []
-    for (bbox, text, prob) in results:
-        xs = [pt[0] for pt in bbox]
-        ys = [pt[1] for pt in bbox]
-        xmin, xmax = min(xs), max(xs)
-        ymin, ymax = min(ys), max(ys)
-        blocks.append({
-            "text": text,
-            "bbox": [
-                int(ymin / h * 1000),
-                int(xmin / w * 1000),
-                int(ymax / h * 1000),
-                int(xmax / w * 1000)
-            ]
-        })
-    return jsonify(blocks)
-
-if __name__ == '__main__':
-    app.run(port=5001)
-`}
-                      onClick={(e) => { e.target.select(); document.execCommand('copy'); alert('Copied code to clipboard!'); }}
-                      style={{
-                        width: '100%',
-                        height: '110px',
-                        background: '#111111',
-                        color: '#bbb',
-                        fontSize: '9px',
-                        fontFamily: 'monospace',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: '3px',
-                        padding: '4px',
-                        resize: 'vertical',
-                        cursor: 'pointer',
-                        margin: '0 0 6px 0'
-                      }}
-                      title="Click to select all and copy"
-                    />
-                    <small style={{ color: '#888', display: 'block' }}>
-                      {uiLanguage === '繁體中文' 
-                        ? '※ 點擊程式碼框可快速全選複製。EasyOCR 在本地辨識力與排版精準度堪比 Windows 內建引擎。' 
-                        : '* Click the code block to select and copy. EasyOCR provides near 100% accuracy.'}
-                    </small>
+                  <strong style={{ color: '#60CDFF' }}>
+                    {uiLanguage === '繁體中文' ? '本地伺服器的用途' : 'Purpose of the local server'}
+                  </strong>
+                  <div style={{ marginTop: '4px' }}>
+                    {uiLanguage === '繁體中文'
+                      ? '把圖片交給作業系統原生 OCR：macOS 使用 Apple Vision，Windows 使用 Windows OCR；伺服器也可替換成自訂 OCR。只使用瀏覽器 Tesseract 或 Gemini 時不需要啟動它。'
+                      : 'Routes the image to native OS OCR: Apple Vision on macOS, Windows OCR on Windows, or a custom OCR service. It is not required when using browser Tesseract or Gemini.'}
                   </div>
-                </details>
+                  <div style={{ marginTop: '5px', color: '#FBBF24' }}>
+                    {uiLanguage === '繁體中文'
+                      ? '目前已連線 Apple Vision；保留此引擎可取得比瀏覽器 Tesseract 更好的繁中辨識。'
+                      : 'Apple Vision is connected now; keep this engine for stronger Traditional Chinese recognition than browser Tesseract.'}
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -914,32 +845,62 @@ if __name__ == '__main__':
           </button>
 
           <h2 className="panel-title" style={{marginTop: '24px'}}>{t('aiOps')}</h2>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+          <div className="ai-operation-row">
+            <div className="ai-operation-item">
+              <button
+                className="btn btn-secondary"
+                disabled={!selectedRegion || isLoadingLLM}
+                onClick={handleFixText}
+              >
+                {t('fixText')}
+              </button>
+              <button
+                type="button"
+                className="ai-help-icon"
+                aria-label={t('fixTextHelp')}
+                title={t('fixTextHelp')}
+                data-tooltip={t('fixTextHelp')}
+              >
+                ⓘ
+              </button>
+            </div>
+            <div className="ai-operation-item">
+              <button
+                className="btn btn-secondary"
+                disabled={!selectedRegion || isLoadingLLM}
+                onClick={handleExtractEntities}
+              >
+                {t('extract')}
+              </button>
+              <button
+                type="button"
+                className="ai-help-icon"
+                aria-label={t('extractHelp')}
+                title={t('extractHelp')}
+                data-tooltip={t('extractHelp')}
+              >
+                ⓘ
+              </button>
+            </div>
+          </div>
+          <div className="ai-operation-item ai-operation-item-wide">
             <button 
               className="btn btn-secondary" 
-              style={{flex: 1}} 
               disabled={!selectedRegion || isLoadingLLM} 
-              onClick={handleFixText}
+              onClick={handleTranslate}
             >
-              {t('fixText')}
+              {t('translate')}
             </button>
-            <button 
-              className="btn btn-secondary" 
-              style={{flex: 1}} 
-              disabled={!selectedRegion || isLoadingLLM}
-              onClick={handleExtractEntities}
+            <button
+              type="button"
+              className="ai-help-icon"
+              aria-label={t('translateHelp')}
+              title={t('translateHelp')}
+              data-tooltip={t('translateHelp')}
             >
-              {t('extract')}
+              ⓘ
             </button>
           </div>
-          <button 
-            className="btn btn-secondary" 
-            style={{width: '100%', marginBottom: '8px'}} 
-            disabled={!selectedRegion || isLoadingLLM} 
-            onClick={handleTranslate}
-          >
-            {t('translate')}
-          </button>
 
           {/* WebLLM Load Progress Output */}
           {llmProgress && (
