@@ -8,6 +8,7 @@ const FALLBACK_FONT_FAMILIES = [
   'Century Gothic', 'Arial', 'Segoe UI', 'Courier New', 'Times New Roman',
   'Microsoft JhengHei', 'PingFang TC', 'DFKai-SB', 'PMingLiU', 'sans-serif'
 ];
+const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
 
 function App() {
   const [selectedRegion, setSelectedRegion] = useState(null);
@@ -34,8 +35,17 @@ function App() {
   });
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
 
-  // OCR Engine (local Tesseract vs cloud Gemini vs custom local server)
-  const [ocrEngine, setOcrEngine] = useState(() => localStorage.getItem('ocr_engine') || 'local');
+  // OCR Engine: native OS OCR is the main path; browser/cloud engines remain fallback only.
+  const [ocrEngine, setOcrEngine] = useState(() => {
+    const savedVersion = localStorage.getItem('ocr_engine_config_version');
+    const savedEngine = localStorage.getItem('ocr_engine');
+    if (savedVersion !== OCR_ENGINE_CONFIG_VERSION) {
+      localStorage.setItem('ocr_engine_config_version', OCR_ENGINE_CONFIG_VERSION);
+      localStorage.setItem('ocr_engine', 'custom');
+      return 'custom';
+    }
+    return savedEngine || 'custom';
+  });
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.5-flash');
   const [geminiApiUrl, setGeminiApiUrl] = useState(() => localStorage.getItem('gemini_api_url') || 'https://generativelanguage.googleapis.com');
@@ -52,6 +62,7 @@ function App() {
   const handleOcrEngineChange = (engine) => {
     setOcrEngine(engine);
     localStorage.setItem('ocr_engine', engine);
+    localStorage.setItem('ocr_engine_config_version', OCR_ENGINE_CONFIG_VERSION);
   };
 
   const handleGeminiApiKeyChange = (key) => {
@@ -114,26 +125,9 @@ function App() {
     }
   }, [ocrEngine, localServerUrl]);
 
-  // Smart engine default: when the user has never explicitly chosen an engine,
-  // probe the local OCR server once on startup — if it's reachable, prefer it
-  // (native-engine accuracy, no quota). Otherwise stay on Tesseract, the only
-  // engine guaranteed to work on every platform (including mobile, where a
-  // localhost server can never exist). Not persisted, so it re-probes next visit.
-  useEffect(() => {
-    if (localStorage.getItem('ocr_engine')) return; // respect the user's explicit choice
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-    const baseUrl = localServerUrl.replace(/\/ocr$/, '');
-    fetch(`${baseUrl}/status`, { signal: controller.signal })
-      .then(res => (res.ok ? res.json() : null))
-      .then(data => {
-        if (data?.status === 'running') {
-          setOcrEngine('custom');
-        }
-      })
-      .catch(() => { /* no local server (e.g. mobile / Safari mixed-content) — keep Tesseract */ })
-      .finally(() => clearTimeout(timeoutId));
-  }, []);
+  // The default is now deliberately simple: native OCR is the primary workflow.
+  // Tesseract/Gemini are kept as opt-in fallback engines when localhost native
+  // OCR is unavailable or the user explicitly wants to compare engines.
 
   // Preset Fonts
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
@@ -391,10 +385,10 @@ function App() {
           </button>
         </div>
       </header>
-      
+
       {/* --- Main 3-Pane Layout --- */}
       <div className="main-content">
-        
+
         {/* Left Sidebar */}
         <aside className="sidebar left-sidebar" style={{ display: showLeftPanel ? 'flex' : 'none' }}>
           <h2 className="panel-title">{t('docStatus')}</h2>
@@ -417,8 +411,8 @@ function App() {
           <h2 className="panel-title" style={{ marginTop: '16px' }}>{t('layers')}</h2>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {layers.map(layer => (
-              <div 
-                key={layer.id} 
+              <div
+                key={layer.id}
                 className={`layer-item ${selectedRegion?.id === layer.id ? 'active' : ''}`}
                 onClick={() => {
                   if (canvasRef.current) canvasRef.current.selectRegion(layer.id);
@@ -436,14 +430,14 @@ function App() {
 
         {/* Center Workspace (Canvas) */}
         <main className="workspace">
-          <OcrCanvas 
-            ref={canvasRef} 
+          <OcrCanvas
+            ref={canvasRef}
             zoomLevel={zoom}
             isRegionalOcrActive={isRegionalOcrActive}
 
             onWorkerStatusChange={setWorkerStatus}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
-            onRegionSelect={setSelectedRegion} 
+            onRegionSelect={setSelectedRegion}
             onLayersUpdate={setLayers}
             onImageLoaded={(loaded) => { setImageLoaded(loaded); if (loaded) setZoom(1); }}
             onOcrProcessing={setIsOcrProcessing}
@@ -510,7 +504,7 @@ function App() {
         {/* Right Inspector */}
         <aside className="sidebar right-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
           <h2 className="panel-title">{t('formatting')}</h2>
-          
+
           <div className="panel-subtitle">{t('editContent')}</div>
           <textarea
             className="textarea inspector-textarea"
@@ -530,9 +524,9 @@ function App() {
 
           <div className="panel-subtitle">{t('paragraph')}</div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button 
-              className={`btn btn-secondary ${selectedRegion?.isBold ? 'active' : ''}`} 
-              style={{ flex: 1 }} 
+            <button
+              className={`btn btn-secondary ${selectedRegion?.isBold ? 'active' : ''}`}
+              style={{ flex: 1 }}
               disabled={!selectedRegion}
               onClick={() => {
                  const isBold = !selectedRegion.isBold;
@@ -542,9 +536,9 @@ function App() {
             >
               {t('bold')}
             </button>
-            <button 
-              className={`btn btn-secondary ${selectedRegion?.isItalic ? 'active' : ''}`} 
-              style={{ flex: 1 }} 
+            <button
+              className={`btn btn-secondary ${selectedRegion?.isItalic ? 'active' : ''}`}
+              style={{ flex: 1 }}
               disabled={!selectedRegion}
               onClick={() => {
                  const isItalic = !selectedRegion.isItalic;
@@ -559,10 +553,10 @@ function App() {
           <div className="panel-subtitle">{t('color')}</div>
           <div className="color-presets">
             {['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'].map(color => (
-              <button 
-                key={color} 
-                className="color-btn" 
-                style={{ backgroundColor: color, border: selectedRegion?.fill === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)' }} 
+              <button
+                key={color}
+                className="color-btn"
+                style={{ backgroundColor: color, border: selectedRegion?.fill === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)' }}
                 disabled={!selectedRegion}
                 onClick={() => {
                   setSelectedRegion(prev => ({...prev, fill: color}));
@@ -572,8 +566,8 @@ function App() {
             ))}
 
             {/* Custom Color Palette Picker */}
-            <label 
-              className="color-btn" 
+            <label
+              className="color-btn"
               style={{
                 background: 'linear-gradient(45deg, red, orange, yellow, green, blue, purple)',
                 display: 'inline-block',
@@ -583,8 +577,8 @@ function App() {
               }}
               title={t('customColor')}
             >
-              <input 
-                type="color" 
+              <input
+                type="color"
                 style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegion ? 'pointer' : 'not-allowed' }}
                 disabled={!selectedRegion}
                 value={selectedRegion?.fill || '#000000'}
@@ -598,32 +592,88 @@ function App() {
           </div>
 
           <div className="panel-subtitle">{t('ocrEngine')}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-              <button 
-                className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
-                style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                title={t('localEngineHelp')}
-                onClick={() => handleOcrEngineChange('local')}
-              >
-                {t('localEngine')}
-              </button>
-              <button 
-                className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
-                style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                title={t('cloudEngineHelp')}
-                onClick={() => handleOcrEngineChange('cloud')}
-              >
-                {t('cloudEngine')}
-              </button>
-              <button 
-                className={`btn btn-secondary ${ocrEngine === 'custom' ? 'active' : ''}`}
-                style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                title={t('nativeServerEngineHelp')}
-                onClick={() => handleOcrEngineChange('custom')}
-              >
-                {t('nativeServerEngine')}
-              </button>
+          <div className="ocr-engine-panel">
+            {ocrEngine !== 'custom' && (
+              <div className="fallback-active-notice">
+                <span>{t('fallbackEngineActive')}</span>
+                <button className="btn btn-secondary" onClick={() => handleOcrEngineChange('custom')}>
+                  {t('switchToNativeOcr')}
+                </button>
+              </div>
+            )}
+
+            <div className={`native-ocr-card ${ocrEngine === 'custom' ? 'active' : ''}`}>
+              <div className="native-ocr-header">
+                <div>
+                  <strong>{t('nativeOcrPrimary')}</strong>
+                  <div>{t('nativeOcrMainDescription')}</div>
+                </div>
+                <button
+                  className={`btn btn-secondary ${ocrEngine === 'custom' ? 'active' : ''}`}
+                  onClick={() => handleOcrEngineChange('custom')}
+                >
+                  {ocrEngine === 'custom' ? t('nativeOcrActive') : t('useNativeOcr')}
+                </button>
+              </div>
+
+              <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                {t('localServerUrl')}:
+              </span>
+              <input
+                type="text"
+                value={localServerUrl}
+                onChange={(e) => handleLocalServerUrlChange(e.target.value)}
+                placeholder="http://localhost:5001/ocr"
+                style={{
+                  background: '#111111',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  padding: '6px 8px',
+                  fontSize: '12px',
+                  width: '100%'
+                }}
+              />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: localServerStatus === 'connected' ? '#4ADE80' : localServerStatus === 'checking' ? '#FBBF24' : '#EF4444',
+                    display: 'inline-block'
+                  }} />
+                  <span style={{ opacity: 0.85 }}>
+                    {localServerStatus === 'connected'
+                      ? `${t('connected')} (${localServerEngine || 'OCR'})`
+                      : localServerStatus === 'checking'
+                      ? t('checking')
+                      : t('serverNotFound')}
+                  </span>
+                </span>
+                <button
+                  onClick={testLocalServerConnection}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: '4px',
+                    color: '#fff',
+                    padding: '2px 6px',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {t('testConnection')}
+                </button>
+              </div>
+
+              <div className="native-ocr-purpose">
+                <strong>{t('localServerPurpose')}</strong>
+                <div>{t('localServerPurposeDescription')}</div>
+                <div className="native-ocr-warning">{t('mobileNativeOcrNote')}</div>
+                <div className="native-ocr-current">{t('localServerCurrentDescription')}</div>
+              </div>
             </div>
 
             <button
@@ -635,161 +685,107 @@ function App() {
               {isOcrProcessing ? t('recognizing') : t('rerunOcr')}
             </button>
 
-            {ocrEngine === 'cloud' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-                <span style={{ fontSize: '11px', opacity: 0.8 }}>{t('geminiKey')}:</span>
-                <input 
-                  type="password"
-                  value={geminiApiKey}
-                  onChange={(e) => handleGeminiApiKeyChange(e.target.value)}
-                  placeholder="AI_zaSy..."
-                  style={{
-                    background: '#111111',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '4px',
-                    padding: '6px 8px',
-                    fontSize: '12px',
-                    width: '100%'
-                  }}
-                />
-
-                <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
-                  {t('cloudModel')}:
-                </span>
-                <select
-                  value={geminiModel}
-                  onChange={(e) => handleGeminiModelChange(e.target.value)}
-                  style={{
-                    background: '#2D2D2D',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '4px',
-                    padding: '6px 8px',
-                    fontSize: '12px',
-                    width: '100%',
-                    cursor: 'pointer'
-                  }}
+            <details className="fallback-engine-panel">
+              <summary>{t('fallbackEngines')}</summary>
+              <div className="fallback-engine-description">{t('fallbackEnginesDescription')}</div>
+              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
+                <button
+                  className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
+                  style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                  title={t('localEngineHelp')}
+                  onClick={() => handleOcrEngineChange('local')}
                 >
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (預設)</option>
-                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (相容)</option>
-                  <option value="gemini-2.0-pro">Gemini 2.0 Pro (高精準度)</option>
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (備用)</option>
-                </select>
-
-                <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
-                  {t('customBaseUrl')}:
-                </span>
-                <input 
-                  type="text"
-                  value={geminiApiUrl}
-                  onChange={(e) => handleGeminiApiUrlChange(e.target.value)}
-                  placeholder="https://generativelanguage.googleapis.com"
-                  style={{
-                    background: '#111111',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '4px',
-                    padding: '6px 8px',
-                    fontSize: '12px',
-                    width: '100%'
-                  }}
-                />
-
-                <a 
-                  href="https://aistudio.google.com/" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  style={{ fontSize: '11px', color: '#60CDFF', textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}
+                  {t('localEngine')}
+                </button>
+                <button
+                  className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
+                  style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                  title={t('cloudEngineHelp')}
+                  onClick={() => handleOcrEngineChange('cloud')}
                 >
-                  {t('getKeyLink')}
-                </a>
+                  {t('cloudEngine')}
+                </button>
               </div>
-            )}
 
-            {ocrEngine === 'custom' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '4px' }}>
-                <span style={{ fontSize: '11px', opacity: 0.8 }}>
-                  {t('localServerUrl')}:
-                </span>
-                <input 
-                  type="text"
-                  value={localServerUrl}
-                  onChange={(e) => handleLocalServerUrlChange(e.target.value)}
-                  placeholder="http://localhost:5001/ocr"
-                  style={{
-                    background: '#111111',
-                    color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '4px',
-                    padding: '6px 8px',
-                    fontSize: '12px',
-                    width: '100%'
-                  }}
-                />
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
-                  <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      background: localServerStatus === 'connected' ? '#4ADE80' : localServerStatus === 'checking' ? '#FBBF24' : '#EF4444',
-                      display: 'inline-block'
-                    }} />
-                    <span style={{ opacity: 0.85 }}>
-                      {localServerStatus === 'connected'
-                        ? `${t('connected')} (${localServerEngine || 'OCR'})`
-                        : localServerStatus === 'checking'
-                        ? t('checking')
-                        : t('serverNotFound')}
-                    </span>
-                  </span>
-                  <button
-                    onClick={testLocalServerConnection}
+              {ocrEngine === 'cloud' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>{t('geminiKey')}:</span>
+                  <input
+                    type="password"
+                    value={geminiApiKey}
+                    onChange={(e) => handleGeminiApiKeyChange(e.target.value)}
+                    placeholder="AI_zaSy..."
                     style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(255,255,255,0.12)',
-                      borderRadius: '4px',
+                      background: '#111111',
                       color: '#fff',
-                      padding: '2px 6px',
-                      fontSize: '10px',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      padding: '6px 8px',
+                      fontSize: '12px',
+                      width: '100%'
+                    }}
+                  />
+
+                  <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+                    {t('cloudModel')}:
+                  </span>
+                  <select
+                    value={geminiModel}
+                    onChange={(e) => handleGeminiModelChange(e.target.value)}
+                    style={{
+                      background: '#2D2D2D',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      padding: '6px 8px',
+                      fontSize: '12px',
+                      width: '100%',
                       cursor: 'pointer'
                     }}
                   >
-                    {t('testConnection')}
-                  </button>
-                </div>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (預設)</option>
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (相容)</option>
+                    <option value="gemini-2.0-pro">Gemini 2.0 Pro (高精準度)</option>
+                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (備用)</option>
+                  </select>
 
-                <div style={{
-                  marginTop: '8px',
-                  padding: '8px',
-                  background: 'rgba(96, 205, 255, 0.08)',
-                  border: '1px solid rgba(96, 205, 255, 0.22)',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  lineHeight: '1.5',
-                  color: 'rgba(255,255,255,0.78)'
-                }}>
-                  <strong style={{ color: '#60CDFF' }}>
-                    {t('localServerPurpose')}
-                  </strong>
-                  <div style={{ marginTop: '4px' }}>
-                    {t('localServerPurposeDescription')}
-                  </div>
-                  <div style={{ marginTop: '5px', color: '#FBBF24' }}>
-                    {t('localServerCurrentDescription')}
-                  </div>
+                  <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+                    {t('customBaseUrl')}:
+                  </span>
+                  <input
+                    type="text"
+                    value={geminiApiUrl}
+                    onChange={(e) => handleGeminiApiUrlChange(e.target.value)}
+                    placeholder="https://generativelanguage.googleapis.com"
+                    style={{
+                      background: '#111111',
+                      color: '#fff',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      padding: '6px 8px',
+                      fontSize: '12px',
+                      width: '100%'
+                    }}
+                  />
+
+                  <a
+                    href="https://aistudio.google.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: '11px', color: '#60CDFF', textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}
+                  >
+                    {t('getKeyLink')}
+                  </a>
                 </div>
-              </div>
-            )}
+              )}
+            </details>
           </div>
 
           <div className="panel-subtitle">{t('presetFonts')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('engFont')}:</span>
-              <select 
+              <select
                 value={englishFont}
                 onChange={(e) => setEnglishFont(e.target.value)}
                 style={{
@@ -807,10 +803,10 @@ function App() {
                 ))}
               </select>
             </div>
-            
+
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('zhFont')}:</span>
-              <select 
+              <select
                 value={chineseFont}
                 onChange={(e) => setChineseFont(e.target.value)}
                 style={{
@@ -830,15 +826,15 @@ function App() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 id="forcePresetFontCheckbox"
                 checked={forcePresetFont}
                 onChange={(e) => setForcePresetFont(e.target.checked)}
                 style={{ cursor: 'pointer' }}
               />
-              <label 
-                htmlFor="forcePresetFontCheckbox" 
+              <label
+                htmlFor="forcePresetFontCheckbox"
                 style={{ fontSize: '11px', opacity: 0.8, cursor: 'pointer', userSelect: 'none' }}
               >
                 {t('forceFont')}
@@ -850,8 +846,8 @@ function App() {
             </div>
           </div>
 
-          <button 
-            className="btn btn-secondary" 
+          <button
+            className="btn btn-secondary"
             style={{ width: '100%', marginBottom: '16px' }}
             disabled={!imageLoaded}
             onClick={handleApplyDefaultFontAll}
@@ -914,20 +910,20 @@ function App() {
               💡 {llmProgress}
             </div>
           )}
-          
+
           <h2 className="panel-title" style={{marginTop: '24px'}}>{t('ops')}</h2>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button 
-              className={`btn btn-secondary ${isRegionalOcrActive ? 'active' : ''}`} 
-              style={{flex: 1}} 
+            <button
+              className={`btn btn-secondary ${isRegionalOcrActive ? 'active' : ''}`}
+              style={{flex: 1}}
               disabled={!imageLoaded}
               onClick={() => setIsRegionalOcrActive(!isRegionalOcrActive)}
             >
               {isRegionalOcrActive ? t('drawingMode') : t('regionalOcr')}
             </button>
-            <button 
-              className="btn btn-secondary" 
-              style={{flex: 1}} 
+            <button
+              className="btn btn-secondary"
+              style={{flex: 1}}
               disabled={!selectedRegion}
               onClick={handleRemoveText}
             >

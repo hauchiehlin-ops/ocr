@@ -300,6 +300,115 @@ body {
   display: block;
 }
 
+.ocr-engine-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.native-ocr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.native-ocr-card.active {
+  border-color: rgba(96, 205, 255, 0.55);
+  background: rgba(96, 205, 255, 0.08);
+}
+
+.native-ocr-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.native-ocr-header strong {
+  display: block;
+  color: #60CDFF;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.native-ocr-header .btn {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.native-ocr-purpose {
+  margin-top: 2px;
+  padding: 8px;
+  background: rgba(96, 205, 255, 0.08);
+  border: 1px solid rgba(96, 205, 255, 0.22);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.native-ocr-purpose strong {
+  color: #60CDFF;
+}
+
+.native-ocr-warning {
+  margin-top: 5px;
+  color: #FFB86C;
+}
+
+.native-ocr-current {
+  margin-top: 5px;
+  color: #FBBF24;
+}
+
+.fallback-active-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 5px;
+  background: rgba(251, 191, 36, 0.08);
+  color: #FBBF24;
+  font-size: 11px;
+}
+
+.fallback-active-notice .btn {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.fallback-engine-panel {
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 11px;
+}
+
+.fallback-engine-panel summary {
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 600;
+}
+
+.fallback-engine-description {
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.62);
+  line-height: 1.45;
+}
+
 .status-box {
   background: var(--bg-tertiary);
   border-radius: 4px;
