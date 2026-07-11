@@ -8,11 +8,17 @@ echo   AI OCR Pro Editor - Windows Native OCR Server
 echo ============================================================
 echo.
 
-if exist "windows_ocr_helper.ps1" goto :server_source_ready
 echo [0/3] Downloading the Windows OCR helper component...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/windows_ocr_helper.ps1' -OutFile 'windows_ocr_helper.ps1'"
-if errorlevel 1 goto :download_failed
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/windows_ocr_helper.ps1?download=1' -OutFile 'windows_ocr_helper.tmp'"
+if errorlevel 1 goto :helper_download_failed
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[void][scriptblock]::Create([IO.File]::ReadAllText('windows_ocr_helper.tmp', [Text.Encoding]::ASCII))"
+if errorlevel 1 goto :helper_download_failed
+move /y "windows_ocr_helper.tmp" "windows_ocr_helper.ps1" >nul
+if errorlevel 1 goto :helper_download_failed
 
+:helper_ready
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[void][scriptblock]::Create([IO.File]::ReadAllText('windows_ocr_helper.ps1', [Text.Encoding]::ASCII))"
+if errorlevel 1 goto :helper_invalid
 if exist "ocr_server.py" goto :server_source_ready
 echo [0/3] Downloading the official OCR server component...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0windows_ocr_helper.ps1" download "ocr_server.py"
@@ -111,6 +117,21 @@ goto :fail
 :download_failed
 echo ERROR: Unable to download ocr_server.py from the official GitHub repository.
 echo Check the network connection or download the complete project instead.
+goto :fail
+
+:helper_download_failed
+if exist "windows_ocr_helper.tmp" del /q "windows_ocr_helper.tmp" >nul 2>nul
+if exist "windows_ocr_helper.ps1" (
+  echo WARNING: Unable to update the helper component; trying the existing local copy.
+  goto :helper_ready
+)
+echo ERROR: Unable to download the Windows OCR helper component.
+echo Check the network connection or download the complete project instead.
+goto :fail
+
+:helper_invalid
+echo ERROR: The Windows OCR helper component is incomplete or invalid.
+echo Delete windows_ocr_helper.ps1, check the network connection, and run this BAT file again.
 goto :fail
 
 :setup_failed

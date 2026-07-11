@@ -46,7 +46,10 @@ switch ($Mode) {
   }
 
   "popup" {
-    $message = "Windows 原生 OCR 已啟動。您可以關閉這個視窗；OCR 會在背景繼續執行。請回到網頁點擊「測試連接」。"
+    # Keep this helper strictly ASCII. Windows PowerShell 5.1 interprets a
+    # UTF-8 file without a BOM as the active ANSI code page, which can corrupt
+    # non-ASCII string literals and cause a parser error before any mode runs.
+    $message = "Windows Native OCR is ready. Return to the web page and click Test Connection."
     try {
       $shell = New-Object -ComObject WScript.Shell
       $null = $shell.Popup($message, 0, "AI OCR Pro Editor", 64)
