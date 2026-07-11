@@ -11,6 +11,7 @@ const params = new URLSearchParams(location.search);
 const W = Number(params.get('w') || 1200);
 const H = Number(params.get('h') || 800);
 const OCR_URL = params.get('ocrUrl') || 'http://localhost:5001/ocr';
+const IMAGE_URL = params.get('imageUrl') || '';
 
 const IMG_W = 1000;
 const IMG_H = 700;
@@ -32,7 +33,12 @@ for (const level of ['error', 'warn']) {
 }
 window.alert = (m) => { resultsEl().textContent = 'E2E_ALERT ' + m; };
 
-function makeTestImageBlob() {
+async function makeTestImageBlob() {
+  if (IMAGE_URL) {
+    const response = await fetch(IMAGE_URL);
+    if (!response.ok) throw new Error(`Unable to load E2E image: ${response.status}`);
+    return response.blob();
+  }
   const c = document.createElement('canvas');
   c.width = IMG_W;
   c.height = IMG_H;
@@ -110,6 +116,15 @@ async function measure() {
     scale: +scale.toFixed(4),
     exportSize: { w: exportImg.width, h: exportImg.height },
     textboxCount: textboxes.length,
+    textboxes: textboxes.map(t => ({
+      id: t.id,
+      text: t.text,
+      fill: t.fill,
+      left: +t.left.toFixed(1),
+      top: +t.top.toFixed(1),
+      width: +t.width.toFixed(1),
+      height: +t.height.toFixed(1)
+    })),
     patchCount: patches.length,
     patches: patches.map(p => {
       // sample the patch bitmap itself
