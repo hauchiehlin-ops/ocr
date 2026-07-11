@@ -69,6 +69,7 @@ const SIMPLIFIED_CHINESE_FONT_LABELS = {
 };
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
 const WINDOWS_OCR_STARTER_URL = 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.bat';
+const MACOS_OCR_INSTALLER_URL = 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.sh';
 const WINDOWS_PROJECT_ZIP_URL = 'https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip';
 // Shown until ListModels succeeds (or when it fails: offline, invalid key…).
 // Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
@@ -249,6 +250,26 @@ function App() {
     }
   };
 
+  const handleDownloadMacOcrInstaller = async () => {
+    try {
+      const response = await fetch(MACOS_OCR_INSTALLER_URL, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'setup_and_run_ocr.sh';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      window.alert(t('macInstallerDownloadedHint'));
+    } catch (error) {
+      console.warn('Direct macOS OCR installer download failed; opening the official source.', error);
+      window.open(MACOS_OCR_INSTALLER_URL, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const handleUiLanguageChange = (language) => {
     setUiLanguage(language);
     localStorage.setItem('ui_language', language);
@@ -263,6 +284,7 @@ function App() {
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   );
   const isAndroidBrowser = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+  const isMacDesktopBrowser = typeof navigator !== 'undefined' && /Macintosh|Mac OS X/i.test(navigator.userAgent) && !isIOSLikeBrowser;
   const isMobileWebBrowser = (isIOSLikeBrowser || isAndroidBrowser) && !mobileNativeOcrAvailable;
 
   const testLocalServerConnection = async () => {
@@ -1020,6 +1042,35 @@ function App() {
                     <a href={WINDOWS_PROJECT_ZIP_URL} target="_blank" rel="noopener noreferrer">
                       {t('downloadWindowsProjectZip')}
                     </a>
+                  </details>
+                </div>
+              )}
+              {isMacDesktopBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
+                <div className="native-ocr-warning">
+                  <div>{t('macServerStartHint')}</div>
+                  <button
+                    type="button"
+                    className="windows-ocr-download"
+                    onClick={handleDownloadMacOcrInstaller}
+                  >
+                    ⬇ {t('downloadMacOcrInstaller')}
+                  </button>
+                  <details className="windows-ocr-help">
+                    <summary>{t('macTroubleshootingTitle')}</summary>
+                    <ol>
+                      <li>{t('macTroubleshootingDownload')}</li>
+                      <li>
+                        {t('macTroubleshootingRun')}
+                        <code>bash "$HOME/Downloads/setup_and_run_ocr.sh"</code>
+                      </li>
+                      <li>{t('macTroubleshootingPassword')}</li>
+                      <li>{t('macTroubleshootingReady')}</li>
+                      <li>
+                        {t('macTroubleshootingVerify')}
+                        <code>curl http://127.0.0.1:5001/status</code>
+                      </li>
+                      <li>{t('macTroubleshootingFiles')}</li>
+                    </ol>
                   </details>
                 </div>
               )}

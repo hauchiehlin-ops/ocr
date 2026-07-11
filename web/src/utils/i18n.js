@@ -93,7 +93,17 @@ const english = {
   windowsTroubleshootingVerify: 'When the server window says it is running, open a second Command Prompt and verify it. A successful result contains status running and engine WindowsOCR:',
   windowsTroubleshootingFiles: 'After success, the downloaded BAT and old OCR files in Downloads may be deleted. Keep %LOCALAPPDATA%\\AI OCR Pro Editor\\OCR Server because it contains the installed runtime.',
   windowsTroubleshootingBackground: 'After the ready prompt appears, the OCR server keeps running in the background. Closing the setup window will not disconnect OCR.',
-  downloadWindowsProjectZip: 'Corporate network blocks the single file? Download the complete official project ZIP.'
+  downloadWindowsProjectZip: 'Corporate network blocks the single file? Download the complete official project ZIP.',
+  macServerStartHint: 'macOS: install the Apple Vision OCR background service once, then click Test Connection. It starts automatically after future logins.',
+  downloadMacOcrInstaller: 'Download macOS OCR installer',
+  macInstallerDownloadedHint: 'The macOS OCR installer was downloaded. Open Terminal and run: bash "$HOME/Downloads/setup_and_run_ocr.sh". When the ready prompt appears, return here and click Test Connection.',
+  macTroubleshootingTitle: 'macOS installation and connection steps',
+  macTroubleshootingDownload: 'Download the official setup_and_run_ocr.sh file. The browser cannot start a local process directly because of macOS security restrictions.',
+  macTroubleshootingRun: 'Open Terminal, paste this command, and press Return:',
+  macTroubleshootingPassword: 'If Python is missing, macOS asks for an administrator password while installing the official Python package.',
+  macTroubleshootingReady: 'Wait for macOS Native OCR is installed and ready, then close Terminal and click Test Connection.',
+  macTroubleshootingVerify: 'To verify manually, run this command; a successful response contains status running and engine AppleVision:',
+  macTroubleshootingFiles: 'After success, the downloaded SH file may be deleted. Keep ~/Library/Application Support/AI OCR Pro Editor/OCR Server and ~/Library/LaunchAgents/com.ocreditor.native-ocr.plist.'
 };
 
 const traditionalChinese = {
@@ -161,7 +171,17 @@ const traditionalChinese = {
   windowsTroubleshootingVerify: '當伺服器視窗顯示正在執行，再開一個命令提示字元驗證。成功時會看到 status running 與 engine WindowsOCR：',
   windowsTroubleshootingBackground: '出現已啟動提示後，OCR 會在背景持續執行；關閉這個安裝／啟動視窗不會中斷原生 OCR。',
   windowsTroubleshootingFiles: '安裝成功後，可刪除「下載」資料夾中的 BAT 與舊 OCR 檔案；請保留 %LOCALAPPDATA%\\AI OCR Pro Editor\\OCR Server，這是正式執行環境。',
-  downloadWindowsProjectZip: '公司網路擋下單檔下載？改下載完整官方專案 ZIP。'
+  downloadWindowsProjectZip: '公司網路擋下單檔下載？改下載完整官方專案 ZIP。',
+  macServerStartHint: 'macOS：只需安裝一次 Apple Vision OCR 背景服務，完成後按「測試連接」；之後每次登入會自動啟動。',
+  downloadMacOcrInstaller: '下載 macOS OCR 一鍵安裝檔',
+  macInstallerDownloadedHint: 'macOS OCR 安裝檔已下載。請開啟「終端機」並執行：bash "$HOME/Downloads/setup_and_run_ocr.sh"。看到完成提示後回到本頁按「測試連接」。',
+  macTroubleshootingTitle: 'macOS 安裝與連線步驟',
+  macTroubleshootingDownload: '下載官方 setup_and_run_ocr.sh；基於 macOS 安全限制，網頁本身不能直接啟動本機程序。',
+  macTroubleshootingRun: '開啟「終端機」，貼上下列指令後按 Return：',
+  macTroubleshootingPassword: '若沒有 Python，安裝官方 Python 套件時 macOS 會要求輸入管理員密碼。',
+  macTroubleshootingReady: '等畫面顯示 macOS Native OCR is installed and ready 後即可關閉終端機，再按「測試連接」。',
+  macTroubleshootingVerify: '若要手動驗證，執行下列指令；成功時會看到 status running 與 engine AppleVision：',
+  macTroubleshootingFiles: '安裝成功後可刪除下載的 SH 檔；必須保留 ~/Library/Application Support/AI OCR Pro Editor/OCR Server 與 ~/Library/LaunchAgents/com.ocreditor.native-ocr.plist。'
 };
 
 // The native editor promises all eleven languages.  The dictionaries below

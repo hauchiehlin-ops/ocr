@@ -282,7 +282,7 @@
             <thead><tr><th data-i18n="manual_native_platform">平台</th><th data-i18n="manual_native_connection">正確連線方式</th></tr></thead>
             <tbody>
                 <tr><td>Windows Chrome / Edge</td><td data-i18n="manual_native_windows_mode">執行 setup_and_run_ocr.bat，等出現已啟動提示後回網頁按「測試連接」；啟動完成後可關閉命令視窗。</td></tr>
-                <tr><td>macOS Chrome / Safari</td><td data-i18n="manual_native_macos_mode">在專案資料夾執行 setup_and_run_ocr.sh，保持終端機開啟，再按「測試連接」。</td></tr>
+                <tr><td>macOS Chrome / Safari</td><td data-i18n="manual_native_macos_mode">執行一次 setup_and_run_ocr.sh；程式會安裝至固定位置、在背景啟動並設定登入後自動啟動。完成後可關閉終端機，再按「測試連接」。</td></tr>
                 <tr><td>iOS / Android App</td><td data-i18n="manual_native_mobile_app_mode">必須是 Capacitor 打包版本，直接使用 iOS Vision / Android ML Kit，不需要也不應填 localhost。</td></tr>
                 <tr><td data-i18n="manual_native_mobile_browser">手機瀏覽器</td><td data-i18n="manual_native_mobile_browser_mode">無法直接使用作業系統原生 OCR；iPadOS 的 Safari/Chrome 不能從網頁啟動 localhost，也不能直接呼叫 Apple Vision。請使用 Gemini/Tesseract，或安裝打包 App。</td></tr>
             </tbody>
@@ -299,9 +299,10 @@
         </ol>
 
         <h3 data-i18n="manual_native_macos_steps">macOS 處理步驟</h3>
-        <p data-i18n="manual_native_macos_command_intro">開啟「終端機」、進入專案資料夾並執行；保持終端機視窗開啟：</p>
-        <code class="command-block">cd /path/to/OCR<br>chmod +x setup_and_run_ocr.sh<br>./setup_and_run_ocr.sh<br>curl http://127.0.0.1:5001/status</code>
-        <p data-i18n="manual_native_macos_success">成功時會看到 engine 為 AppleVision。若 5001 已被占用，先關閉舊的 OCR 伺服器視窗再重試。</p>
+        <p data-i18n="manual_native_macos_command_intro">從網頁下載 macOS 安裝檔後，開啟「終端機」執行下列指令；完成後終端機可以關閉：</p>
+        <code class="command-block">bash "$HOME/Downloads/setup_and_run_ocr.sh"<br>curl http://127.0.0.1:5001/status</code>
+        <p data-i18n="manual_native_macos_success">成功時會看到 engine 為 AppleVision。服務安裝於使用者 Library，並由 LaunchAgent 在登入後自動啟動。</p>
+        <p data-i18n="manual_native_macos_files">安裝成功後可刪除「下載」資料夾中的 setup_and_run_ocr.sh；請保留 ~/Library/Application Support/AI OCR Pro Editor/OCR Server 與 ~/Library/LaunchAgents/com.ocreditor.native-ocr.plist。</p>
 
         <h3 data-i18n="manual_native_mobile_steps">iOS / Android App 處理步驟</h3>
         <p data-i18n="manual_native_mobile_steps_desc">App 顯示原生 OCR 不可用時，先確認安裝的是最新 Capacitor 打包版本而不是手機瀏覽器捷徑；重新執行 Web build 與 cap sync 後再以 Xcode/Android Studio 建置安裝。iOS 必須註冊 NativeOcrPlugin 並使用 Vision；Android 必須包含 ML Kit 中文文字辨識依賴。重新安裝後仍不可用時，先切換 Gemini/Tesseract，並將裝置型號、OS 版本與錯誤畫面提供給維護者。</p>
