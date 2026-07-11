@@ -1,7 +1,8 @@
 import * as ort from 'onnxruntime-web';
 
 const MODEL_SIZE = 512;
-const MODEL_URL = import.meta.env.VITE_LAMA_MODEL_URL || '/models/lama_fp32.onnx';
+const MODEL_URL = import.meta.env.VITE_LAMA_MODEL_URL ||
+  'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx';
 const WASM_BASE_URL = import.meta.env.VITE_ORT_WASM_BASE_URL ||
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/';
 const MODEL_CACHE = 'ocr-ai-models-v1';

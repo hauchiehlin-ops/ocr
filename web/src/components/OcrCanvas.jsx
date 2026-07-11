@@ -257,6 +257,7 @@ const OcrCanvas = forwardRef(({
   const bgImage = useRef(null);
   const sampleCanvasRef = useRef(null);
   const batchInpaintCanvasRef = useRef(null);
+  const batchInpaintAttemptedRef = useRef(false);
   const aiDownloadApproved = useRef(false);
   const tesseractWorker = useRef(null);
   const originalDimensions = useRef({ width: 0, height: 0 });
@@ -569,6 +570,7 @@ const OcrCanvas = forwardRef(({
     const sourceCanvas = sampleCanvasRef.current;
     const layout = imageLayout.current;
     batchInpaintCanvasRef.current = null;
+    batchInpaintAttemptedRef.current = false;
     if (!sourceCanvas || !blocks?.length || !layout.scale) return;
     const width = sourceCanvas.width, height = sourceCanvas.height;
     const source = sourceCanvas.getContext('2d').getImageData(0, 0, width, height).data;
@@ -586,6 +588,7 @@ const OcrCanvas = forwardRef(({
       for (let y = y0; y < y1; y++) mask.fill(1, y * width + x0, y * width + x1);
     }
     if (!mask.some(Boolean)) return;
+    batchInpaintAttemptedRef.current = true;
     if (!aiDownloadApproved.current && shouldConfirmLargeDownload()) {
       aiDownloadApproved.current = window.confirm('高品質 AI 背景修補首次需要下載約 198 MB 模型。建議使用 Wi-Fi。是否繼續？');
       if (!aiDownloadApproved.current) return;
@@ -779,6 +782,14 @@ const OcrCanvas = forwardRef(({
     }
     if (!maskedCount) return null;
 
+    // On photographs a single-colour substrate model classifies legitimate
+    // scenery as foreground. In that case interpolation would repaint most of
+    // the OCR rectangle into obvious vertical bands. Never synthesize a patch
+    // when the detected "glyph" area is implausibly large; retaining the
+    // original pixels is visually safer until AI inpainting is available.
+    const targetArea = Math.max(1, (targetRight - targetLeft) * (targetBottom - targetTop));
+    if (maskedCount / targetArea > 0.38 && !batchInpaintCanvasRef.current) return null;
+
     // Dilate so anti-aliased edges and glyph strokes that poke slightly past
     // a tight OCR bounding box are rebuilt as well.
     const dilationRadius = Math.max(2, Math.min(6, Math.round(imageHeight * 0.16)));
@@ -809,7 +820,7 @@ const OcrCanvas = forwardRef(({
     if (batchInpaintCanvasRef.current) {
       lamaOutput = batchInpaintCanvasRef.current.getContext('2d')
         .getImageData(geometry.patchLeft, geometry.patchTop, patchWidth, patchHeight).data;
-    } else try {
+    } else if (!batchInpaintAttemptedRef.current) try {
       if (!aiDownloadApproved.current && shouldConfirmLargeDownload()) {
         aiDownloadApproved.current = window.confirm('高品質 AI 背景修補首次需要下載約 198 MB 模型。建議使用 Wi-Fi。是否繼續？');
         if (!aiDownloadApproved.current) throw new DOMException('使用者選擇省流量模式', 'AbortError');
