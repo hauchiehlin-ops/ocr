@@ -15,6 +15,8 @@ fabric.FabricObject.ownDefaults.cornerSize = 8;
 fabric.FabricObject.ownDefaults.touchCornerSize = 18;
 fabric.FabricObject.ownDefaults.transparentCorners = true;
 
+const DEFAULT_OCR_FONT_FAMILY = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
 // Typo correction dictionary from WPF project to achieve 99%+ accuracy for target mindmap
 const ocrCorrectionDict = {
   "連瘠廟關": "連動機制",
@@ -253,8 +255,8 @@ const OcrCanvas = forwardRef(({
   onRegionalOcrComplete,
   onHistoryStatusChange,
   onWorkerStatusChange,
-  presetFontFamily = 'Inter',
-  forcePresetFont = true,
+  presetFontFamily = DEFAULT_OCR_FONT_FAMILY,
+  forcePresetFont = false,
   ocrEngine = 'local',
   geminiApiKey = '',
   geminiModel = 'gemini-2.0-flash',
@@ -532,13 +534,12 @@ const OcrCanvas = forwardRef(({
   }, [isRegionalOcrActive, regionalAction]);
 
   // Pixel Color Sampler
-  const getAverageCornerColor = (cx, cy) => {
+  const getAverageCornerColor = (cx, cy, size = 3) => {
     const canvas = sampleCanvasRef.current;
     if (!canvas) return { r: 255, g: 255, b: 255 };
     const ctx = canvas.getContext('2d');
     
-    let sumR = 0, sumG = 0, sumB = 0, count = 0;
-    const size = 2; // 5x5 neighborhood to avoid text details
+    const pixels = [];
     
     const startX = Math.max(0, cx - size);
     const endX = Math.min(canvas.width - 1, cx + size);
@@ -549,20 +550,44 @@ const OcrCanvas = forwardRef(({
       const imgData = ctx.getImageData(startX, startY, endX - startX + 1, endY - startY + 1);
       const data = imgData.data;
       for (let i = 0; i < data.length; i += 4) {
-        sumR += data[i];
-        sumG += data[i+1];
-        sumB += data[i+2];
-        count++;
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        pixels.push({
+          r,
+          g,
+          b,
+          lum: 0.299 * r + 0.587 * g + 0.114 * b,
+          saturation: Math.max(r, g, b) - Math.min(r, g, b)
+        });
       }
     } catch (e) {
       console.warn("Corner color sampling failed:", e);
     }
     
-    if (count === 0) return { r: 255, g: 255, b: 255 };
+    if (pixels.length === 0) return { r: 255, g: 255, b: 255 };
+    pixels.sort((a, b) => a.lum - b.lum);
+    const trim = Math.floor(pixels.length * 0.22);
+    let stablePixels = pixels.slice(trim, pixels.length - trim);
+    if (stablePixels.length < 4) stablePixels = pixels;
+
+    const medianLum = stablePixels[Math.floor(stablePixels.length / 2)]?.lum ?? 255;
+    const medianSaturation = [...stablePixels].sort((a, b) => a.saturation - b.saturation)[Math.floor(stablePixels.length / 2)]?.saturation ?? 0;
+    const filteredPixels = stablePixels.filter(pixel =>
+      Math.abs(pixel.lum - medianLum) < 58 &&
+      Math.abs(pixel.saturation - medianSaturation) < 95
+    );
+    const finalPixels = filteredPixels.length >= 3 ? filteredPixels : stablePixels;
+    const sum = finalPixels.reduce((acc, pixel) => ({
+      r: acc.r + pixel.r,
+      g: acc.g + pixel.g,
+      b: acc.b + pixel.b
+    }), { r: 0, g: 0, b: 0 });
+
     return {
-      r: Math.round(sumR / count),
-      g: Math.round(sumG / count),
-      b: Math.round(sumB / count)
+      r: Math.round(sum.r / finalPixels.length),
+      g: Math.round(sum.g / finalPixels.length),
+      b: Math.round(sum.b / finalPixels.length)
     };
   };
 
@@ -570,7 +595,7 @@ const OcrCanvas = forwardRef(({
   // selected/OCR box perimeter.  This guarantees that source glyphs are hidden,
   // while avoiding a flat single-colour rectangle: every output pixel blends
   // top/bottom/left/right perimeter samples according to its position.
-  const createPerimeterFillPatch = (left, top, width, height, { padding = 2, maxSourceRatio = 0.12 } = {}) => {
+  const createPerimeterFillPatch = (left, top, width, height, { padding = 2, paddingX = null, paddingY = null, maxSourceRatio = 0.12 } = {}) => {
     const layout = imageLayout.current;
     if (!layout.width || !sampleCanvasRef.current || layout.scale <= 0) return null;
 
@@ -593,32 +618,34 @@ const OcrCanvas = forwardRef(({
     const boxArea = imgWidth * imgHeight;
     if (maxSourceRatio && sourceArea > 0 && boxArea / sourceArea > maxSourceRatio) return null;
 
-    const patchLeft = Math.max(0, imgLeft - padding);
-    const patchTop = Math.max(0, imgTop - padding);
-    const patchRight = Math.min(imgWidthMax, imgRight + padding);
-    const patchBottom = Math.min(imgHeightMax, imgBottom + padding);
+    const resolvedPaddingX = Math.max(0, Math.round(paddingX ?? padding));
+    const resolvedPaddingY = Math.max(0, Math.round(paddingY ?? padding));
+    const patchLeft = Math.max(0, imgLeft - resolvedPaddingX);
+    const patchTop = Math.max(0, imgTop - resolvedPaddingY);
+    const patchRight = Math.min(imgWidthMax, imgRight + resolvedPaddingX);
+    const patchBottom = Math.min(imgHeightMax, imgBottom + resolvedPaddingY);
     const patchWidth = Math.max(1, patchRight - patchLeft);
     const patchHeight = Math.max(1, patchBottom - patchTop);
-    const offset = Math.max(3, Math.min(14, Math.round(Math.min(imgWidth, imgHeight) * 0.18)));
+    const offset = Math.max(4, Math.min(18, Math.round(Math.min(imgWidth, imgHeight) * 0.22)));
 
     const sampleX = (x) => Math.max(0, Math.min(imgWidthMax - 1, Math.round(x)));
     const sampleY = (y) => Math.max(0, Math.min(imgHeightMax - 1, Math.round(y)));
-    const topY = sampleY(imgTop - offset);
-    const bottomY = sampleY(imgBottom - 1 + offset);
-    const leftX = sampleX(imgLeft - offset);
-    const rightX = sampleX(imgRight - 1 + offset);
+    const topY = sampleY(patchTop - offset);
+    const bottomY = sampleY(patchBottom - 1 + offset);
+    const leftX = sampleX(patchLeft - offset);
+    const rightX = sampleX(patchRight - 1 + offset);
 
     const topSamples = Array.from({ length: patchWidth }, (_, x) =>
-      getAverageCornerColor(sampleX(patchLeft + x), topY)
+      getAverageCornerColor(sampleX(patchLeft + x), topY, 4)
     );
     const bottomSamples = Array.from({ length: patchWidth }, (_, x) =>
-      getAverageCornerColor(sampleX(patchLeft + x), bottomY)
+      getAverageCornerColor(sampleX(patchLeft + x), bottomY, 4)
     );
     const leftSamples = Array.from({ length: patchHeight }, (_, y) =>
-      getAverageCornerColor(leftX, sampleY(patchTop + y))
+      getAverageCornerColor(leftX, sampleY(patchTop + y), 4)
     );
     const rightSamples = Array.from({ length: patchHeight }, (_, y) =>
-      getAverageCornerColor(rightX, sampleY(patchTop + y))
+      getAverageCornerColor(rightX, sampleY(patchTop + y), 4)
     );
 
     const patchCanvas = document.createElement('canvas');
@@ -630,7 +657,7 @@ const OcrCanvas = forwardRef(({
 
     for (let y = 0; y < patchHeight; y++) {
       const imageY = patchTop + y;
-      const ty = imgHeight > 1 ? Math.max(0, Math.min(1, (imageY - imgTop) / (imgHeight - 1))) : 0;
+      const ty = patchHeight > 1 ? Math.max(0, Math.min(1, (imageY - patchTop) / (patchHeight - 1))) : 0;
       const yEdgeDistance = Math.min(ty, 1 - ty);
       const horizontalWeight = 1 / (yEdgeDistance + 0.12);
       const leftColor = leftSamples[y];
@@ -638,7 +665,7 @@ const OcrCanvas = forwardRef(({
 
       for (let x = 0; x < patchWidth; x++) {
         const imageX = patchLeft + x;
-        const tx = imgWidth > 1 ? Math.max(0, Math.min(1, (imageX - imgLeft) / (imgWidth - 1))) : 0;
+        const tx = patchWidth > 1 ? Math.max(0, Math.min(1, (imageX - patchLeft) / (patchWidth - 1))) : 0;
         const xEdgeDistance = Math.min(tx, 1 - tx);
         const verticalWeight = 1 / (xEdgeDistance + 0.12);
         const topColor = topSamples[x];
@@ -673,8 +700,15 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  const createTextPatch = (left, top, width, height) =>
-    createPerimeterFillPatch(left, top, width, height, { padding: 3, maxSourceRatio: null });
+  const createTextPatch = (left, top, width, height) => {
+    const layout = imageLayout.current;
+    const scale = layout.scale || 1;
+    const imageWidth = Math.max(1, Math.abs(width / scale));
+    const imageHeight = Math.max(1, Math.abs(height / scale));
+    const paddingX = Math.max(6, Math.min(28, Math.round(imageWidth * 0.12)));
+    const paddingY = Math.max(8, Math.min(34, Math.round(imageHeight * 0.55)));
+    return createPerimeterFillPatch(left, top, width, height, { paddingX, paddingY, maxSourceRatio: null });
+  };
 
   const createRegionErasePatch = (left, top, width, height) =>
     createPerimeterFillPatch(left, top, width, height, { padding: 0, maxSourceRatio: null });
@@ -879,7 +913,7 @@ const OcrCanvas = forwardRef(({
 
       const canvas = fabricCanvas.current;
       isHistoryDisabled.current = true;
-      const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+      const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
       const blocks = [];
 
       if (ocrEngine === 'cloud') {
@@ -1089,7 +1123,7 @@ const OcrCanvas = forwardRef(({
       }
     });
 
-    const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+    const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
     const reviewBlocks = dedupeOcrBlocks(
       sanitizeOcrBlocks(blocks, imageLayout.current)
     );
@@ -1230,11 +1264,37 @@ const OcrCanvas = forwardRef(({
     });
   };
 
+  const refreshTextboxMetrics = (textbox) => {
+    if (!textbox || textbox.type !== 'textbox') return;
+    textbox.dirty = true;
+    textbox.initDimensions?.();
+    textbox.setCoords();
+  };
+
+  const withIdentityViewport = (canvas, callback) => {
+    const previousViewport = canvas.viewportTransform ? [...canvas.viewportTransform] : [1, 0, 0, 1, 0, 0];
+    const activeObject = canvas.getActiveObject();
+
+    canvas.discardActiveObject();
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    canvas.renderAll();
+
+    try {
+      return callback();
+    } finally {
+      canvas.setViewportTransform(previousViewport);
+      if (activeObject && canvas.getObjects().includes(activeObject)) {
+        canvas.setActiveObject(activeObject);
+      }
+      canvas.renderAll();
+    }
+  };
+
   const addManualTextBox = (left, top, initialText = t('manualRegionText'), width = 140) => {
     const canvas = fabricCanvas.current;
     if (!canvas) return null;
 
-    const fontToUse = forcePresetFont ? presetFontFamily : 'Inter';
+    const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
     isHistoryDisabled.current = true;
     const text = new fabric.Textbox(initialText, {
       left,
@@ -1280,30 +1340,44 @@ const OcrCanvas = forwardRef(({
   useImperativeHandle(ref, () => ({
     updateRegionText: (id, newText) => {
       const canvas = fabricCanvas.current;
-      if (!canvas) return;
+      if (!canvas) return false;
       const obj = canvas.getObjects().find(o => o.id === id);
       if (obj) {
         const needsReplacement = obj.isOcrReview && obj.text !== newText;
         obj.set('text', newText);
+        refreshTextboxMetrics(obj);
         if (needsReplacement) {
-          void materializeReviewLayer(obj).then(() => canvas.renderAll());
+          void materializeReviewLayer(obj).then(() => {
+            refreshTextboxMetrics(obj);
+            canvas.renderAll();
+          });
         }
         canvas.renderAll();
         saveHistory();
+        syncLayers();
+        return true;
       }
+      return false;
     },
     updateRegionStyle: (id, styleObject) => {
       const canvas = fabricCanvas.current;
-      if (!canvas) return;
+      if (!canvas) return false;
       const obj = canvas.getObjects().find(o => o.id === id);
       if (obj) {
         obj.set(styleObject);
+        refreshTextboxMetrics(obj);
         if (obj.isOcrReview) {
-          void materializeReviewLayer(obj).then(() => canvas.renderAll());
+          void materializeReviewLayer(obj).then(() => {
+            refreshTextboxMetrics(obj);
+            canvas.renderAll();
+          });
         }
         canvas.renderAll();
         saveHistory();
+        syncLayers();
+        return true;
       }
+      return false;
     },
     selectRegion: (id) => {
       const canvas = fabricCanvas.current;
@@ -1334,21 +1408,28 @@ const OcrCanvas = forwardRef(({
         canvas.remove(activeObj);
         canvas.discardActiveObject();
         canvas.renderAll();
+        saveHistory();
+        syncLayers();
       }
     },
     applyDefaultFontToAll: (customFontStack) => {
       const canvas = fabricCanvas.current;
-      if (!canvas) return;
-      const fontToUse = customFontStack || 'Inter';
+      if (!canvas) return 0;
+      const fontToUse = customFontStack || DEFAULT_OCR_FONT_FAMILY;
+      let appliedCount = 0;
       isHistoryDisabled.current = true;
       canvas.getObjects().forEach(obj => {
         if (obj.type === 'textbox') {
           obj.set({ fontFamily: fontToUse });
+          refreshTextboxMetrics(obj);
+          appliedCount += 1;
         }
       });
       isHistoryDisabled.current = false;
-      saveHistory();
+      if (appliedCount > 0) saveHistory();
       canvas.renderAll();
+      syncLayers();
+      return appliedCount;
     },
     undo: () => {
       const canvas = fabricCanvas.current;
@@ -1431,19 +1512,16 @@ const OcrCanvas = forwardRef(({
       const canvas = fabricCanvas.current;
       if (!canvas || !originalDimensions.current.width) return;
 
-      canvas.discardActiveObject();
-      canvas.renderAll();
-
       const layout = imageLayout.current;
       // Crop to the image area and restore original image resolution
-      const dataUrl = canvas.toDataURL({
+      const dataUrl = withIdentityViewport(canvas, () => canvas.toDataURL({
         format: 'png',
         left: layout.left,
         top: layout.top,
         width: layout.width,
         height: layout.height,
         multiplier: 1 / layout.scale
-      });
+      }));
 
       const link = document.createElement("a");
       link.href = dataUrl;
@@ -1456,13 +1534,10 @@ const OcrCanvas = forwardRef(({
       const canvas = fabricCanvas.current;
       if (!canvas || !originalDimensions.current.width) return;
 
-      canvas.discardActiveObject();
-      canvas.renderAll();
-
       const layout = imageLayout.current;
       const scale = layout.scale;
       // Crop to the image area and restore original image resolution
-      const dataUrl = canvas.toDataURL({
+      const dataUrl = withIdentityViewport(canvas, () => canvas.toDataURL({
         format: 'jpeg',
         quality: 1.0,
         left: layout.left,
@@ -1470,7 +1545,7 @@ const OcrCanvas = forwardRef(({
         width: layout.width,
         height: layout.height,
         multiplier: 1 / scale
-      });
+      }));
 
       const origWidth = originalDimensions.current.width;
       const origHeight = originalDimensions.current.height;

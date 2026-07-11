@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import { fixText, extractEntities } from './utils/llm';
 import { getTranslation, SUPPORTED_UI_LANGUAGES } from './utils/i18n';
@@ -13,6 +13,19 @@ const FALLBACK_FONT_FAMILIES = [
   'Apple SD Gothic Neo', 'PMingLiU', 'DFKai-SB', 'sans-serif', 'serif', 'monospace'
 ];
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
+const DOCS_LANGUAGE_CODES = {
+  English: 'en',
+  '繁體中文': 'zh-TW',
+  '简体中文': 'zh-CN',
+  '日本語': 'ja',
+  '한국어': 'ko',
+  'ไทย': 'th',
+  'Español': 'es',
+  'Português': 'pt',
+  'Bahasa Melayu': 'ms',
+  'Русский': 'ru',
+  'Deutsch': 'de'
+};
 
 function App() {
   const nativeOcrAvailableAtStartup = isNativeOcrAvailable();
@@ -150,13 +163,35 @@ function App() {
   const [fontLoadStatus, setFontLoadStatus] = useState('');
   const [fontApplyStatus, setFontApplyStatus] = useState('');
 
-  const mergeFontFamilies = (fonts = []) => {
+  const mergeFontFamilies = useCallback((fonts = []) => {
     const families = new Set(FALLBACK_FONT_FAMILIES);
     fonts.forEach((font) => {
       if (font?.family) families.add(font.family);
-      if (font?.fullName) families.add(font.fullName);
     });
     return [...families].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, []);
+
+  const alignSelectedFontsWithAvailable = useCallback((families) => {
+    const list = families?.length ? families : FALLBACK_FONT_FAMILIES;
+    setEnglishFont(prev => list.includes(prev) ? prev : (list.includes('Century Gothic') ? 'Century Gothic' : list[0] || prev));
+    setChineseFont(prev => list.includes(prev) ? prev : (list.includes('Microsoft JhengHei') ? 'Microsoft JhengHei' : list[0] || prev));
+  }, []);
+
+  const loadCssFontFamily = async (family) => {
+    if (!document.fonts?.load || !family) return;
+    try {
+      await document.fonts.load(`16px ${quoteFontFamily(family)}`);
+      await document.fonts.ready;
+    } catch (error) {
+      console.info('Font readiness check skipped:', family, error);
+    }
+  };
+
+  const ensurePresetFontsReady = async () => {
+    await Promise.all([
+      loadCssFontFamily(englishFont),
+      loadCssFontFamily(chineseFont)
+    ]);
   };
 
   const queryDeviceFonts = async ({ requireGrantedPermission = false } = {}) => {
@@ -185,15 +220,20 @@ function App() {
       const result = await queryDeviceFonts();
       if (!result.supported) {
         setFontLoadStatus('fontUnsupported');
-        setAvailableFontFamilies(mergeFontFamilies());
+        const fallbackFonts = mergeFontFamilies();
+        setAvailableFontFamilies(fallbackFonts);
+        alignSelectedFontsWithAvailable(fallbackFonts);
         return;
       }
       const merged = mergeFontFamilies(result.fonts);
       setAvailableFontFamilies(merged);
+      alignSelectedFontsWithAvailable(merged);
       setFontLoadStatus(result.fonts.length > 0 ? 'fontLoaded' : 'fontPermissionNeeded');
     } catch (error) {
       console.info('Local font enumeration unavailable:', error);
-      setAvailableFontFamilies(mergeFontFamilies());
+      const fallbackFonts = mergeFontFamilies();
+      setAvailableFontFamilies(fallbackFonts);
+      alignSelectedFontsWithAvailable(fallbackFonts);
       setFontLoadStatus('fontPermissionDenied');
     }
   };
@@ -213,11 +253,12 @@ function App() {
       }
       if (!cancelled) {
         setAvailableFontFamilies(merged);
+        alignSelectedFontsWithAvailable(merged);
       }
     };
     loadLocalFonts();
     return () => { cancelled = true; };
-  }, []);
+  }, [alignSelectedFontsWithAvailable, mergeFontFamilies]);
 
   // Each choice carries cross-platform equivalents: the Windows names
   // (JhengHei/DFKai-SB/PMingLiU) don't exist on macOS and vice versa,
@@ -295,21 +336,27 @@ function App() {
      }
   };
 
-  const handleApplyDefaultFontAll = () => {
+  const handleApplyDefaultFontAll = async () => {
      if (canvasRef.current) {
-        canvasRef.current.applyDefaultFontToAll(presetFontFamily);
-        setFontApplyStatus('fontAppliedAll');
-        if (selectedRegion) {
+        await ensurePresetFontsReady();
+        const appliedCount = canvasRef.current.applyDefaultFontToAll(presetFontFamily);
+        setFontApplyStatus(appliedCount > 0 ? 'fontAppliedAll' : 'fontApplyNoSelection');
+        if (selectedRegion && appliedCount > 0) {
           setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
         }
      }
   };
 
-  const handleApplyPresetFontSelected = () => {
+  const handleApplyPresetFontSelected = async () => {
      if (canvasRef.current && selectedRegion) {
-        canvasRef.current.updateRegionStyle(selectedRegion.id, { fontFamily: presetFontFamily });
-        setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
-        setFontApplyStatus('fontAppliedSelected');
+        await ensurePresetFontsReady();
+        const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, { fontFamily: presetFontFamily });
+        if (applied) {
+          setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
+          setFontApplyStatus('fontAppliedSelected');
+        } else {
+          setFontApplyStatus('fontApplyNoSelection');
+        }
      }
   };
 
@@ -362,6 +409,8 @@ function App() {
   };
 
   const t = (key) => getTranslation(uiLanguage, key);
+  const appBasePath = import.meta.env.BASE_URL || '/';
+  const manualHref = `${appBasePath.endsWith('/') ? appBasePath : `${appBasePath}/`}docs/user-manual.html?lang=${DOCS_LANGUAGE_CODES[uiLanguage] || 'en'}`;
 
   return (
     <div className="app-container">
@@ -411,23 +460,9 @@ function App() {
               </div>
             </div>
 
-            {/* Settings Menu */}
-            <div className="menu-container">
-              <div className="menu-item">{t('settings')}</div>
-              <div className="dropdown-menu">
-                {/* UI Language Option */}
-                <div className="dropdown-item" style={{ cursor: 'default', fontWeight: 'bold' }}>
-                  <span>{t('uiLang')}</span>
-                </div>
-                {SUPPORTED_UI_LANGUAGES.map((language) => (
-                  <div className="dropdown-item" key={language} onClick={() => handleUiLanguageChange(language)}>
-                    <span>{language}</span>
-                    <span>{uiLanguage === language ? '✓' : ''}</span>
-                  </div>
-                ))}
-
-              </div>
-            </div>
+            <a className="menu-item menu-link" href={manualHref} target="_blank" rel="noopener noreferrer">
+              📖 {t('manualGuide')}
+            </a>
           </div>
         </div>
 
@@ -447,9 +482,19 @@ function App() {
             <button className="btn btn-secondary" style={{padding: '2px 8px'}} onClick={() => setZoom(Math.min(5, zoom + 0.1))}>+</button>
             <button className="btn btn-secondary" style={{padding: '2px 8px'}} onClick={() => setZoom(1)}>100%</button>
           </div>
-          <button className="btn btn-primary" onClick={handleExport} style={{marginLeft: '8px'}} disabled={!imageLoaded}>
-            {t('exportImage')}
-          </button>
+          <label className="language-control">
+            <span className="language-control-label">{t('uiLang')}</span>
+            <select
+              className="language-select"
+              value={uiLanguage}
+              onChange={(event) => handleUiLanguageChange(event.target.value)}
+              aria-label={t('uiLang')}
+            >
+              {SUPPORTED_UI_LANGUAGES.map((language) => (
+                <option value={language} key={language}>{language}</option>
+              ))}
+            </select>
+          </label>
         </div>
       </header>
 
@@ -871,7 +916,10 @@ function App() {
               <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('engFont')}:</span>
               <select
                 value={englishFont}
-                onChange={(e) => setEnglishFont(e.target.value)}
+                onChange={(e) => {
+                  setEnglishFont(e.target.value);
+                  setFontApplyStatus('');
+                }}
                 style={{
                   background: '#2D2D2D',
                   color: '#fff',
@@ -892,7 +940,10 @@ function App() {
               <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('zhFont')}:</span>
               <select
                 value={chineseFont}
-                onChange={(e) => setChineseFont(e.target.value)}
+                onChange={(e) => {
+                  setChineseFont(e.target.value);
+                  setFontApplyStatus('');
+                }}
                 style={{
                   background: '#2D2D2D',
                   color: '#fff',

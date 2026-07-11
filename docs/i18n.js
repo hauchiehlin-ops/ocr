@@ -721,7 +721,7 @@ const manualOperationGuideTranslations = {
     "manual_ai_proof": "After selecting text, press <span class=\"button-token\">Proofread Text</span> to correct OCR typos, spacing, and awkward wording. The nearby <span class=\"button-token\">ⓘ</span> explains the purpose.",
     "manual_ai_extract": "Press <span class=\"button-token\">Extract Entities</span> to summarize people, organizations, metrics, dates, and key concepts from the selected text; the result is appended to the current layer.",
     "manual_h2_export": "7. Export and Save",
-    "manual_export_image": "Press the upper-right <span class=\"button-token primary\">Export Image</span> button to output the image with edited text, masks, and background repairs applied.",
+    "manual_export_image": "Use <span class=\"button-token\">File</span> → <span class=\"button-token primary\">Save Image</span> to export the complete image with edited text, masks, and background repairs applied.",
     "manual_export_data": "The <span class=\"button-token\">File</span> menu can export CSV or searchable PDF. CSV stores text layer content; PDF places searchable text over the image.",
     "manual_h2_mobile": "8. iOS / Android Notes",
     "manual_mobile_desc": "For true mobile on-device OCR, package the app with Capacitor or native app shells. Mobile browsers usually cannot start a localhost native OCR server; packaged apps can call iOS Vision or Android ML Kit / Text Recognition without a same-network server."
@@ -760,7 +760,7 @@ const manualOperationGuideTranslations = {
     "manual_ai_proof": "選取文字後按 <span class=\"button-token\">智能校對</span>，用於修正 OCR 錯字、空格與語句不順。旁邊的 <span class=\"button-token\">ⓘ</span> 可查看該功能用途。",
     "manual_ai_extract": "按 <span class=\"button-token\">擷取實體</span> 可從選取文字中整理人名、組織、指標、日期與核心概念；結果會附加到目前文字圖層。",
     "manual_h2_export": "7. 匯出與保存",
-    "manual_export_image": "按右上角 <span class=\"button-token primary\">匯出圖片</span>，會輸出已套用文字、遮罩與背景修補後的圖片。",
+    "manual_export_image": "從 <span class=\"button-token\">檔案</span> 選單點選 <span class=\"button-token primary\">儲存圖片</span>，會輸出已套用文字、遮罩與背景修補後的完整圖片。",
     "manual_export_data": "從 <span class=\"button-token\">檔案</span> 選單可匯出 CSV 或可搜尋 PDF；CSV 保存文字圖層內容，PDF 會把文字層加到圖片上方以利搜尋。",
     "manual_h2_mobile": "8. iOS / Android 使用注意",
     "manual_mobile_desc": "若使用真正手機端原生 OCR，請以 Capacitor 或原生 App 打包。手機瀏覽器通常不能直接啟動 localhost 原生 OCR 伺服器；打包 App 後可由 iOS Vision 或 Android ML Kit / Text Recognition 在裝置上完成辨識，不需同網段伺服器。"
@@ -799,7 +799,7 @@ const manualOperationGuideTranslations = {
     "manual_ai_proof": "选中文字后按 <span class=\"button-token\">智能校对</span>，用于修正 OCR 错字、空格与语句问题。旁边 <span class=\"button-token\">ⓘ</span> 可查看用途。",
     "manual_ai_extract": "按 <span class=\"button-token\">提取实体</span> 可整理人名、组织、指标、日期与核心概念；结果会附加到当前文字图层。",
     "manual_h2_export": "7. 导出与保存",
-    "manual_export_image": "按右上角 <span class=\"button-token primary\">导出图片</span>，会输出已套用文字、遮罩与背景修补后的图片。",
+    "manual_export_image": "从 <span class=\"button-token\">文件</span> 菜单点选 <span class=\"button-token primary\">保存图片</span>，会输出已套用文字、遮罩与背景修补后的完整图片。",
     "manual_export_data": "从 <span class=\"button-token\">文件</span> 菜单可导出 CSV 或可搜索 PDF；CSV 保存文字图层，PDF 会加入可搜索文字层。",
     "manual_h2_mobile": "8. iOS / Android 使用注意",
     "manual_mobile_desc": "若要真正手机端原生 OCR，请用 Capacitor 或原生 App 打包。手机浏览器通常不能启动 localhost 原生 OCR 服务器；打包 App 后可调用 iOS Vision 或 Android ML Kit / Text Recognition，不需同网段服务器。"
@@ -974,7 +974,7 @@ const manualGuideDetailOverrides = {
     "manual_format_force": "<span class=\"button-token\">Force Apply on Image/OCR Load</span> は既定でオフです。OCR 文字の見た目を統一したい時だけ有効化します。",
     "manual_ai_proof": "文字を選択して <span class=\"button-token\">テキスト校正</span> を押すと OCR 誤字、空白、表現を修正します。<span class=\"button-token\">ⓘ</span> で用途を確認できます。",
     "manual_ai_extract": "<span class=\"button-token\">エンティティ抽出</span> は人名、組織、指標、日付、概念を整理し、結果を現在のレイヤーに追加します。",
-    "manual_export_image": "右上の <span class=\"button-token primary\">画像をエクスポート</span> で、編集文字・マスク・背景修復を反映した画像を書き出します。",
+    "manual_export_image": "<span class=\"button-token\">ファイル</span> → <span class=\"button-token primary\">画像を保存</span> で、編集文字・マスク・背景修復を反映した完全な画像を書き出します。",
     "manual_export_data": "<span class=\"button-token\">ファイル</span> メニューから CSV または検索可能 PDF を出力できます。CSV は文字レイヤー、PDF は画像上に検索用文字を追加します。"
   },
   "ko": {
@@ -997,7 +997,7 @@ const manualGuideDetailOverrides = {
     "manual_format_force": "<span class=\"button-token\">Force Apply on Image/OCR Load</span> 는 기본 꺼짐입니다. 전체 OCR 글꼴을 통일할 때만 켜세요.",
     "manual_ai_proof": "텍스트 선택 후 <span class=\"button-token\">텍스트 교정</span> 을 누르면 OCR 오타, 공백, 어색한 문장을 고칩니다. <span class=\"button-token\">ⓘ</span> 로 설명을 볼 수 있습니다.",
     "manual_ai_extract": "<span class=\"button-token\">엔터티 추출</span> 은 사람, 조직, 지표, 날짜, 핵심 개념을 정리하여 현재 레이어에 추가합니다.",
-    "manual_export_image": "오른쪽 위 <span class=\"button-token primary\">이미지 내보내기</span> 는 수정 텍스트, 마스크, 배경 복구가 적용된 이미지를 출력합니다.",
+    "manual_export_image": "<span class=\"button-token\">파일</span> → <span class=\"button-token primary\">이미지 저장</span> 으로 수정 텍스트, 마스크, 배경 복구가 적용된 전체 이미지를 출력합니다.",
     "manual_export_data": "<span class=\"button-token\">파일</span> 메뉴에서 CSV 또는 검색 가능한 PDF 를 내보낼 수 있습니다."
   },
   "es": {
@@ -1020,7 +1020,7 @@ const manualGuideDetailOverrides = {
     "manual_format_force": "<span class=\"button-token\">Forzar al cargar imagen/OCR</span> está desactivado por defecto. Actívalo solo para unificar todas las fuentes OCR.",
     "manual_ai_proof": "Con texto seleccionado, <span class=\"button-token\">Corregir texto</span> corrige errores OCR, espacios y redacción. <span class=\"button-token\">ⓘ</span> muestra su propósito.",
     "manual_ai_extract": "<span class=\"button-token\">Extraer entidades</span> resume personas, organizaciones, métricas, fechas y conceptos clave en la capa actual.",
-    "manual_export_image": "Pulsa <span class=\"button-token primary\">Exportar imagen</span> para generar la imagen con texto, máscaras y reparaciones aplicadas.",
+    "manual_export_image": "Usa <span class=\"button-token\">Archivo</span> → <span class=\"button-token primary\">Guardar imagen</span> para generar la imagen completa con texto, máscaras y reparaciones aplicadas.",
     "manual_export_data": "Desde <span class=\"button-token\">Archivo</span> puedes exportar CSV o PDF buscable."
   },
   "pt": {
@@ -1043,7 +1043,7 @@ const manualGuideDetailOverrides = {
     "manual_format_force": "<span class=\"button-token\">Forçar ao carregar imagem/OCR</span> vem desligado. Ative só para uniformizar as fontes OCR.",
     "manual_ai_proof": "Com texto selecionado, <span class=\"button-token\">Corrigir texto</span> ajusta erros OCR, espaços e redação. <span class=\"button-token\">ⓘ</span> explica a função.",
     "manual_ai_extract": "<span class=\"button-token\">Extrair entidades</span> organiza pessoas, organizações, métricas, datas e conceitos na camada atual.",
-    "manual_export_image": "Clique <span class=\"button-token primary\">Exportar imagem</span> para gerar a imagem editada com máscaras e reparos.",
+    "manual_export_image": "Use <span class=\"button-token\">Arquivo</span> → <span class=\"button-token primary\">Salvar imagem</span> para gerar a imagem completa com texto, máscaras e reparos.",
     "manual_export_data": "No menu <span class=\"button-token\">Arquivo</span>, exporte CSV ou PDF pesquisável."
   },
   "ms": {
@@ -1066,7 +1066,7 @@ const manualGuideDetailOverrides = {
     "manual_format_force": "<span class=\"button-token\">Paksa guna selepas imej/OCR</span> dimatikan secara lalai. Hidupkan hanya untuk seragamkan fon OCR.",
     "manual_ai_proof": "Pilih teks lalu tekan <span class=\"button-token\">Semak Teks</span> untuk betulkan ralat OCR, jarak dan ayat. <span class=\"button-token\">ⓘ</span> menerangkan fungsi.",
     "manual_ai_extract": "<span class=\"button-token\">Ekstrak Entiti</span> menyusun orang, organisasi, metrik, tarikh dan konsep utama ke dalam lapisan semasa.",
-    "manual_export_image": "Tekan <span class=\"button-token primary\">Eksport Imej</span> untuk hasilkan imej dengan teks, topeng dan pembaikan latar.",
+    "manual_export_image": "Guna <span class=\"button-token\">Fail</span> → <span class=\"button-token primary\">Simpan Imej</span> untuk hasilkan imej penuh dengan teks, topeng dan pembaikan latar.",
     "manual_export_data": "Menu <span class=\"button-token\">Fail</span> boleh eksport CSV atau PDF boleh cari."
   },
   "ru": {
@@ -1089,7 +1089,7 @@ const manualGuideDetailOverrides = {
     "manual_format_force": "<span class=\"button-token\">Принудительно применять после загрузки/OCR</span> по умолчанию выключено.",
     "manual_ai_proof": "После выбора текста <span class=\"button-token\">Коррекция текста</span> исправляет ошибки OCR, пробелы и стиль. <span class=\"button-token\">ⓘ</span> объясняет назначение.",
     "manual_ai_extract": "<span class=\"button-token\">Извлечь сущности</span> собирает людей, организации, метрики, даты и ключевые понятия.",
-    "manual_export_image": "Нажмите <span class=\"button-token primary\">Экспорт изображения</span>, чтобы вывести итоговое изображение.",
+    "manual_export_image": "Используйте <span class=\"button-token\">Файл</span> → <span class=\"button-token primary\">Сохранить изображение</span>, чтобы вывести полное итоговое изображение.",
     "manual_export_data": "Через <span class=\"button-token\">Файл</span> можно экспортировать CSV или PDF с поиском."
   },
   "de": {
@@ -1112,7 +1112,7 @@ const manualGuideDetailOverrides = {
     "manual_format_force": "<span class=\"button-token\">Beim Laden/OCR erzwingen</span> ist standardmäßig aus. Aktivieren Sie es nur zur einheitlichen OCR-Schrift.",
     "manual_ai_proof": "Nach Textauswahl korrigiert <span class=\"button-token\">Text korrigieren</span> OCR-Fehler, Abstände und Formulierungen. <span class=\"button-token\">ⓘ</span> erklärt die Funktion.",
     "manual_ai_extract": "<span class=\"button-token\">Entitäten extrahieren</span> sammelt Personen, Organisationen, Kennzahlen, Daten und Schlüsselbegriffe.",
-    "manual_export_image": "Mit <span class=\"button-token primary\">Bild exportieren</span> wird das fertige Bild ausgegeben.",
+    "manual_export_image": "Über <span class=\"button-token\">Datei</span> → <span class=\"button-token primary\">Bild speichern</span> geben Sie das vollständige fertige Bild aus.",
     "manual_export_data": "Über <span class=\"button-token\">Datei</span> exportieren Sie CSV oder durchsuchbare PDF."
   }
 };
@@ -1152,7 +1152,8 @@ function applyLanguage(lang) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  const savedLang = localStorage.getItem('ocreditor_lang') || 'en';
+  const requestedLang = new URLSearchParams(window.location.search).get('lang');
+  const savedLang = translations[requestedLang] ? requestedLang : (localStorage.getItem('ocreditor_lang') || 'en');
   
   const langSelect = document.getElementById("lang-select");
   if (langSelect) {
