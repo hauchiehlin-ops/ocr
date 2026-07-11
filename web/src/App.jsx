@@ -228,6 +228,25 @@ function App() {
     localStorage.setItem('local_server_url', url);
   };
 
+  const handleDownloadWindowsOcrStarter = async () => {
+    try {
+      const response = await fetch(WINDOWS_OCR_STARTER_URL, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = 'setup_and_run_ocr.bat';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (error) {
+      console.warn('Direct Windows OCR starter download failed; opening the official source.', error);
+      window.open(WINDOWS_OCR_STARTER_URL, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   const handleUiLanguageChange = (language) => {
     setUiLanguage(language);
     localStorage.setItem('ui_language', language);
@@ -950,15 +969,13 @@ function App() {
               {isWindowsBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
                 <div className="native-ocr-warning">
                   <div>{t('windowsServerStartHint')}</div>
-                  <a
+                  <button
+                    type="button"
                     className="windows-ocr-download"
-                    href={WINDOWS_OCR_STARTER_URL}
-                    download="setup_and_run_ocr.bat"
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={handleDownloadWindowsOcrStarter}
                   >
                     ⬇ {t('downloadWindowsOcrStarter')}
-                  </a>
+                  </button>
                 </div>
               )}
 

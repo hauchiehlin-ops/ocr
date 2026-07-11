@@ -497,8 +497,10 @@ body {
   border-radius: 4px;
   background: rgba(96, 205, 255, 0.1);
   color: #60CDFF;
+  font: inherit;
   font-weight: 700;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .windows-ocr-download:hover,
