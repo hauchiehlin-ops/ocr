@@ -3,17 +3,14 @@ import * as ort from 'onnxruntime-web';
 const MODEL_SIZE = 512;
 const MODEL_URL = import.meta.env.VITE_LAMA_MODEL_URL ||
   'https://huggingface.co/Carve/LaMa-ONNX/resolve/c3c0c9e468934d62e79c329e35d82dd09ff8c444/lama_fp32.onnx';
+const LOCAL_WASM_BASE_URL = `${(import.meta.env.BASE_URL || '/').replace(/\/?$/, '/')}ort/`;
 const WASM_BASE_URL = import.meta.env.VITE_ORT_WASM_BASE_URL ||
-  'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/';
-const WASM_FILENAME = 'ort-wasm-simd-threaded.wasm';
-const WASM_URL = `${WASM_BASE_URL.endsWith('/') ? WASM_BASE_URL : `${WASM_BASE_URL}/`}${WASM_FILENAME}`;
+  LOCAL_WASM_BASE_URL;
 const MODEL_CACHE = 'ocr-ai-models-v1';
 const MODEL_SHA256 = '1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6';
-const WASM_SHA256 = 'd1ab1b94b16a65b29d710d0b587b29e7bed336827577623913479b8afe8113e6';
 const DEFAULT_TIMEOUT = 120000;
 let sessionPromise;
 let activeController;
-let runtimeBlobUrl;
 
 ort.env.wasm.wasmPaths = WASM_BASE_URL.endsWith('/') ? WASM_BASE_URL : `${WASM_BASE_URL}/`;
 
@@ -42,30 +39,6 @@ async function verifyBytes(bytes, expectedSha256, label) {
 async function requestPersistentStorage() {
   if (!navigator.storage?.persist) return false;
   try { return await navigator.storage.persist(); } catch { return false; }
-}
-
-async function cacheRuntimeWasm({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}) {
-  if (!('caches' in globalThis)) return null;
-  const cache = await caches.open(MODEL_CACHE);
-  let response = await cache.match(WASM_URL);
-  if (!response) {
-    emit(onStatus, { phase: 'runtime-downloading', progress: null, message: '下載本機 AI 執行引擎…' });
-    const controller = new AbortController();
-    combineSignals(controller, signal);
-    const timer = setTimeout(() => controller.abort(new DOMException('AI 執行引擎下載逾時', 'TimeoutError')), timeoutMs);
-    try {
-      response = await fetch(WASM_URL, { signal: controller.signal, cache: 'no-store' });
-      if (!response.ok) throw new Error(`AI 執行引擎下載失敗：HTTP ${response.status}`);
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      await verifyBytes(bytes, WASM_SHA256, 'AI 執行引擎');
-      await cache.put(WASM_URL, new Response(bytes, { headers: response.headers }));
-      return bytes;
-    } finally { clearTimeout(timer); }
-  } else {
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    await verifyBytes(bytes, WASM_SHA256, '已快取的 AI 執行引擎');
-    return bytes;
-  }
 }
 
 async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}) {
@@ -123,12 +96,6 @@ async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}
 
 async function createSession(options) {
   await requestPersistentStorage();
-  const wasmBytes = await cacheRuntimeWasm(options);
-  if (wasmBytes) {
-    if (runtimeBlobUrl) URL.revokeObjectURL(runtimeBlobUrl);
-    runtimeBlobUrl = URL.createObjectURL(new Blob([wasmBytes], { type: 'application/wasm' }));
-    ort.env.wasm.wasmPaths = { [WASM_FILENAME]: runtimeBlobUrl };
-  }
   const bytes = await fetchModel(options);
   emit(options?.onStatus, { phase: 'loading', progress: 1, message: '載入 AI 修補引擎…' });
   return ort.InferenceSession.create(bytes, {
