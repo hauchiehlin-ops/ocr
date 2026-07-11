@@ -409,7 +409,10 @@ function App() {
     const aLocalized = Boolean(localizedCjkLabels[a]);
     const bLocalized = Boolean(localizedCjkLabels[b]);
     if (aLocalized !== bLocalized) return aLocalized ? -1 : 1;
-    return (localizedCjkLabels[a] || a).localeCompare(localizedCjkLabels[b] || b, uiLanguage);
+    return (localizedCjkLabels[a] || a).localeCompare(
+      localizedCjkLabels[b] || b,
+      DOCS_LANGUAGE_CODES[uiLanguage] || undefined
+    );
   });
   const getChineseFontLabel = (family) => localizedCjkLabels[family]
     ? `${localizedCjkLabels[family]} (${family})`
