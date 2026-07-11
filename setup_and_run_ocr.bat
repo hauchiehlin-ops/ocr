@@ -14,7 +14,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager
 if errorlevel 1 goto :download_failed
 
 :server_source_ready
-if exist "venv\Scripts\python.exe" goto :run_server
+if exist "venv\Scripts\python.exe" goto :verify_environment
 if exist "venv" (
   echo Removing an incomplete Python environment from a previous attempt...
   rmdir /s /q "venv"
@@ -48,6 +48,14 @@ echo [2/3] Installing the Windows OCR bridge and web server...
 if errorlevel 1 goto :setup_failed
 "venv\Scripts\python.exe" -m pip install --disable-pip-version-check flask flask-cors Pillow winocr
 if errorlevel 1 goto :setup_failed
+goto :run_server
+
+:verify_environment
+echo [1/3] Checking the existing Python environment...
+"venv\Scripts\python.exe" -c "import flask, flask_cors, PIL, winocr" >nul 2>nul
+if not errorlevel 1 goto :run_server
+echo Existing environment is missing required packages; repairing it now...
+goto :environment_ready
 
 :run_server
 echo [3/3] Starting Windows OCR in the background on http://127.0.0.1:5001
@@ -72,6 +80,8 @@ echo   Return to the web page and click "Test Connection".
 echo ============================================================
 echo.
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$message='Windows 原生 OCR 已啟動。您可以關閉這個視窗；OCR 會在背景繼續執行。請回到網頁點擊「測試連接」。'; try { $shell=New-Object -ComObject WScript.Shell; $null=$shell.Popup($message, 0, 'AI OCR Pro Editor', 64) } catch { Write-Host $message }"
+echo Press any key to close this setup window.
+pause >nul
 goto :end
 
 :python_missing

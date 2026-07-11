@@ -487,6 +487,31 @@ body {
   color: #FFB86C;
 }
 
+.native-ocr-warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.native-ocr-warning-actions button {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 184, 108, 0.45);
+  border-radius: 4px;
+  background: rgba(255, 184, 108, 0.1);
+  color: #FFD7A6;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.native-ocr-warning-actions button:hover,
+.native-ocr-warning-actions button:focus-visible {
+  background: rgba(255, 184, 108, 0.2);
+  outline: none;
+}
+
 .windows-ocr-download {
   display: inline-flex;
   align-items: center;

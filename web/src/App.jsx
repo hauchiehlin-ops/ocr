@@ -258,6 +258,12 @@ function App() {
   const [localServerEngine, setLocalServerEngine] = useState(() => nativeOcrAvailableAtStartup ? getNativeOcrEngineLabel() : '');
   const [mobileNativeOcrAvailable] = useState(nativeOcrAvailableAtStartup);
   const isWindowsBrowser = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent);
+  const isIOSLikeBrowser = typeof navigator !== 'undefined' && (
+    /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+  const isAndroidBrowser = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+  const isMobileWebBrowser = (isIOSLikeBrowser || isAndroidBrowser) && !mobileNativeOcrAvailable;
 
   const testLocalServerConnection = async () => {
     if (mobileNativeOcrAvailable) {
@@ -1006,6 +1012,25 @@ function App() {
                       {t('downloadWindowsProjectZip')}
                     </a>
                   </details>
+                </div>
+              )}
+              {isMobileWebBrowser && localServerStatus === 'disconnected' && (
+                <div className="native-ocr-warning">
+                  <div>{isIOSLikeBrowser ? t('ipadWebNativeOcrHint') : t('mobileWebNativeOcrHint')}</div>
+                  <div className="native-ocr-warning-actions">
+                    <button
+                      type="button"
+                      onClick={() => setOcrEngine('gemini')}
+                    >
+                      {t('switchToCloudOcr')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOcrEngine('local')}
+                    >
+                      {t('switchToTesseractOcr')}
+                    </button>
+                  </div>
                 </div>
               )}
 
