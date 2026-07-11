@@ -95,46 +95,21 @@ function clampByte(value) {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
-function createEnhancedOcrCanvas(sourceCanvas, preferredScale = 2.5) {
-  const maxSide = 3600;
-  const longestSide = Math.max(sourceCanvas.width, sourceCanvas.height);
-  const scale = Math.max(1, Math.min(preferredScale, maxSide / Math.max(1, longestSide)));
-  const targetWidth = Math.max(1, Math.round(sourceCanvas.width * scale));
-  const targetHeight = Math.max(1, Math.round(sourceCanvas.height * scale));
-  const enhancedCanvas = document.createElement('canvas');
-  enhancedCanvas.width = targetWidth;
-  enhancedCanvas.height = targetHeight;
-
-  const ctx = enhancedCanvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, targetWidth, targetHeight);
+// Native OS OCR engines (Apple Vision, Windows OCR) run their own internal
+// preprocessing. Upscaling or sharpening the bitmap before sending it lowers
+// Apple Vision's confidence (0.5 → 0.3 on the same text), which drops results
+// below the server's cut-off and makes recognition silently return nothing.
+// Crops are therefore sent untouched; this smooth upscale is only a retry
+// path for tiny crops where Vision benefits from a larger input.
+function createUpscaledCanvas(sourceCanvas, scale = 2) {
+  const upscaledCanvas = document.createElement('canvas');
+  upscaledCanvas.width = Math.max(1, Math.round(sourceCanvas.width * scale));
+  upscaledCanvas.height = Math.max(1, Math.round(sourceCanvas.height * scale));
+  const ctx = upscaledCanvas.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(sourceCanvas, 0, 0, targetWidth, targetHeight);
-
-  const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-  const source = imgData.data;
-  const output = new Uint8ClampedArray(source);
-
-  for (let y = 1; y < targetHeight - 1; y++) {
-    for (let x = 1; x < targetWidth - 1; x++) {
-      const idx = (y * targetWidth + x) * 4;
-      for (let channel = 0; channel < 3; channel++) {
-        const center = source[idx + channel];
-        const north = source[idx - targetWidth * 4 + channel];
-        const south = source[idx + targetWidth * 4 + channel];
-        const west = source[idx - 4 + channel];
-        const east = source[idx + 4 + channel];
-        const sharpened = center * 5 - north - south - west - east;
-        const boosted = ((center * 0.7 + sharpened * 0.3) - 128) * 1.08 + 128;
-        output[idx + channel] = clampByte(boosted);
-      }
-      output[idx + 3] = 255;
-    }
-  }
-
-  ctx.putImageData(new ImageData(output, targetWidth, targetHeight), 0, 0);
-  return enhancedCanvas;
+  ctx.drawImage(sourceCanvas, 0, 0, upscaledCanvas.width, upscaledCanvas.height);
+  return upscaledCanvas;
 }
 
 // Font size constrained by BOTH box height (per line) and box width (per character):
@@ -203,11 +178,16 @@ function dedupeOcrBlocks(blocks) {
     .filter((block, index, sorted) => {
       const text = normalizedText(block.text);
       return !sorted.slice(0, index).some(existing => {
+        const overlap = overlapRatio(block.bbox, existing.bbox);
         const existingText = normalizedText(existing.text);
         const sameText = text && existingText &&
           (text === existingText || (Math.min(text.length, existingText.length) >= 3 &&
             (text.includes(existingText) || existingText.includes(text))));
-        return sameText && overlapRatio(block.bbox, existing.bbox) > 0.35;
+        // Tile seams truncate lines mid-word ("SMARiSelection N" under
+        // "SMART Selection Matrix"), so the texts differ yet the boxes sit on
+        // top of each other. Any heavy overlap keeps only the longer/stronger
+        // block, otherwise both render and look like doubled ghost text.
+        return (sameText && overlap > 0.35) || overlap > 0.6;
       });
     });
 }
@@ -265,7 +245,7 @@ const OcrCanvas = forwardRef(({
   forcePresetFont = false,
   ocrEngine = 'local',
   geminiApiKey = '',
-  geminiModel = 'gemini-2.0-flash',
+  geminiModel = 'gemini-3.5-flash',
   geminiApiUrl = 'https://generativelanguage.googleapis.com',
   localServerUrl = 'http://localhost:5001/ocr',
   t = (key) => key
@@ -582,18 +562,21 @@ const OcrCanvas = forwardRef(({
     patchHeight: patchCanvas.height * geometry.scale
   });
 
-  // Reconstruct only glyph pixels.  The old implementation extended every
-  // perimeter sample through the whole OCR box, so a sampled glyph became a
-  // full-height grey/black stripe.  Here the untouched source pixels stay
-  // byte-for-byte identical; only foreground pixels are masked, dilated to
-  // include anti-aliasing, and filled inward from their surrounding background.
+  // Reconstruct only glyph pixels. Two earlier generations of this routine
+  // ghosted: perimeter stripes (v1) and diffusion averaging (v2), where any
+  // glyph pixel the mask missed bled grey into the fill. This version builds
+  // a per-pixel background estimate from the padding ring OUTSIDE the text
+  // box (median top/bottom/left/right bands, so bold dense text can never be
+  // mistaken for the background), masks every pixel that deviates from that
+  // estimate, and fills masked pixels directly with the estimate. The fill
+  // never averages neighbouring pixels, so missed glyph remnants cannot smear.
   const createTextPatch = (left, top, width, height) => {
     const layout = imageLayout.current;
     const scale = layout.scale || 1;
     const imageWidth = Math.max(1, Math.abs(width / scale));
     const imageHeight = Math.max(1, Math.abs(height / scale));
-    const paddingX = Math.max(3, Math.min(12, Math.round(imageWidth * 0.04)));
-    const paddingY = Math.max(3, Math.min(10, Math.round(imageHeight * 0.18)));
+    const paddingX = Math.max(4, Math.min(14, Math.round(imageWidth * 0.05)));
+    const paddingY = Math.max(4, Math.min(12, Math.round(imageHeight * 0.22)));
     const geometry = resolveImagePatchGeometry(left, top, width, height, paddingX, paddingY);
     const sourceCanvas = sampleCanvasRef.current;
     if (!geometry || !sourceCanvas) return null;
@@ -619,164 +602,151 @@ const OcrCanvas = forwardRef(({
     const imageData = ctx.getImageData(0, 0, patchWidth, patchHeight);
     const source = imageData.data;
     const pixelCount = patchWidth * patchHeight;
-    const mask = new Uint8Array(pixelCount);
     const targetLeft = geometry.imgLeft - geometry.patchLeft;
     const targetTop = geometry.imgTop - geometry.patchTop;
     const targetRight = geometry.imgRight - geometry.patchLeft;
     const targetBottom = geometry.imgBottom - geometry.patchTop;
 
-    // Find the dominant background colour inside the OCR box. Quantisation
-    // makes this stable on antialiased text and gentle gradients.
-    const buckets = new Map();
-    for (let y = targetTop; y < targetBottom; y += 1) {
-      for (let x = targetLeft; x < targetRight; x += 1) {
-        const index = (y * patchWidth + x) * 4;
-        const key = `${source[index] >> 4},${source[index + 1] >> 4},${source[index + 2] >> 4}`;
-        const bucket = buckets.get(key) || { count: 0, r: 0, g: 0, b: 0 };
-        bucket.count += 1;
-        bucket.r += source[index];
-        bucket.g += source[index + 1];
-        bucket.b += source[index + 2];
-        buckets.set(key, bucket);
-      }
-    }
-    const dominantBucket = [...buckets.values()].sort((a, b) => b.count - a.count)[0];
-    if (!dominantBucket) return null;
-    const dominant = {
-      r: dominantBucket.r / dominantBucket.count,
-      g: dominantBucket.g / dominantBucket.count,
-      b: dominantBucket.b / dominantBucket.count
+    const channelMedian = (values) => {
+      if (!values.length) return null;
+      values.sort((a, b) => a - b);
+      return values[values.length >> 1];
+    };
+    const medianColor = (indices) => {
+      if (!indices.length) return null;
+      return [
+        channelMedian(indices.map(i => source[i])),
+        channelMedian(indices.map(i => source[i + 1])),
+        channelMedian(indices.map(i => source[i + 2]))
+      ];
     };
 
-    const radius = Math.max(2, Math.min(8, Math.round(imageHeight * 0.12)));
-    const colorDistance = (r1, g1, b1, r2, g2, b2) =>
-      Math.hypot(r1 - r2, g1 - g2, b1 - b2);
-    let maskedCount = 0;
+    // Median background colour per column from the bands above/below the box,
+    // and per row from the bands left/right of it. Medians ignore neighbouring
+    // glyphs or diagram lines that cross the ring.
+    const collectBand = (x0, x1, y0, y1) => {
+      const indices = [];
+      for (let y = Math.max(0, y0); y < Math.min(patchHeight, y1); y += 1) {
+        for (let x = Math.max(0, x0); x < Math.min(patchWidth, x1); x += 1) {
+          indices.push((y * patchWidth + x) * 4);
+        }
+      }
+      return indices;
+    };
+    const globalRing = medianColor([
+      ...collectBand(0, patchWidth, 0, targetTop),
+      ...collectBand(0, patchWidth, targetBottom, patchHeight),
+      ...collectBand(0, targetLeft, targetTop, targetBottom),
+      ...collectBand(targetRight, patchWidth, targetTop, targetBottom)
+    ]);
+    if (!globalRing) return null;
 
+    const topBand = new Array(patchWidth);
+    const bottomBand = new Array(patchWidth);
+    for (let x = 0; x < patchWidth; x += 1) {
+      topBand[x] = medianColor(collectBand(x - 1, x + 2, 0, targetTop));
+      bottomBand[x] = medianColor(collectBand(x - 1, x + 2, targetBottom, patchHeight));
+    }
+    const leftBand = new Array(patchHeight);
+    const rightBand = new Array(patchHeight);
+    for (let y = 0; y < patchHeight; y += 1) {
+      leftBand[y] = medianColor(collectBand(0, targetLeft, y - 1, y + 2));
+      rightBand[y] = medianColor(collectBand(targetRight, patchWidth, y - 1, y + 2));
+    }
+
+    // Directional interpolation between opposite bands follows background
+    // gradients. The vertical estimate is weighted by the (usually much
+    // shorter) box height, the horizontal one by the box width.
+    const boxWidth = Math.max(1, targetRight - targetLeft);
+    const boxHeight = Math.max(1, targetBottom - targetTop);
+    const verticalWeight = 1 / (boxHeight * boxHeight);
+    const horizontalWeight = 1 / (boxWidth * boxWidth);
+    const estimateChannel = (x, y, channel) => {
+      const topColor = topBand[x];
+      const bottomColor = bottomBand[x];
+      const leftColor = leftBand[y];
+      const rightColor = rightBand[y];
+      const ty = Math.max(0, Math.min(1, (y - targetTop + 1) / (boxHeight + 1)));
+      const tx = Math.max(0, Math.min(1, (x - targetLeft + 1) / (boxWidth + 1)));
+      let vertical = null;
+      if (topColor && bottomColor) vertical = topColor[channel] * (1 - ty) + bottomColor[channel] * ty;
+      else if (topColor) vertical = topColor[channel];
+      else if (bottomColor) vertical = bottomColor[channel];
+      let horizontal = null;
+      if (leftColor && rightColor) horizontal = leftColor[channel] * (1 - tx) + rightColor[channel] * tx;
+      else if (leftColor) horizontal = leftColor[channel];
+      else if (rightColor) horizontal = rightColor[channel];
+      if (vertical !== null && horizontal !== null) {
+        return (vertical * verticalWeight + horizontal * horizontalWeight) / (verticalWeight + horizontalWeight);
+      }
+      if (vertical !== null) return vertical;
+      if (horizontal !== null) return horizontal;
+      return globalRing[channel];
+    };
+
+    // Mask every pixel inside the box that deviates from the local background
+    // estimate; a moderate threshold plus dilation captures anti-alias halos.
+    const mask = new Uint8Array(pixelCount);
+    const background = new Float32Array(pixelCount * 3);
+    const maskThreshold = 15;
+    let maskedCount = 0;
     for (let y = targetTop; y < targetBottom; y += 1) {
       for (let x = targetLeft; x < targetRight; x += 1) {
-        const index = (y * patchWidth + x) * 4;
-        let localR = 0;
-        let localG = 0;
-        let localB = 0;
-        let localCount = 0;
-        const sampleLeft = Math.max(0, x - radius);
-        const sampleRight = Math.min(patchWidth - 1, x + radius);
-        const sampleTop = Math.max(0, y - radius);
-        const sampleBottom = Math.min(patchHeight - 1, y + radius);
-        for (let sy = sampleTop; sy <= sampleBottom; sy += radius) {
-          for (let sx = sampleLeft; sx <= sampleRight; sx += radius) {
-            const sampleIndex = (sy * patchWidth + sx) * 4;
-            localR += source[sampleIndex];
-            localG += source[sampleIndex + 1];
-            localB += source[sampleIndex + 2];
-            localCount += 1;
-          }
-        }
-        localR /= localCount;
-        localG /= localCount;
-        localB /= localCount;
-
-        const dominantDistance = colorDistance(
-          source[index], source[index + 1], source[index + 2],
-          dominant.r, dominant.g, dominant.b
-        );
-        const localDistance = colorDistance(
-          source[index], source[index + 1], source[index + 2],
-          localR, localG, localB
-        );
-        if ((dominantDistance > 23 && localDistance > 11) || dominantDistance > 52) {
-          mask[y * patchWidth + x] = 1;
+        const pixelIndex = y * patchWidth + x;
+        const index = pixelIndex * 4;
+        const bgR = estimateChannel(x, y, 0);
+        const bgG = estimateChannel(x, y, 1);
+        const bgB = estimateChannel(x, y, 2);
+        background[pixelIndex * 3] = bgR;
+        background[pixelIndex * 3 + 1] = bgG;
+        background[pixelIndex * 3 + 2] = bgB;
+        if (Math.hypot(source[index] - bgR, source[index + 1] - bgG, source[index + 2] - bgB) > maskThreshold) {
+          mask[pixelIndex] = 1;
           maskedCount += 1;
         }
       }
     }
+    if (!maskedCount) return null;
 
-    // Include antialiasing and the outside edge of tight OCR bounding boxes.
-    const dilationRadius = Math.max(1, Math.min(4, Math.round(imageHeight * 0.09)));
-    if (maskedCount > 0) {
-      const originalMask = new Uint8Array(mask);
-      for (let y = Math.max(0, targetTop - dilationRadius); y < Math.min(patchHeight, targetBottom + dilationRadius); y += 1) {
-        for (let x = Math.max(0, targetLeft - dilationRadius); x < Math.min(patchWidth, targetRight + dilationRadius); x += 1) {
-          let shouldMask = false;
-          for (let dy = -dilationRadius; dy <= dilationRadius && !shouldMask; dy += 1) {
-            for (let dx = -dilationRadius; dx <= dilationRadius; dx += 1) {
-              const sx = x + dx;
-              const sy = y + dy;
-              if (sx >= 0 && sx < patchWidth && sy >= 0 && sy < patchHeight && originalMask[sy * patchWidth + sx]) {
-                shouldMask = true;
-                break;
-              }
+    // Dilate so anti-aliased edges and glyph strokes that poke slightly past
+    // a tight OCR bounding box are rebuilt as well.
+    const dilationRadius = Math.max(1, Math.min(4, Math.round(imageHeight * 0.1)));
+    const dilated = new Uint8Array(mask);
+    for (let y = Math.max(0, targetTop - dilationRadius); y < Math.min(patchHeight, targetBottom + dilationRadius); y += 1) {
+      for (let x = Math.max(0, targetLeft - dilationRadius); x < Math.min(patchWidth, targetRight + dilationRadius); x += 1) {
+        const pixelIndex = y * patchWidth + x;
+        if (dilated[pixelIndex]) continue;
+        let nearMasked = false;
+        for (let dy = -dilationRadius; dy <= dilationRadius && !nearMasked; dy += 1) {
+          const sy = y + dy;
+          if (sy < 0 || sy >= patchHeight) continue;
+          for (let dx = -dilationRadius; dx <= dilationRadius; dx += 1) {
+            const sx = x + dx;
+            if (sx >= 0 && sx < patchWidth && mask[sy * patchWidth + sx]) {
+              nearMasked = true;
+              break;
             }
           }
-          if (shouldMask) mask[y * patchWidth + x] = 1;
         }
+        if (nearMasked) dilated[pixelIndex] = 1;
       }
     }
 
+    // Fill masked pixels with the background estimate. Pixels the dilation
+    // added outside the measured box reuse the nearest in-box estimate.
     const output = new Uint8ClampedArray(source);
-    const known = new Uint8Array(pixelCount);
-    const queued = new Uint8Array(pixelCount);
-    const queue = [];
-    const neighbours = [-1, 1, -patchWidth, patchWidth, -patchWidth - 1, -patchWidth + 1, patchWidth - 1, patchWidth + 1];
-    for (let i = 0; i < pixelCount; i += 1) known[i] = mask[i] ? 0 : 1;
-
-    const hasKnownNeighbour = (pixelIndex) => {
-      const x = pixelIndex % patchWidth;
-      const y = Math.floor(pixelIndex / patchWidth);
-      for (const delta of neighbours) {
-        const neighbour = pixelIndex + delta;
-        if (neighbour < 0 || neighbour >= pixelCount) continue;
-        const nx = neighbour % patchWidth;
-        const ny = Math.floor(neighbour / patchWidth);
-        if (Math.abs(nx - x) <= 1 && Math.abs(ny - y) <= 1 && known[neighbour]) return true;
-      }
-      return false;
-    };
-
-    for (let i = 0; i < pixelCount; i += 1) {
-      if (mask[i] && hasKnownNeighbour(i)) {
-        queue.push(i);
-        queued[i] = 1;
-      }
-    }
-
-    for (let head = 0; head < queue.length; head += 1) {
-      const pixelIndex = queue[head];
-      const x = pixelIndex % patchWidth;
-      const y = Math.floor(pixelIndex / patchWidth);
-      let r = 0;
-      let g = 0;
-      let b = 0;
-      let count = 0;
-      for (const delta of neighbours) {
-        const neighbour = pixelIndex + delta;
-        if (neighbour < 0 || neighbour >= pixelCount || !known[neighbour]) continue;
-        const nx = neighbour % patchWidth;
-        const ny = Math.floor(neighbour / patchWidth);
-        if (Math.abs(nx - x) > 1 || Math.abs(ny - y) > 1) continue;
-        const sourceIndex = neighbour * 4;
-        r += output[sourceIndex];
-        g += output[sourceIndex + 1];
-        b += output[sourceIndex + 2];
-        count += 1;
-      }
-      const outputIndex = pixelIndex * 4;
-      output[outputIndex] = count ? clampByte(r / count) : clampByte(dominant.r);
-      output[outputIndex + 1] = count ? clampByte(g / count) : clampByte(dominant.g);
-      output[outputIndex + 2] = count ? clampByte(b / count) : clampByte(dominant.b);
-      output[outputIndex + 3] = 255;
-      known[pixelIndex] = 1;
-
-      for (const delta of neighbours) {
-        const neighbour = pixelIndex + delta;
-        if (neighbour < 0 || neighbour >= pixelCount || !mask[neighbour] || known[neighbour] || queued[neighbour]) continue;
-        const nx = neighbour % patchWidth;
-        const ny = Math.floor(neighbour / patchWidth);
-        if (Math.abs(nx - x) <= 1 && Math.abs(ny - y) <= 1) {
-          queue.push(neighbour);
-          queued[neighbour] = 1;
-        }
+    for (let y = 0; y < patchHeight; y += 1) {
+      for (let x = 0; x < patchWidth; x += 1) {
+        const pixelIndex = y * patchWidth + x;
+        if (!dilated[pixelIndex]) continue;
+        const clampedX = Math.max(targetLeft, Math.min(targetRight - 1, x));
+        const clampedY = Math.max(targetTop, Math.min(targetBottom - 1, y));
+        const bgIndex = (clampedY * patchWidth + clampedX) * 3;
+        const index = pixelIndex * 4;
+        output[index] = clampByte(background[bgIndex]);
+        output[index + 1] = clampByte(background[bgIndex + 1]);
+        output[index + 2] = clampByte(background[bgIndex + 2]);
+        output[index + 3] = 255;
       }
     }
 
@@ -784,7 +754,7 @@ const OcrCanvas = forwardRef(({
     // would paste source glyphs from that neighbouring box back over its patch.
     // Only reconstructed glyph pixels are therefore composited onto the image.
     for (let i = 0; i < pixelCount; i += 1) {
-      output[i * 4 + 3] = mask[i] ? 255 : 0;
+      output[i * 4 + 3] = dilated[i] ? 255 : 0;
     }
 
     imageData.data.set(output);
@@ -1064,27 +1034,37 @@ const OcrCanvas = forwardRef(({
           });
         }
       } else if (ocrEngine === 'custom') {
-        const cropDataUrl = createEnhancedOcrCanvas(cropCanvas, 3).toDataURL('image/png');
         if (onWorkerStatusChange) {
           onWorkerStatusChange(isNativeOcrAvailable()
             ? `Running on-device OCR (${getNativeOcrEngineLabel()})...`
             : 'Calling Local OCR Server...');
         }
-        const customResult = isNativeOcrAvailable()
-          ? await runNativeOcr(cropDataUrl)
-          : await (async () => {
-            const response = await fetch(localServerUrl, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image: cropDataUrl })
-            });
-            if (!response.ok) {
-              throw new Error(`Local OCR server returned error: ${response.status}`);
-            }
-            return response.json();
-          })();
-        
-        normalizeCustomOcrItems(customResult).forEach((item, index) => {
+        const recognizeWithCustomEngine = async (sourceCanvas) => {
+          const dataUrl = sourceCanvas.toDataURL('image/png');
+          const customResult = isNativeOcrAvailable()
+            ? await runNativeOcr(dataUrl)
+            : await (async () => {
+              const response = await fetch(localServerUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: dataUrl })
+              });
+              if (!response.ok) {
+                throw new Error(`Local OCR server returned error: ${response.status}`);
+              }
+              return response.json();
+            })();
+          return normalizeCustomOcrItems(customResult);
+        };
+
+        // The untouched crop gives native OCR its best confidence. Only very
+        // small crops get a smooth 2x retry when the first pass finds nothing.
+        let customItems = await recognizeWithCustomEngine(cropCanvas);
+        if (customItems.length === 0 && Math.min(imgWidth, imgHeight) < 160) {
+          customItems = await recognizeWithCustomEngine(createUpscaledCanvas(cropCanvas, 2));
+        }
+
+        customItems.forEach((item, index) => {
           const [ymin, xmin, ymax, xmax] = item.bbox;
           const blockLeft = canvasLeft + (xmin / 1000) * canvasWidth;
           const blockTop = canvasTop + (ymin / 1000) * canvasHeight;
@@ -1837,19 +1817,20 @@ const OcrCanvas = forwardRef(({
         });
       });
     } else if (ocrEngine === 'custom') {
-      const enhancedData = createEnhancedOcrCanvas(sampleCanvas, 2.5).toDataURL('image/png');
+      // Send the original-resolution image untouched: sharpening/upscaling
+      // lowers Apple Vision's confidence and results get filtered server-side.
       if (onWorkerStatusChange) {
         onWorkerStatusChange(isNativeOcrAvailable()
           ? `Running on-device OCR (${getNativeOcrEngineLabel()})...`
           : 'Calling Local OCR Server...');
       }
       const customResult = isNativeOcrAvailable()
-        ? await runNativeOcr(enhancedData)
+        ? await runNativeOcr(data)
         : await (async () => {
           const response = await fetch(localServerUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: enhancedData })
+            body: JSON.stringify({ image: data })
           });
           if (!response.ok) {
             throw new Error(`Local OCR server returned error: ${response.status}`);

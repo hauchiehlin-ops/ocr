@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import { fixText, extractEntities } from './utils/llm';
+import { listGeminiOcrModels } from './utils/geminiOcr';
 import { getTranslation, SUPPORTED_UI_LANGUAGES } from './utils/i18n';
 import { getNativeOcrEngineLabel, isNativeOcrAvailable } from './utils/nativeOcr';
 import './index.css';
@@ -12,7 +13,30 @@ const FALLBACK_FONT_FAMILIES = [
   'Songti TC', 'Kaiti TC', 'Hiragino Sans', 'Noto Sans TC', 'Noto Serif TC',
   'Apple SD Gothic Neo', 'PMingLiU', 'DFKai-SB', 'sans-serif', 'serif', 'monospace'
 ];
+const CJK_FONT_STACKS = {
+  'Microsoft JhengHei': `'Microsoft JhengHei', '微軟正黑體', 'PingFang TC', 'Heiti TC'`,
+  'PingFang TC': `'PingFang TC', 'Microsoft JhengHei', 'Heiti TC'`,
+  'DFKai-SB': `'DFKai-SB', '標楷體', 'BiauKai', 'Kaiti TC', 'KaiTi'`,
+  'PMingLiU': `'PMingLiU', '新細明體', 'Songti TC', 'LiSong Pro', 'SimSun'`,
+  'sans-serif': 'sans-serif'
+};
+const EN_FONT_STACKS = {
+  'Century Gothic': `'Century Gothic', 'Avenir Next', 'Futura'`,
+  'Segoe UI': `'Segoe UI', 'Helvetica Neue', 'Arial'`,
+  'Arial': `'Arial', 'Helvetica'`,
+  'Courier New': `'Courier New', 'Courier', monospace`,
+  'Times New Roman': `'Times New Roman', 'Times', serif`
+};
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
+// Shown until ListModels succeeds (or when it fails: offline, invalid key…).
+// Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
+const STATIC_GEMINI_MODEL_OPTIONS = [
+  { id: 'gemini-3.5-flash', displayName: 'Gemini 3.5 Flash (預設)' },
+  { id: 'gemini-3.1-pro-preview', displayName: 'Gemini 3.1 Pro Preview (最高精準度)' },
+  { id: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash-Lite (輕量)' },
+  { id: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash (穩定舊版)' },
+  { id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro (穩定舊版)' }
+];
 const DOCS_LANGUAGE_CODES = {
   English: 'en',
   '繁體中文': 'zh-TW',
@@ -66,7 +90,21 @@ function App() {
     return savedEngine || 'custom';
   });
   const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-  const [geminiModel, setGeminiModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.5-flash');
+  const [geminiModel, setGeminiModel] = useState(() => {
+    const saved = localStorage.getItem('gemini_model');
+    // Migrate saved choices that Google has since retired (calling them 404s):
+    // gemini-1.5-* (2025), gemini-2.0-flash/-lite (2026-06-01),
+    // gemini-3-pro-preview (2026-03-09); gemini-2.0-pro never shipped.
+    const retiredModels = [
+      'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-pro',
+      'gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-3-pro-preview'
+    ];
+    if (!saved || retiredModels.includes(saved)) {
+      localStorage.setItem('gemini_model', 'gemini-3.5-flash');
+      return 'gemini-3.5-flash';
+    }
+    return saved;
+  });
   const [geminiApiUrl, setGeminiApiUrl] = useState(() => localStorage.getItem('gemini_api_url') || 'https://generativelanguage.googleapis.com');
   const [localServerUrl, setLocalServerUrl] = useState(() => {
     const saved = localStorage.getItem('local_server_url');
@@ -93,6 +131,50 @@ function App() {
     setGeminiModel(model);
     localStorage.setItem('gemini_model', model);
   };
+
+  // Live model discovery: fill the cloud-model dropdown from GET /v1beta/models
+  // so retired ids can never linger in the UI (and geminiOcr's failover chain
+  // is refreshed with what the key can actually call). Debounced because the
+  // API key arrives one keystroke at a time.
+  const [geminiModelOptions, setGeminiModelOptions] = useState([]);
+  const [geminiModelListStatus, setGeminiModelListStatus] = useState('idle');
+
+  useEffect(() => {
+    if (ocrEngine !== 'cloud' || !geminiApiKey.trim()) {
+      setGeminiModelListStatus('idle');
+      return;
+    }
+    let cancelled = false;
+    setGeminiModelListStatus('loading');
+    const timer = setTimeout(async () => {
+      try {
+        const models = await listGeminiOcrModels(geminiApiKey.trim(), geminiApiUrl);
+        if (cancelled || models.length === 0) {
+          if (!cancelled) setGeminiModelListStatus('error');
+          return;
+        }
+        setGeminiModelOptions(models);
+        setGeminiModelListStatus('loaded');
+        // The saved model may have been retired since it was chosen.
+        setGeminiModel((current) => {
+          if (models.some(model => model.id === current)) return current;
+          localStorage.setItem('gemini_model', models[0].id);
+          return models[0].id;
+        });
+      } catch (error) {
+        console.warn('Gemini ListModels failed; keeping the static model list.', error);
+        if (!cancelled) setGeminiModelListStatus('error');
+      }
+    }, 800);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [ocrEngine, geminiApiKey, geminiApiUrl]);
+
+  const activeGeminiModelOptions = geminiModelOptions.length > 0
+    ? geminiModelOptions
+    : STATIC_GEMINI_MODEL_OPTIONS;
 
   const handleGeminiApiUrlChange = (url) => {
     setGeminiApiUrl(url);
@@ -263,22 +345,55 @@ function App() {
   // Each choice carries cross-platform equivalents: the Windows names
   // (JhengHei/DFKai-SB/PMingLiU) don't exist on macOS and vice versa,
   // so a bare name silently falls back and font switching looks broken.
-  const CJK_FONT_STACKS = {
-    'Microsoft JhengHei': `'Microsoft JhengHei', '微軟正黑體', 'PingFang TC', 'Heiti TC'`,
-    'PingFang TC': `'PingFang TC', 'Microsoft JhengHei', 'Heiti TC'`,
-    'DFKai-SB': `'DFKai-SB', '標楷體', 'BiauKai', 'Kaiti TC', 'KaiTi'`,
-    'PMingLiU': `'PMingLiU', '新細明體', 'Songti TC', 'LiSong Pro', 'SimSun'`,
-    'sans-serif': 'sans-serif'
-  };
-  const EN_FONT_STACKS = {
-    'Century Gothic': `'Century Gothic', 'Avenir Next', 'Futura'`,
-    'Segoe UI': `'Segoe UI', 'Helvetica Neue', 'Arial'`,
-    'Arial': `'Arial', 'Helvetica'`,
-    'Courier New': `'Courier New', 'Courier', monospace`,
-    'Times New Roman': `'Times New Roman', 'Times', serif`
-  };
   const quoteFontFamily = (family) => `'${String(family).replace(/'/g, "\\'")}'`;
   const presetFontFamily = `${EN_FONT_STACKS[englishFont] || quoteFontFamily(englishFont)}, ${CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont)}, sans-serif`;
+
+  // The Chinese/system dropdown lists only families that can actually draw
+  // CJK glyphs. Device enumeration returns hundreds of Latin-only families;
+  // mixed in alphabetically they buried the real CJK fonts, and picking a
+  // Latin-only family silently fell back to the system default — both read
+  // as "my local fonts never show up". Detection renders 「體」 with the
+  // candidate stack and compares pixels against the generic fallback: if the
+  // output is identical to both generics, the family has no CJK glyphs.
+  const cjkFontFamilies = useMemo(() => {
+    if (typeof document === 'undefined') return availableFontFamilies;
+    const probeCanvas = document.createElement('canvas');
+    probeCanvas.width = 48;
+    probeCanvas.height = 44;
+    const probeCtx = probeCanvas.getContext('2d', { willReadFrequently: true });
+    if (!probeCtx) return availableFontFamilies;
+    const render = (fontFamily) => {
+      probeCtx.clearRect(0, 0, probeCanvas.width, probeCanvas.height);
+      probeCtx.font = `32px ${fontFamily}`;
+      // Alphabetic baseline positions the glyph independently of the first
+      // font's metrics. With textBaseline 'top' an installed Latin-only
+      // family shifts the fallback CJK glyph vertically and false-passes.
+      probeCtx.textBaseline = 'alphabetic';
+      probeCtx.fillText('體', 4, 36);
+      return probeCtx.getImageData(0, 0, probeCanvas.width, probeCanvas.height).data;
+    };
+    const alphaDiffers = (a, b) => {
+      for (let i = 3; i < a.length; i += 4) {
+        if (a[i] !== b[i]) return true;
+      }
+      return false;
+    };
+    const baselines = {
+      monospace: render('monospace'),
+      serif: render('serif')
+    };
+    const capable = availableFontFamilies.filter((family) => {
+      const probe = CJK_FONT_STACKS[family] || quoteFontFamily(family);
+      return ['monospace', 'serif'].some((generic) =>
+        alphaDiffers(render(`${probe}, ${generic}`), baselines[generic])
+      );
+    });
+    return capable.length ? capable : availableFontFamilies;
+  }, [availableFontFamilies]);
+
+  const chineseFontOptions = cjkFontFamilies.includes(chineseFont)
+    ? cjkFontFamilies
+    : [chineseFont, ...cjkFontFamilies];
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
@@ -401,8 +516,33 @@ function App() {
      canvasRef.current?.insertText();
   };
 
+  // Engine-capability gate. Every feature was audited against the three
+  // engines: canvas-only actions (框選刪除, 移除文字, 插入文字, fonts, exports)
+  // and the local WebLLM operations (智能校對, 擷取實體) are engine-independent
+  // and always stay available. The only engine-dependent actions are the two
+  // that trigger recognition — 區域 OCR and 重新辨識 — which are dimmed with an
+  // explanation whenever the active engine cannot actually run:
+  //   cloud  → missing Gemini API key
+  //   custom → local native OCR server not connected (and not a packaged app)
+  const ocrEngineBlockReason =
+    ocrEngine === 'cloud' && !geminiApiKey
+      ? 'engineNeedsKeyHint'
+      : ocrEngine === 'custom' && !mobileNativeOcrAvailable && localServerStatus !== 'connected'
+        ? 'engineNeedsServerHint'
+        : null;
+  const ocrActionsBlocked = Boolean(ocrEngineBlockReason);
+
+  // Leave marquee mode immediately if the engine loses its prerequisites
+  // (e.g. the user clears the API key while regional OCR is armed).
+  useEffect(() => {
+    if (ocrActionsBlocked && isRegionalOcrActive && regionalAction === 'ocr') {
+      setIsRegionalOcrActive(false);
+    }
+  }, [ocrActionsBlocked, isRegionalOcrActive, regionalAction]);
+
   const handleRegionTool = (action) => {
     if (!imageLoaded) return;
+    if (action === 'ocr' && ocrActionsBlocked) return;
     const shouldTurnOff = isRegionalOcrActive && regionalAction === action;
     setRegionalAction(action);
     setIsRegionalOcrActive(!shouldTurnOff);
@@ -468,14 +608,6 @@ function App() {
 
         <div className="header-right">
           <div className="zoom-controls">
-            {/* Undo/Redo Controls */}
-            <button className="btn btn-secondary" style={{padding: '2px 8px', marginRight: '8px'}} disabled={!canUndo} onClick={() => canvasRef.current?.undo()}>
-              {t('undo')}
-            </button>
-            <button className="btn btn-secondary" style={{padding: '2px 8px', marginRight: '16px'}} disabled={!canRedo} onClick={() => canvasRef.current?.redo()}>
-              {t('redo')}
-            </button>
-
             <span>{t('zoom')}:</span>
             <button className="btn btn-secondary" style={{padding: '2px 8px'}} onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}>-</button>
             <span style={{width: '40px', textAlign: 'center'}}>{Math.round(zoom * 100)}%</span>
@@ -808,11 +940,15 @@ function App() {
             <button
               className="btn btn-primary"
               style={{ width: '100%', padding: '8px', fontSize: '12px', fontWeight: 'bold' }}
-              disabled={!imageLoaded || isOcrProcessing}
+              disabled={!imageLoaded || isOcrProcessing || ocrActionsBlocked}
+              title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
               onClick={() => canvasRef.current?.rerunOcr()}
             >
               {isOcrProcessing ? t('recognizing') : t('rerunOcr')}
             </button>
+            {ocrEngineBlockReason && (
+              <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
+            )}
 
             <details className="fallback-engine-panel">
               <summary>{t('fallbackEngines')}</summary>
@@ -872,11 +1008,22 @@ function App() {
                       cursor: 'pointer'
                     }}
                   >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (預設)</option>
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (相容)</option>
-                    <option value="gemini-2.0-pro">Gemini 2.0 Pro (高精準度)</option>
-                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (備用)</option>
+                    {!activeGeminiModelOptions.some(model => model.id === geminiModel) && (
+                      <option value={geminiModel}>{geminiModel}</option>
+                    )}
+                    {activeGeminiModelOptions.map(model => (
+                      <option value={model.id} key={model.id}>{model.displayName}</option>
+                    ))}
                   </select>
+                  <span style={{
+                    fontSize: '10px',
+                    opacity: 0.75,
+                    color: geminiModelListStatus === 'error' ? '#FBBF24' : '#60CDFF'
+                  }}>
+                    {geminiModelListStatus === 'loading' && t('modelListLoading')}
+                    {geminiModelListStatus === 'loaded' && `✓ ${t('modelListLoaded')} (${geminiModelOptions.length})`}
+                    {geminiModelListStatus === 'error' && `⚠ ${t('modelListFailed')}`}
+                  </span>
 
                   <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
                     {t('customBaseUrl')}:
@@ -954,7 +1101,7 @@ function App() {
                   width: '180px'
                 }}
               >
-                {availableFontFamilies.map((family) => (
+                {chineseFontOptions.map((family) => (
                   <option value={family} key={`cjk-${family}`}>{family}</option>
                 ))}
               </select>
@@ -1081,7 +1228,8 @@ function App() {
             <button
               className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'ocr' ? 'active' : ''}`}
               style={{flex: 1}}
-              disabled={!imageLoaded}
+              disabled={!imageLoaded || ocrActionsBlocked}
+              title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
               onClick={() => handleRegionTool('ocr')}
             >
               {isRegionalOcrActive && regionalAction === 'ocr' ? t('drawingMode') : t('regionalOcr')}
@@ -1102,6 +1250,9 @@ function App() {
             >
               {t('removeText')}
             </button>
+            {ocrEngineBlockReason && (
+              <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
+            )}
           </div>
         </aside>
 

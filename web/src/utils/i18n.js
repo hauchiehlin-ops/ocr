@@ -70,7 +70,12 @@ const english = {
   initializingAi: 'Initializing AI Engine (first launch downloads ~950MB)...', initializingAiShort: 'Initializing AI Engine...',
   textCorrected: 'Text corrected successfully!', entitiesExtracted: 'Entities extracted!', aiFailed: 'AI operation failed.',
   noLayersExport: 'No layers to export.', loadImageFirst: 'Please load an image first.',
-  manualRegionText: 'Enter text'
+  manualRegionText: 'Enter text',
+  engineNeedsKeyHint: 'Cloud (Gemini) engine: enter a Gemini API key to enable Regional OCR and Re-run OCR.',
+  engineNeedsServerHint: 'Native OCR server is not connected: Regional OCR and Re-run OCR are unavailable until it connects (or switch to a fallback engine).',
+  modelListLoading: 'Fetching the live model list from Google…',
+  modelListLoaded: 'Live model list loaded',
+  modelListFailed: 'Could not fetch the live model list; using the built-in defaults.'
 };
 
 const traditionalChinese = {
@@ -115,7 +120,12 @@ const traditionalChinese = {
   onDeviceOcrPurposeDescription: '在打包後的 iOS/Android App 內直接呼叫手機作業系統 OCR。無需 localhost、同網段伺服器、雲端服務或 API 金鑰。',
   onDeviceOcrOfflineNote: '手機 App 模式：OCR 保留在本機裝置內，即使沒有同網段伺服器也可辨識。',
   onDeviceOcrCurrentEngine: '目前原生引擎：',
-  initializingAi: '初始化 AI 引擎中（首次載入需下載約 950MB）...', initializingAiShort: '初始化 AI 引擎中...', textCorrected: '文字校對完成！', entitiesExtracted: '實體擷取完成！', aiFailed: 'AI 協同處理失敗。', noLayersExport: '無圖層可供匯出。', loadImageFirst: '請先載入一張圖片。', manualRegionText: '請輸入文字'
+  initializingAi: '初始化 AI 引擎中（首次載入需下載約 950MB）...', initializingAiShort: '初始化 AI 引擎中...', textCorrected: '文字校對完成！', entitiesExtracted: '實體擷取完成！', aiFailed: 'AI 協同處理失敗。', noLayersExport: '無圖層可供匯出。', loadImageFirst: '請先載入一張圖片。', manualRegionText: '請輸入文字',
+  engineNeedsKeyHint: '雲端 (Gemini) 引擎：需先輸入 Gemini API 金鑰，「區域 OCR」與「重新辨識」才可使用。',
+  engineNeedsServerHint: '本地原生 OCR 伺服器未連接：「區域 OCR」與「重新辨識」暫時停用，待連接後恢復（或改用備援引擎）。',
+  modelListLoading: '正在從 Google 取得線上可用模型清單…',
+  modelListLoaded: '已取得線上可用模型清單',
+  modelListFailed: '無法取得線上模型清單，改用內建預設清單。'
 };
 
 // The native editor promises all eleven languages.  The dictionaries below

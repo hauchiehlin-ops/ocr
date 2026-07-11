@@ -9,8 +9,9 @@
  *   4. Full-image OCR is split into horizontal tiles (default 3).
  *      Each tile becomes an independent queued request, so a transient
  *      429 only blocks that tile — completed tiles are never lost.
- *   5. Model Cascade Fallback: If 2.0-flash returns a quota error, automatically fallback
- *      to 1.5-flash or 1.5-pro to bypass regional constraints (like EU/UK limit: 0).
+ *   5. Model Cascade Fallback: if the selected model is blocked or limited,
+ *      automatically fall back through the currently-live stable models
+ *      (3.5-flash → 3.1-flash-lite → 2.5-flash → 2.5-pro).
  *   6. Custom API Endpoints: Allow custom proxy base URLs to bypass geography-based blocks.
  */
 
@@ -111,19 +112,95 @@ function loadImage(dataUrl) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Live model discovery (GET /v1beta/models)
+// ---------------------------------------------------------------------------
+
+// Static safety net, used only until ListModels has succeeded once. Kept to
+// currently-live STABLE models per the official list (ai.google.dev/gemini-api/
+// docs/models, checked 2026-07); retired ids 404 and mask real errors.
+const STATIC_FALLBACK_CHAIN = [
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro'
+];
+
+// Name fragments of models that cannot do image→text OCR (speech, embeddings,
+// image/video GENERATION, translation, non-multimodal Gemma…).
+const NON_OCR_NAME_FRAGMENTS = [
+  'embedding', 'tts', 'live', 'audio', 'image', 'imagen', 'veo',
+  'omni', 'translate', 'aqa', 'gemma', 'robotics', 'computer-use'
+];
+
+// Once ListModels succeeds, the recognition cascade fails over through models
+// Google actually serves right now instead of the static snapshot above.
+let liveStableModelIds = null;
+
+const modelVersionOf = (id) => {
+  const match = id.match(/^gemini-(\d+(?:\.\d+)?)/);
+  return match ? parseFloat(match[1]) : 0;
+};
+const modelTierOf = (id) => {
+  if (id.includes('flash-lite')) return 1;
+  if (id.includes('flash')) return 0;
+  if (id.includes('pro')) return 2;
+  return 3;
+};
+const isPreviewModel = (id) => /preview|exp/.test(id);
+
+/**
+ * Fetch the models the API key can use right now and keep the OCR-capable
+ * subset, newest first (stable before preview, flash before pro within a
+ * version). Also refreshes the cascade used by callGemini.
+ */
+export async function listGeminiOcrModels(apiKey, apiUrl = 'https://generativelanguage.googleapis.com') {
+  const baseApiUrl = apiUrl.replace(/\/+$/, '');
+  const rawModels = [];
+  let pageToken = '';
+  do {
+    const pageParam = pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : '';
+    const res = await fetch(`${baseApiUrl}/v1beta/models?pageSize=200${pageParam}&key=${apiKey}`);
+    if (!res.ok) throw new Error(`Gemini ListModels error: ${res.status}`);
+    const json = await res.json();
+    rawModels.push(...(json.models || []));
+    pageToken = json.nextPageToken || '';
+  } while (pageToken);
+
+  const seen = new Set();
+  const ocrModels = rawModels.flatMap((model) => {
+    const id = String(model.name || '').replace(/^models\//, '');
+    if (!id.startsWith('gemini-') || seen.has(id)) return [];
+    if (!(model.supportedGenerationMethods || []).includes('generateContent')) return [];
+    if (NON_OCR_NAME_FRAGMENTS.some(fragment => id.includes(fragment))) return [];
+    seen.add(id);
+    return [{ id, displayName: model.displayName || id, isPreview: isPreviewModel(id) }];
+  })
+    // Drop numeric snapshot aliases ("-001") when their base id is also listed.
+    .filter((model, _, all) => {
+      const base = model.id.replace(/-\d{3}$/, '');
+      return base === model.id || !all.some(other => other.id === base);
+    })
+    .sort((a, b) =>
+      (modelVersionOf(b.id) - modelVersionOf(a.id)) ||
+      (Number(a.isPreview) - Number(b.isPreview)) ||
+      (modelTierOf(a.id) - modelTierOf(b.id)) ||
+      a.id.localeCompare(b.id)
+    );
+
+  const stableIds = ocrModels.filter(model => !model.isPreview).map(model => model.id);
+  if (stableIds.length) liveStableModelIds = stableIds;
+  return ocrModels;
+}
+
 /** Fire a single Gemini generateContent request with model cascade and custom endpoint base URL. */
-async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com', onStatusChange = null) {
-  // Build a cascade list of models to try if the primary model is blocked or limited (2026 specs)
-  const fallbackChain = [
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-pro',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro'
-  ];
+async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false, modelName = 'gemini-3.5-flash', apiUrl = 'https://generativelanguage.googleapis.com', onStatusChange = null) {
+  const fallbackChain = liveStableModelIds?.length
+    ? liveStableModelIds.slice(0, 4)
+    : STATIC_FALLBACK_CHAIN;
   const modelsToTry = [modelName, ...fallbackChain.filter(m => m !== modelName)];
 
-  let lastError;
+  const errors = [];
   const baseApiUrl = apiUrl.replace(/\/+$/, ''); // Strip trailing slashes
 
   let activeIndex = 0;
@@ -163,7 +240,7 @@ async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false
       if (!text) throw new Error('No text response received from Gemini.');
       return text;
     } catch (err) {
-      lastError = err;
+      errors.push(err);
       console.warn(`[Gemini Cascade] Model ${model} failed: ${err.message}. Trying next fallback model...`);
       // If the API key is completely invalid or unauthorized (400/403), throw immediately
       if (err.message.includes('API key') || err.message.includes('not valid') || err.message.includes('403')) {
@@ -171,7 +248,9 @@ async function callGemini(base64Data, mimeType, prompt, apiKey, jsonMode = false
       }
     }
   }
-  throw lastError;
+  // Surface the most meaningful failure: a quota/network error from a live
+  // model explains more than a trailing "model not found" from a fallback.
+  throw errors.find(err => !err.message.includes('404')) || errors[errors.length - 1];
 }
 
 const OCR_PROMPT = `Analyze the image and perform extremely high-precision document OCR.
@@ -232,7 +311,7 @@ function textsSimilar(a, b) {
 // Public API — Full-Image OCR  (single tile, goes through queue)
 // ---------------------------------------------------------------------------
 
-export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
+export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-3.5-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
   const m = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error('Invalid image data format.');
 
@@ -254,7 +333,7 @@ export async function runGeminiOcr(base64DataUrl, apiKey, onStatusChange, modelN
  * and duplicate blocks in overlapping zones are merged using Non-Maximum Suppression (NMS).
  */
 export async function runGeminiOcrTiled(
-  base64DataUrl, apiKey, onStatusChange, tileCount = 4, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com'
+  base64DataUrl, apiKey, onStatusChange, tileCount = 4, modelName = 'gemini-3.5-flash', apiUrl = 'https://generativelanguage.googleapis.com'
 ) {
   const img = await loadImage(base64DataUrl);
   const fullW = img.width;
@@ -338,7 +417,7 @@ export async function runGeminiOcrTiled(
 
   if (succeeded === 0) {
     throw new Error(
-      'All quadrants failed — your daily API quota may be exhausted or model is restricted. Please wait or try choosing a fallback model (e.g. Gemini 1.5 Flash).'
+      'All quadrants failed — your daily API quota may be exhausted or model is restricted. Please wait or try choosing another model (e.g. Gemini 2.5 Flash).'
     );
   }
 
@@ -404,7 +483,7 @@ export async function runGeminiOcrTiled(
 // Public API — Regional (Crop-Box) OCR
 // ---------------------------------------------------------------------------
 
-export async function runGeminiRegionalOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-2.5-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
+export async function runGeminiRegionalOcr(base64DataUrl, apiKey, onStatusChange, modelName = 'gemini-3.5-flash', apiUrl = 'https://generativelanguage.googleapis.com') {
   const m = base64DataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!m) throw new Error('Invalid image data format.');
 

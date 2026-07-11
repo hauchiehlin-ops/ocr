@@ -69,7 +69,10 @@ def vision_ocr_tile(img_bytes, offset_x, offset_y, tile_w, tile_h, full_w, full_
         cand = candidates.objectAtIndex_(0)
         text = str(cand.string())
         conf = float(cand.confidence())
-        if conf < 0.45 or not text.strip():
+        # Vision quantises zh-Hant confidence coarsely (0.3 / 0.5 / 1.0) and
+        # returns 0.3 for perfectly correct short labels; 0.45 silently threw
+        # those away and regional recognition came back empty.
+        if conf < 0.25 or not text.strip():
             continue
         # Vision bbox: normalized [0,1], origin at BOTTOM-left
         bb = obs.boundingBox()
@@ -106,13 +109,25 @@ def _overlap_ratio(a, b):
 
 
 def _dedupe_blocks(blocks):
-    """Remove only same-text detections from the overlap between two crops."""
+    """Collapse duplicate detections from overlapping passes.
+
+    Tile crops cut lines mid-word, so the same label can come back as several
+    different truncated strings stacked on the same spot. Longer text wins:
+    the full-image pass sees complete lines, and any heavily overlapping
+    shorter variant is a seam artefact, not a separate label.
+    """
     kept = []
-    for block in sorted(blocks, key=lambda item: item["confidence"], reverse=True):
+    ordered = sorted(
+        blocks,
+        key=lambda item: (len(_normalized_text(item["text"])), item["confidence"]),
+        reverse=True,
+    )
+    for block in ordered:
         text = _normalized_text(block["text"])
         duplicate = any(
-            text and text == _normalized_text(existing["text"]) and
-            _overlap_ratio(block["bbox"], existing["bbox"]) > 0.35
+            _overlap_ratio(block["bbox"], existing["bbox"]) > 0.6 or
+            (text and text == _normalized_text(existing["text"]) and
+             _overlap_ratio(block["bbox"], existing["bbox"]) > 0.35)
             for existing in kept
         )
         if not duplicate:
@@ -121,7 +136,14 @@ def _dedupe_blocks(blocks):
 
 
 def vision_ocr(img_bytes):
-    """Run high-accuracy Vision OCR, using overlapping crops for dense diagrams."""
+    """Run high-accuracy Vision OCR.
+
+    The full image is always recognized first so long lines are never cut in
+    half. Overlapping tile crops are added only for large, dense diagrams:
+    they recover small text Vision would lose to internal downscaling, and
+    the length-preferring dedupe discards their seam-truncated variants in
+    favour of the complete full-image lines.
+    """
     try:
         from PIL import Image
         image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
@@ -130,21 +152,19 @@ def vision_ocr(img_bytes):
         return vision_ocr_tile(img_bytes, 0, 0, 1, 1, 1, 1)
 
     full_w, full_h = image.size
-    use_tiles = full_w > 1200 or full_h > 900
-    tile_w = int(round(full_w * 0.58)) if use_tiles else full_w
-    tile_h = int(round(full_h * 0.58)) if use_tiles else full_h
-    xs = [0, full_w - tile_w] if use_tiles else [0]
-    ys = [0, full_h - tile_h] if use_tiles else [0]
-    blocks = []
+    blocks = vision_ocr_tile(img_bytes, 0, 0, full_w, full_h, full_w, full_h)
 
-    for top in ys:
-        for left in xs:
-            crop = image.crop((left, top, left + tile_w, top + tile_h))
-            payload = io.BytesIO()
-            crop.save(payload, format="PNG")
-            blocks.extend(vision_ocr_tile(
-                payload.getvalue(), left, top, tile_w, tile_h, full_w, full_h
-            ))
+    if full_w > 1600 or full_h > 1200:
+        tile_w = int(round(full_w * 0.58))
+        tile_h = int(round(full_h * 0.58))
+        for top in (0, full_h - tile_h):
+            for left in (0, full_w - tile_w):
+                crop = image.crop((left, top, left + tile_w, top + tile_h))
+                payload = io.BytesIO()
+                crop.save(payload, format="PNG")
+                blocks.extend(vision_ocr_tile(
+                    payload.getvalue(), left, top, tile_w, tile_h, full_w, full_h
+                ))
 
     return _dedupe_blocks(blocks)
 
