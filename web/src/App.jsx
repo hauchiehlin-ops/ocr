@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import { fixText, extractEntities } from './utils/llm';
 import { listGeminiOcrModels } from './utils/geminiOcr';
@@ -348,52 +348,15 @@ function App() {
   const quoteFontFamily = (family) => `'${String(family).replace(/'/g, "\\'")}'`;
   const presetFontFamily = `${EN_FONT_STACKS[englishFont] || quoteFontFamily(englishFont)}, ${CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont)}, sans-serif`;
 
-  // The Chinese/system dropdown lists only families that can actually draw
-  // CJK glyphs. Device enumeration returns hundreds of Latin-only families;
-  // mixed in alphabetically they buried the real CJK fonts, and picking a
-  // Latin-only family silently fell back to the system default — both read
-  // as "my local fonts never show up". Detection renders 「體」 with the
-  // candidate stack and compares pixels against the generic fallback: if the
-  // output is identical to both generics, the family has no CJK glyphs.
-  const cjkFontFamilies = useMemo(() => {
-    if (typeof document === 'undefined') return availableFontFamilies;
-    const probeCanvas = document.createElement('canvas');
-    probeCanvas.width = 48;
-    probeCanvas.height = 44;
-    const probeCtx = probeCanvas.getContext('2d', { willReadFrequently: true });
-    if (!probeCtx) return availableFontFamilies;
-    const render = (fontFamily) => {
-      probeCtx.clearRect(0, 0, probeCanvas.width, probeCanvas.height);
-      probeCtx.font = `32px ${fontFamily}`;
-      // Alphabetic baseline positions the glyph independently of the first
-      // font's metrics. With textBaseline 'top' an installed Latin-only
-      // family shifts the fallback CJK glyph vertically and false-passes.
-      probeCtx.textBaseline = 'alphabetic';
-      probeCtx.fillText('體', 4, 36);
-      return probeCtx.getImageData(0, 0, probeCanvas.width, probeCanvas.height).data;
-    };
-    const alphaDiffers = (a, b) => {
-      for (let i = 3; i < a.length; i += 4) {
-        if (a[i] !== b[i]) return true;
-      }
-      return false;
-    };
-    const baselines = {
-      monospace: render('monospace'),
-      serif: render('serif')
-    };
-    const capable = availableFontFamilies.filter((family) => {
-      const probe = CJK_FONT_STACKS[family] || quoteFontFamily(family);
-      return ['monospace', 'serif'].some((generic) =>
-        alphaDiffers(render(`${probe}, ${generic}`), baselines[generic])
-      );
-    });
-    return capable.length ? capable : availableFontFamilies;
-  }, [availableFontFamilies]);
-
-  const chineseFontOptions = cjkFontFamilies.includes(chineseFont)
-    ? cjkFontFamilies
-    : [chineseFont, ...cjkFontFamilies];
+  // Local Font Access already returns installed family names. Pixel-probing a
+  // CJK glyph is not a reliable coverage test: font aliases and OS fallback on
+  // both macOS and Windows can make a real Chinese font render identically to
+  // the generic baseline, which previously hid it from this dropdown. Show the
+  // complete enumerated list and let the existing CJK fallback stack handle an
+  // occasional missing glyph at render time.
+  const chineseFontOptions = availableFontFamilies.includes(chineseFont)
+    ? availableFontFamilies
+    : [chineseFont, ...availableFontFamilies];
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
