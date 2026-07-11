@@ -607,7 +607,10 @@ function App() {
       {/* --- TitleBar & MenuBar --- */}
       <header className="header">
         <div className="header-left">
-          <h1 style={{ fontWeight: 'bold', letterSpacing: '0.5px' }}>{t('title')}</h1>
+          <div className="app-brand">
+            <img className="app-brand-icon" src={`${appBasePath}favicon-32.png`} alt="" width="28" height="28" />
+            <h1>{t('title')}</h1>
+          </div>
           <div className="menu-bar">
             {/* File Menu */}
             <div className="menu-container">
