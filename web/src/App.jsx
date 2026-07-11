@@ -27,6 +27,46 @@ const EN_FONT_STACKS = {
   'Courier New': `'Courier New', 'Courier', monospace`,
   'Times New Roman': `'Times New Roman', 'Times', serif`
 };
+const TRADITIONAL_CHINESE_FONT_LABELS = {
+  'Microsoft JhengHei': '微軟正黑體',
+  'Microsoft JhengHei UI': '微軟正黑體 UI',
+  'PMingLiU': '新細明體',
+  'MingLiU': '細明體',
+  'MingLiU_HKSCS': '細明體_HKSCS',
+  'DFKai-SB': '標楷體',
+  'PingFang TC': '蘋方-繁',
+  'PingFang HK': '蘋方-港',
+  'Heiti TC': '黑體-繁',
+  'Songti TC': '宋體-繁',
+  'Kaiti TC': '楷體-繁',
+  'Lantinghei TC': '蘭亭黑-繁',
+  'Libian TC': '隸變-繁',
+  'LingWai TC': '凌慧體-繁',
+  'LiHei Pro': '儷黑 Pro',
+  'LiSong Pro': '儷宋 Pro',
+  'BiauKai': '標楷體',
+  'Hiragino Sans CNS': '冬青黑體繁體中文',
+  'Noto Sans TC': 'Noto Sans 繁體中文',
+  'Noto Serif TC': 'Noto Serif 繁體中文'
+};
+const SIMPLIFIED_CHINESE_FONT_LABELS = {
+  'Microsoft YaHei': '微软雅黑',
+  'Microsoft YaHei UI': '微软雅黑 UI',
+  'SimSun': '宋体',
+  'NSimSun': '新宋体',
+  'SimHei': '黑体',
+  'KaiTi': '楷体',
+  'FangSong': '仿宋',
+  'PingFang SC': '苹方-简',
+  'Heiti SC': '黑体-简',
+  'Songti SC': '宋体-简',
+  'Kaiti SC': '楷体-简',
+  'Lantinghei SC': '兰亭黑-简',
+  'Libian SC': '隶变-简',
+  'LingWai SC': '凌慧体-简',
+  'Noto Sans SC': 'Noto Sans 简体中文',
+  'Noto Serif SC': 'Noto Serif 简体中文'
+};
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
 // Shown until ListModels succeeds (or when it fails: offline, invalid key…).
 // Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
@@ -359,6 +399,20 @@ function App() {
   const chineseFontOptions = availableFontFamilies.includes(chineseFont)
     ? availableFontFamilies
     : [chineseFont, ...availableFontFamilies];
+  const localizedCjkLabels = uiLanguage === '简体中文'
+    ? { ...TRADITIONAL_CHINESE_FONT_LABELS, ...SIMPLIFIED_CHINESE_FONT_LABELS }
+    : uiLanguage === '繁體中文'
+      ? { ...SIMPLIFIED_CHINESE_FONT_LABELS, ...TRADITIONAL_CHINESE_FONT_LABELS }
+      : {};
+  const sortedChineseFontOptions = [...chineseFontOptions].sort((a, b) => {
+    const aLocalized = Boolean(localizedCjkLabels[a]);
+    const bLocalized = Boolean(localizedCjkLabels[b]);
+    if (aLocalized !== bLocalized) return aLocalized ? -1 : 1;
+    return (localizedCjkLabels[a] || a).localeCompare(localizedCjkLabels[b] || b, uiLanguage);
+  });
+  const getChineseFontLabel = (family) => localizedCjkLabels[family]
+    ? `${localizedCjkLabels[family]} (${family})`
+    : family;
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
@@ -1077,8 +1131,8 @@ function App() {
                   width: '180px'
                 }}
               >
-                {chineseFontOptions.map((family) => (
-                  <option value={family} key={`cjk-${family}`}>{family}</option>
+                {sortedChineseFontOptions.map((family) => (
+                  <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
                 ))}
               </select>
             </div>
