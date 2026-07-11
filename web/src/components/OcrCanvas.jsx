@@ -627,9 +627,9 @@ const OcrCanvas = forwardRef(({
       ];
     };
 
-    // Median background colour per column from the bands above/below the box,
-    // and per row from the bands left/right of it. Medians ignore neighbouring
-    // glyphs or diagram lines that cross the ring.
+    // Collect robust bands outside the destructive target. Earlier code built
+    // one colour per column/row; a glyph touching a narrow band contaminated a
+    // whole column and was stretched into the conspicuous vertical streaks.
     const collectBand = (x0, x1, y0, y1) => {
       const indices = [];
       for (let y = Math.max(0, y0); y < Math.min(patchHeight, y1); y += 1) {
@@ -647,41 +647,29 @@ const OcrCanvas = forwardRef(({
     ]);
     if (!globalRing) return null;
 
-    const topBand = new Array(patchWidth);
-    const bottomBand = new Array(patchWidth);
-    for (let x = 0; x < patchWidth; x += 1) {
-      topBand[x] = medianColor(collectBand(x - 1, x + 2, 0, targetTop));
-      bottomBand[x] = medianColor(collectBand(x - 1, x + 2, targetBottom, patchHeight));
-    }
-    const leftBand = new Array(patchHeight);
-    const rightBand = new Array(patchHeight);
-    for (let y = 0; y < patchHeight; y += 1) {
-      leftBand[y] = medianColor(collectBand(0, targetLeft, y - 1, y + 2));
-      rightBand[y] = medianColor(collectBand(targetRight, patchWidth, y - 1, y + 2));
-    }
+    const topBand = medianColor(collectBand(0, patchWidth, 0, targetTop));
+    const bottomBand = medianColor(collectBand(0, patchWidth, targetBottom, patchHeight));
+    const leftBand = medianColor(collectBand(0, targetLeft, targetTop, targetBottom));
+    const rightBand = medianColor(collectBand(targetRight, patchWidth, targetTop, targetBottom));
 
-    // Directional interpolation between opposite bands follows background
-    // gradients. The vertical estimate is weighted by the (usually much
-    // shorter) box height, the horizontal one by the box width.
+    // Interpolate only low-frequency surfaces between whole-edge medians.
+    // Isolated letters, icons and connector crossings are outvoted and can no
+    // longer generate glyph-shaped or column-shaped fill artefacts.
     const boxWidth = Math.max(1, targetRight - targetLeft);
     const boxHeight = Math.max(1, targetBottom - targetTop);
     const verticalWeight = 1 / (boxHeight * boxHeight);
     const horizontalWeight = 1 / (boxWidth * boxWidth);
     const estimateChannel = (x, y, channel) => {
-      const topColor = topBand[x];
-      const bottomColor = bottomBand[x];
-      const leftColor = leftBand[y];
-      const rightColor = rightBand[y];
       const ty = Math.max(0, Math.min(1, (y - targetTop + 1) / (boxHeight + 1)));
       const tx = Math.max(0, Math.min(1, (x - targetLeft + 1) / (boxWidth + 1)));
       let vertical = null;
-      if (topColor && bottomColor) vertical = topColor[channel] * (1 - ty) + bottomColor[channel] * ty;
-      else if (topColor) vertical = topColor[channel];
-      else if (bottomColor) vertical = bottomColor[channel];
+      if (topBand && bottomBand) vertical = topBand[channel] * (1 - ty) + bottomBand[channel] * ty;
+      else if (topBand) vertical = topBand[channel];
+      else if (bottomBand) vertical = bottomBand[channel];
       let horizontal = null;
-      if (leftColor && rightColor) horizontal = leftColor[channel] * (1 - tx) + rightColor[channel] * tx;
-      else if (leftColor) horizontal = leftColor[channel];
-      else if (rightColor) horizontal = rightColor[channel];
+      if (leftBand && rightBand) horizontal = leftBand[channel] * (1 - tx) + rightBand[channel] * tx;
+      else if (leftBand) horizontal = leftBand[channel];
+      else if (rightBand) horizontal = rightBand[channel];
       if (vertical !== null && horizontal !== null) {
         return (vertical * verticalWeight + horizontal * horizontalWeight) / (verticalWeight + horizontalWeight);
       }
