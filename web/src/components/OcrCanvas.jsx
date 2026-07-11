@@ -652,18 +652,19 @@ const OcrCanvas = forwardRef(({
       }
       return indices;
     };
-    const globalRing = dominantColor([
-      ...collectBand(0, patchWidth, 0, targetTop),
-      ...collectBand(0, patchWidth, targetBottom, patchHeight),
-      ...collectBand(0, targetLeft, targetTop, targetBottom),
-      ...collectBand(targetRight, patchWidth, targetTop, targetBottom)
-    ]);
-    if (!globalRing) return null;
+    // The majority colour *inside* a text bbox is its real substrate. Sampling
+    // outside is unsafe for labels drawn on cards: just beyond the bbox may be
+    // white page background, which caused the blue/grey card itself to be
+    // classified as foreground and eaten away.
+    const substrateColor = dominantColor(
+      collectBand(targetLeft, targetRight, targetTop, targetBottom)
+    );
+    if (!substrateColor) return null;
 
     // The winning joint colour is deliberately constant. Only glyph-mask
     // pixels are replaced, so surrounding gradients remain untouched; using a
     // constant real source colour prevents broad synthetic grey rectangles.
-    const estimateChannel = (_x, _y, channel) => globalRing[channel];
+    const estimateChannel = (_x, _y, channel) => substrateColor[channel];
 
     // Mask every pixel inside the box that deviates from the local background
     // estimate; a moderate threshold plus dilation captures anti-alias halos.
@@ -1057,8 +1058,10 @@ const OcrCanvas = forwardRef(({
             width: blockWidth,
             height: blockHeight,
             confidence: item.confidence ?? 0,
-            cleanupExpandX: Math.max(2, blockWidth * 0.06),
-            cleanupExpandY: Math.max(2, blockHeight * 0.22),
+            // Destructive seeds stay inside the native bbox. Mask dilation
+            // follows actual glyph pixels beyond it without erasing card edges.
+            cleanupExpandX: 0,
+            cleanupExpandY: 0,
             id: `layer_${Date.now()}_${index}`
           });
         });
@@ -1835,8 +1838,8 @@ const OcrCanvas = forwardRef(({
             id: `layer_${Date.now()}_${index}`,
             text: correctOcrText(item.text),
             confidence: item.confidence ?? 0,
-            cleanupExpandX: Math.max(2, nativeBoxWidth * 0.06),
-            cleanupExpandY: Math.max(2, nativeBoxHeight * 0.22),
+            cleanupExpandX: 0,
+            cleanupExpandY: 0,
           bbox: {
             x: layout.left + (xmin / 1000) * layout.width,
             y: layout.top + (ymin / 1000) * layout.height,
