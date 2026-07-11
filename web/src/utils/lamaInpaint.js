@@ -2,14 +2,18 @@ import * as ort from 'onnxruntime-web';
 
 const MODEL_SIZE = 512;
 const MODEL_URL = import.meta.env.VITE_LAMA_MODEL_URL ||
-  'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx';
+  'https://huggingface.co/Carve/LaMa-ONNX/resolve/c3c0c9e468934d62e79c329e35d82dd09ff8c444/lama_fp32.onnx';
 const WASM_BASE_URL = import.meta.env.VITE_ORT_WASM_BASE_URL ||
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.27.0/dist/';
+const WASM_FILENAME = 'ort-wasm-simd-threaded.wasm';
+const WASM_URL = `${WASM_BASE_URL.endsWith('/') ? WASM_BASE_URL : `${WASM_BASE_URL}/`}${WASM_FILENAME}`;
 const MODEL_CACHE = 'ocr-ai-models-v1';
 const MODEL_SHA256 = '1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6';
+const WASM_SHA256 = 'd1ab1b94b16a65b29d710d0b587b29e7bed336827577623913479b8afe8113e6';
 const DEFAULT_TIMEOUT = 120000;
 let sessionPromise;
 let activeController;
+let runtimeBlobUrl;
 
 ort.env.wasm.wasmPaths = WASM_BASE_URL.endsWith('/') ? WASM_BASE_URL : `${WASM_BASE_URL}/`;
 
@@ -28,11 +32,40 @@ async function getCachedModel() {
   return (await caches.open(MODEL_CACHE)).match(MODEL_URL);
 }
 
-async function verifyModel(bytes) {
+async function verifyBytes(bytes, expectedSha256, label) {
   if (!crypto?.subtle) return;
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   const actual = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
-  if (actual !== MODEL_SHA256) throw new Error('AI 模型校驗失敗，已拒絕載入可能損壞的檔案');
+  if (actual !== expectedSha256) throw new Error(`${label}校驗失敗，已拒絕載入可能損壞的檔案`);
+}
+
+async function requestPersistentStorage() {
+  if (!navigator.storage?.persist) return false;
+  try { return await navigator.storage.persist(); } catch { return false; }
+}
+
+async function cacheRuntimeWasm({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}) {
+  if (!('caches' in globalThis)) return null;
+  const cache = await caches.open(MODEL_CACHE);
+  let response = await cache.match(WASM_URL);
+  if (!response) {
+    emit(onStatus, { phase: 'runtime-downloading', progress: null, message: '下載本機 AI 執行引擎…' });
+    const controller = new AbortController();
+    combineSignals(controller, signal);
+    const timer = setTimeout(() => controller.abort(new DOMException('AI 執行引擎下載逾時', 'TimeoutError')), timeoutMs);
+    try {
+      response = await fetch(WASM_URL, { signal: controller.signal, cache: 'no-store' });
+      if (!response.ok) throw new Error(`AI 執行引擎下載失敗：HTTP ${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      await verifyBytes(bytes, WASM_SHA256, 'AI 執行引擎');
+      await cache.put(WASM_URL, new Response(bytes, { headers: response.headers }));
+      return bytes;
+    } finally { clearTimeout(timer); }
+  } else {
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    await verifyBytes(bytes, WASM_SHA256, '已快取的 AI 執行引擎');
+    return bytes;
+  }
 }
 
 async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}) {
@@ -40,7 +73,7 @@ async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}
   if (cached) {
     emit(onStatus, { phase: 'cache-hit', progress: 1, message: '使用已快取的 AI 修補模型' });
     const bytes = new Uint8Array(await cached.arrayBuffer());
-    await verifyModel(bytes);
+    await verifyBytes(bytes, MODEL_SHA256, 'AI 模型');
     return bytes;
   }
 
@@ -75,7 +108,7 @@ async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}
     let offset = 0;
     for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
     emit(onStatus, { phase: 'verifying', progress: 1, message: '驗證 AI 模型完整性…' });
-    await verifyModel(bytes);
+    await verifyBytes(bytes, MODEL_SHA256, 'AI 模型');
     if ('caches' in globalThis) {
       const headers = new Headers(response.headers);
       headers.set('X-Model-SHA256', MODEL_SHA256);
@@ -89,6 +122,13 @@ async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}
 }
 
 async function createSession(options) {
+  await requestPersistentStorage();
+  const wasmBytes = await cacheRuntimeWasm(options);
+  if (wasmBytes) {
+    if (runtimeBlobUrl) URL.revokeObjectURL(runtimeBlobUrl);
+    runtimeBlobUrl = URL.createObjectURL(new Blob([wasmBytes], { type: 'application/wasm' }));
+    ort.env.wasm.wasmPaths = { [WASM_FILENAME]: runtimeBlobUrl };
+  }
   const bytes = await fetchModel(options);
   emit(options?.onStatus, { phase: 'loading', progress: 1, message: '載入 AI 修補引擎…' });
   return ort.InferenceSession.create(bytes, {
