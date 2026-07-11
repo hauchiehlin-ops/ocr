@@ -652,13 +652,18 @@ const OcrCanvas = forwardRef(({
       }
       return indices;
     };
-    // The majority colour *inside* a text bbox is its real substrate. Sampling
-    // outside is unsafe for labels drawn on cards: just beyond the bbox may be
-    // white page background, which caused the blue/grey card itself to be
-    // classified as foreground and eaten away.
-    const substrateColor = dominantColor(
-      collectBand(targetLeft, targetRight, targetTop, targetBottom)
-    );
+    // Native OCR boxes can be so glyph-tight that black strokes are the
+    // majority *inside* the bbox; treating that as substrate produced solid
+    // black replacement rectangles. Sample only the non-destructive padding
+    // ring instead. The cleanup target itself is no longer geometrically
+    // expanded, so this ring stays local to the card/background while the
+    // destructive mask remains strictly inside the original OCR bbox.
+    const substrateColor = dominantColor([
+      ...collectBand(0, patchWidth, 0, targetTop),
+      ...collectBand(0, patchWidth, targetBottom, patchHeight),
+      ...collectBand(0, targetLeft, targetTop, targetBottom),
+      ...collectBand(targetRight, patchWidth, targetTop, targetBottom)
+    ]);
     if (!substrateColor) return null;
 
     // The winning joint colour is deliberately constant. Only glyph-mask
