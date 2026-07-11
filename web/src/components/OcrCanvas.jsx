@@ -688,7 +688,11 @@ const OcrCanvas = forwardRef(({
     // estimate; a moderate threshold plus dilation captures anti-alias halos.
     const mask = new Uint8Array(pixelCount);
     const background = new Float32Array(pixelCount * 3);
-    const maskThreshold = 15;
+    // Anti-aliased strokes can differ from their background by fewer than 15
+    // RGB units.  That old threshold left the thin vertical fragments visible
+    // in high-contrast labels.  Eight still ignores normal compression noise,
+    // while catching the pale edge pixels that form recognisable ghost text.
+    const maskThreshold = 8;
     let maskedCount = 0;
     for (let y = targetTop; y < targetBottom; y += 1) {
       for (let x = targetLeft; x < targetRight; x += 1) {
@@ -710,7 +714,7 @@ const OcrCanvas = forwardRef(({
 
     // Dilate so anti-aliased edges and glyph strokes that poke slightly past
     // a tight OCR bounding box are rebuilt as well.
-    const dilationRadius = Math.max(1, Math.min(4, Math.round(imageHeight * 0.1)));
+    const dilationRadius = Math.max(2, Math.min(6, Math.round(imageHeight * 0.16)));
     const dilated = new Uint8Array(mask);
     for (let y = Math.max(0, targetTop - dilationRadius); y < Math.min(patchHeight, targetBottom + dilationRadius); y += 1) {
       for (let x = Math.max(0, targetLeft - dilationRadius); x < Math.min(patchWidth, targetRight + dilationRadius); x += 1) {
@@ -789,10 +793,13 @@ const OcrCanvas = forwardRef(({
       const stable = values.slice(Math.floor(values.length * 0.25), Math.ceil(values.length * 0.75));
       return stable.reduce((sum, pixel) => ({ r: sum.r + pixel.r / stable.length, g: sum.g + pixel.g / stable.length, b: sum.b + pixel.b / stable.length }), { r: 0, g: 0, b: 0 });
     };
-    const northWest = sample(geometry.imgLeft, geometry.imgTop);
-    const northEast = sample(geometry.imgRight, geometry.imgTop);
-    const southWest = sample(geometry.imgLeft, geometry.imgBottom);
-    const southEast = sample(geometry.imgRight, geometry.imgBottom);
+    // Sample beyond the selected area. Sampling on its corners allowed the
+    // very residual being erased to leak back into the reconstructed surface.
+    const outside = radius + 2;
+    const northWest = sample(geometry.imgLeft - outside, geometry.imgTop - outside);
+    const northEast = sample(geometry.imgRight + outside, geometry.imgTop - outside);
+    const southWest = sample(geometry.imgLeft - outside, geometry.imgBottom + outside);
+    const southEast = sample(geometry.imgRight + outside, geometry.imgBottom + outside);
     const imageData = ctx.createImageData(patchWidth, patchHeight);
     for (let y = 0; y < patchHeight; y += 1) {
       const ty = patchHeight > 1 ? y / (patchHeight - 1) : 0;
@@ -864,31 +871,20 @@ const OcrCanvas = forwardRef(({
       sourceLayerId: null
     });
     canvas.add(patchImg);
-    canvas.sendObjectToBack(patchImg);
 
-    const region = {
-      x: Math.min(left, left + width),
-      y: Math.min(top, top + height),
-      w: Math.abs(width),
-      h: Math.abs(height)
-    };
-    const textboxesToRemove = canvas.getObjects().filter(obj => {
-      if (obj.type !== 'textbox') return false;
-      const bounds = obj.getBoundingRect();
-      const rect = { x: bounds.left, y: bounds.top, w: bounds.width, h: bounds.height };
-      const centerX = rect.x + rect.w / 2;
-      const centerY = rect.y + rect.h / 2;
-      const centerInside = centerX >= region.x && centerX <= region.x + region.w &&
-        centerY >= region.y && centerY <= region.y + region.h;
-      return centerInside || overlapRatio(region, rect) > 0.12;
-    });
-
-    textboxesToRemove.forEach(textbox => {
-      canvas.getObjects()
-        .filter(obj => obj.isPatch && obj.sourceLayerId === textbox.id)
-        .forEach(obj => canvas.remove(obj));
-      canvas.remove(textbox);
-    });
+    // A manual cleanup is a corrective paint layer, not an object deletion
+    // command.  It must cover older automatic patches (which may themselves
+    // contain the residual), while remaining below every editable textbox.
+    // Previously sendObjectToBack() hid this patch underneath the faulty old
+    // patch; it appeared to work only when the selection also deleted the
+    // textbox and its associated patch.
+    const objects = canvas.getObjects();
+    const firstTextboxIndex = objects.findIndex(obj => obj.type === 'textbox');
+    if (firstTextboxIndex >= 0) {
+      canvas.moveObjectTo(patchImg, firstTextboxIndex);
+    } else {
+      canvas.bringObjectToFront(patchImg);
+    }
 
     canvas.discardActiveObject();
     isHistoryDisabled.current = false;
