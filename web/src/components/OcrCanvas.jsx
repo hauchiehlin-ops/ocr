@@ -1834,10 +1834,35 @@ const OcrCanvas = forwardRef(({
         })();
       const layout = imageLayout.current;
 
-      normalizeCustomOcrItems(customResult).forEach((item, index) => {
+      const nativeItems = normalizeCustomOcrItems(customResult);
+      const nativeHeights = nativeItems
+        .map(item => item.bbox[2] - item.bbox[0])
+        .filter(height => height > 0)
+        .sort((a, b) => a - b);
+      const medianNativeHeight = nativeHeights.length
+        ? nativeHeights[Math.floor(nativeHeights.length / 2)]
+        : 0;
+
+      nativeItems.forEach((item, index) => {
         const [ymin, xmin, ymax, xmax] = item.bbox;
         const nativeBoxWidth = ((xmax - xmin) / 1000) * layout.width;
         const nativeBoxHeight = ((ymax - ymin) / 1000) * layout.height;
+        const normalizedLength = normalizedText(item.text).length;
+        const normalizedWidth = xmax - xmin;
+        const normalizedHeight = ymax - ymin;
+        const isLowConfidence = (item.confidence ?? 0) < 0.45;
+        const isIconLikeSingleGlyph = normalizedLength <= 1 &&
+          normalizedWidth / Math.max(1, normalizedHeight) < 1.8;
+        const isOversizedDecorativeText = medianNativeHeight > 0 &&
+          normalizedHeight > medianNativeHeight * 1.8 &&
+          normalizedLength <= 8;
+
+        // Native OCR is deliberately fail-safe. A questionable detection must
+        // never gain permission to erase source pixels: icon-embedded glyphs
+        // (e.g. 「照」), decorative SMART letters misread as "1/4会", and
+        // Vision's coarse 0.3-confidence guesses remain untouched. Gemini's
+        // semantic OCR does not need this native-only guard.
+        if (isLowConfidence || isIconLikeSingleGlyph || isOversizedDecorativeText) return;
 
           blocks.push({
             id: `layer_${Date.now()}_${index}`,
