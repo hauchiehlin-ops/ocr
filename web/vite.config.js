@@ -56,4 +56,9 @@ const docsPlugin = () => ({
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), docsPlugin()],
+  // Select ORT's external-WASM entrypoint. The runtime URL is configured by
+  // VITE_ORT_WASM_BASE_URL and large binaries never enter the Pages artifact.
+  resolve: {
+    conditions: ['onnxruntime-web-use-extern-wasm']
+  },
 })

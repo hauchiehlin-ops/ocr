@@ -1,0 +1,64 @@
+name: Web release
+
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/web-release.yml', 'THIRD_PARTY_NOTICES.md']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    env:
+      VITE_LAMA_MODEL_URL: ${{ vars.LAMA_MODEL_URL }}
+      VITE_ORT_WASM_BASE_URL: ${{ vars.ORT_WASM_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Verify production asset configuration
+        run: |
+          test -n "$VITE_LAMA_MODEL_URL"
+          test -n "$VITE_ORT_WASM_BASE_URL"
+          case "$VITE_LAMA_MODEL_URL" in https://*) ;; *) exit 1 ;; esac
+          case "$VITE_ORT_WASM_BASE_URL" in https://*) ;; *) exit 1 ;; esac
+      - name: Download and verify LaMa model
+        run: npm run model:setup
+      - name: Verify model checksum independently
+        run: echo '1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4eb68d6  public/models/lama_fp32.onnx' | sha256sum --check
+      - name: Keep model outside the Pages artifact
+        run: rm public/models/lama_fp32.onnx
+      - run: npm run lint
+      - run: npm run build
+      - name: Assert large runtime assets are externalized
+        run: |
+          test ! -e dist/models/lama_fp32.onnx
+          test -z "$(find dist -type f -size +25M -print -quit)"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: verify-build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy web artifact
+        id: deployment
+        uses: actions/deploy-pages@v4

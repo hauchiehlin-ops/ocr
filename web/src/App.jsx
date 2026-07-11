@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import OcrCanvas from './components/OcrCanvas';
+import { cancelLamaOperation } from './utils/lamaInpaint';
 import { fixText, extractEntities } from './utils/llm';
 import { listGeminiOcrModels } from './utils/geminiOcr';
 import { getTranslation, SUPPORTED_UI_LANGUAGES } from './utils/i18n';
@@ -122,6 +123,7 @@ function App() {
     return SUPPORTED_UI_LANGUAGES.includes(saved) ? saved : '繁體中文';
   });
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
+  const [aiStatus, setAiStatus] = useState(null);
 
   // OCR Engine: native OS OCR is the main path; browser/cloud engines remain fallback only.
   const [ocrEngine, setOcrEngine] = useState(() => {
@@ -793,6 +795,7 @@ function App() {
             regionalAction={regionalAction}
 
             onWorkerStatusChange={setWorkerStatus}
+            onAiStatusChange={setAiStatus}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
             onRegionSelect={setSelectedRegion}
             onLayersUpdate={setLayers}
@@ -825,7 +828,7 @@ function App() {
               justifyContent: 'center',
               zIndex: 900,
               gap: '16px',
-              pointerEvents: 'none',
+              pointerEvents: 'auto',
             }}>
               {/* Spinner */}
               <div style={{
@@ -848,6 +851,15 @@ function App() {
               }}>
                 {workerStatus}
               </div>
+              {aiStatus?.phase === 'downloading' && (
+                <div style={{ width: 'min(420px, 75%)' }}>
+                  <div style={{ height: '8px', background: 'rgba(255,255,255,.15)', borderRadius: '6px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.round((aiStatus.progress || 0) * 100)}%`, background: '#60CDFF' }} />
+                  </div>
+                  <button className="btn-secondary" style={{ marginTop: '14px' }} onClick={cancelLamaOperation}>取消下載並使用快速修補</button>
+                </div>
+              )}
+              {aiStatus?.phase === 'error' && <div style={{ color: '#ff8a8a', maxWidth: '70%', textAlign: 'center' }}>{aiStatus.message}</div>}
 
               {/* Sub-hint */}
               <div style={{
@@ -857,6 +869,13 @@ function App() {
               }}>
                 {ocrEngine === 'cloud' ? t('cloudOcrHint') : t('ocrHint')}
               </div>
+            </div>
+          )}
+          {aiStatus?.phase === 'error' && !isOcrProcessing && (
+            <div style={{ position: 'absolute', right: '16px', bottom: '16px', zIndex: 950, maxWidth: '420px', padding: '12px 16px', background: '#4a1f24', border: '1px solid #ff7b86', borderRadius: '8px', color: '#fff' }}>
+              <div>AI 修補載入失敗，已自動改用快速修補。</div>
+              <div style={{ fontSize: '12px', opacity: .8, marginTop: '4px' }}>{aiStatus.message}</div>
+              <button className="btn-secondary" style={{ marginTop: '8px' }} onClick={() => setAiStatus(null)}>關閉</button>
             </div>
           )}
         </main>

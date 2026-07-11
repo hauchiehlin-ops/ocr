@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node start-all.js",
+    "model:setup": "node scripts/download-lama.mjs",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"

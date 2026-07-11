@@ -46,6 +46,7 @@ platforms/ios/**/*.xcodeproj/project.xcworkspace/xcuserdata/
 # core/models/*.onnx
 # We might want to track models if they are small, but they are often large.
 # I'll leave them tracked for now unless they hit GitHub's 100MB limit.
+web/public/models/*.onnx
 
 # Build artifacts & package cache
 .build/

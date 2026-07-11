@@ -4,6 +4,7 @@ import Tesseract from 'tesseract.js';
 import { jsPDF } from 'jspdf';
 import { runGeminiOcrTiled, runGeminiRegionalOcr } from '../utils/geminiOcr';
 import { getNativeOcrEngineLabel, isNativeOcrAvailable, runNativeOcr } from '../utils/nativeOcr';
+import { inpaintWithLama, shouldConfirmLargeDownload } from '../utils/lamaInpaint';
 
 // Fabric v7 changed the default object origin from left/top to center, so every
 // object placed by (left, top) rendered shifted up-left by half its size: cover
@@ -237,6 +238,7 @@ const OcrCanvas = forwardRef(({
   onRegionalOcrComplete,
   onHistoryStatusChange,
   onWorkerStatusChange,
+  onAiStatusChange,
   presetFontFamily = DEFAULT_OCR_FONT_FAMILY,
   presetFontSize = 16,
   presetBold = false,
@@ -254,6 +256,8 @@ const OcrCanvas = forwardRef(({
   const fabricCanvas = useRef(null);
   const bgImage = useRef(null);
   const sampleCanvasRef = useRef(null);
+  const batchInpaintCanvasRef = useRef(null);
+  const aiDownloadApproved = useRef(false);
   const tesseractWorker = useRef(null);
   const originalDimensions = useRef({ width: 0, height: 0 });
   // Where the background image actually sits on the canvas:
@@ -561,6 +565,46 @@ const OcrCanvas = forwardRef(({
     patchHeight: patchCanvas.height * geometry.scale
   });
 
+  const prepareBatchInpaint = async blocks => {
+    const sourceCanvas = sampleCanvasRef.current;
+    const layout = imageLayout.current;
+    batchInpaintCanvasRef.current = null;
+    if (!sourceCanvas || !blocks?.length || !layout.scale) return;
+    const width = sourceCanvas.width, height = sourceCanvas.height;
+    const source = sourceCanvas.getContext('2d').getImageData(0, 0, width, height).data;
+    const mask = new Uint8Array(width * height);
+    for (const block of blocks) {
+      if (block.manual) continue;
+      const box = block.bbox || block;
+      const left = box.x ?? box.left, top = box.y ?? box.top;
+      const boxWidth = box.w ?? box.width, boxHeight = box.h ?? box.height;
+      if (![left, top, boxWidth, boxHeight].every(Number.isFinite)) continue;
+      const x0 = Math.max(0, Math.floor((left - layout.left) / layout.scale) - 2);
+      const y0 = Math.max(0, Math.floor((top - layout.top) / layout.scale) - 2);
+      const x1 = Math.min(width, Math.ceil((left + boxWidth - layout.left) / layout.scale) + 2);
+      const y1 = Math.min(height, Math.ceil((top + boxHeight - layout.top) / layout.scale) + 2);
+      for (let y = y0; y < y1; y++) mask.fill(1, y * width + x0, y * width + x1);
+    }
+    if (!mask.some(Boolean)) return;
+    if (!aiDownloadApproved.current && shouldConfirmLargeDownload()) {
+      aiDownloadApproved.current = window.confirm('高品質 AI 背景修補首次需要下載約 198 MB 模型。建議使用 Wi-Fi。是否繼續？');
+      if (!aiDownloadApproved.current) return;
+    }
+    try {
+      const result = await inpaintWithLama(source, mask, width, height, {
+        onStatus: status => { onAiStatusChange?.(status); if (status.message) onWorkerStatusChange?.(status.message); }
+      });
+      if (!result) return;
+      const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+      const context = canvas.getContext('2d'); const data = context.createImageData(width, height);
+      data.data.set(result); context.putImageData(data, 0, 0);
+      batchInpaintCanvasRef.current = canvas;
+    } catch (error) {
+      if (error?.name !== 'AbortError') console.warn('Batch LaMa unavailable; using spatial fallback.', error);
+      onAiStatusChange?.({ phase: error?.name === 'AbortError' ? 'cancelled' : 'error', message: error.message });
+    }
+  };
+
   // Reconstruct only glyph pixels. Two earlier generations of this routine
   // ghosted: perimeter stripes (v1) and diffusion averaging (v2), where any
   // glyph pixel the mask missed bled grey into the fill. This version builds
@@ -569,7 +613,7 @@ const OcrCanvas = forwardRef(({
   // mistaken for the background), masks every pixel that deviates from that
   // estimate, and fills masked pixels directly with the estimate. The fill
   // never averages neighbouring pixels, so missed glyph remnants cannot smear.
-  const createTextPatch = (left, top, width, height, expandX = 0, expandY = 0) => {
+  const createTextPatch = async (left, top, width, height, expandX = 0, expandY = 0) => {
     // The OCR bbox positions replacement text; cleanup needs a separate,
     // slightly wider target because native engines return glyph-tight boxes.
     left -= expandX;
@@ -580,8 +624,8 @@ const OcrCanvas = forwardRef(({
     const scale = layout.scale || 1;
     const imageWidth = Math.max(1, Math.abs(width / scale));
     const imageHeight = Math.max(1, Math.abs(height / scale));
-    const paddingX = Math.max(4, Math.min(14, Math.round(imageWidth * 0.05)));
-    const paddingY = Math.max(4, Math.min(12, Math.round(imageHeight * 0.22)));
+    const paddingX = Math.max(16, Math.min(96, Math.round(imageWidth * 0.3)));
+    const paddingY = Math.max(16, Math.min(96, Math.round(imageHeight * 1.2)));
     const geometry = resolveImagePatchGeometry(left, top, width, height, paddingX, paddingY);
     const sourceCanvas = sampleCanvasRef.current;
     if (!geometry || !sourceCanvas) return null;
@@ -665,10 +709,47 @@ const OcrCanvas = forwardRef(({
     ]);
     if (!substrateColor) return null;
 
-    // The winning joint colour is deliberately constant. Only glyph-mask
-    // pixels are replaced, so surrounding gradients remain untouched; using a
-    // constant real source colour prevents broad synthetic grey rectangles.
-    const estimateChannel = (_x, _y, channel) => substrateColor[channel];
+    // Reconstruct a spatial background field from all four sides. A single
+    // dominant RGB value is safe for flat UI cards but creates visible blocks
+    // on photographs. Side profiles preserve gradients and structures that
+    // enter the text box (sky, foliage, lines, light falloff), while the robust
+    // median rejects an occasional glyph/edge leaking into the sampling band.
+    const median = values => {
+      if (!values.length) return 0;
+      values.sort((a, b) => a - b);
+      const middle = values.length >> 1;
+      return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2;
+    };
+    const bandRadius = Math.max(1, Math.min(4, Math.floor(Math.min(paddingX, paddingY) / 2)));
+    const profilePixel = (x, y, horizontal, channel) => {
+      const values = [];
+      for (let offset = -bandRadius; offset <= bandRadius; offset += 1) {
+        const sx = Math.max(0, Math.min(patchWidth - 1, horizontal ? x + offset : x));
+        const sy = Math.max(0, Math.min(patchHeight - 1, horizontal ? y : y + offset));
+        values.push(source[(sy * patchWidth + sx) * 4 + channel]);
+      }
+      return median(values);
+    };
+    const topProfile = Array.from({ length: patchWidth }, (_, x) => [0, 1, 2].map(c => profilePixel(x, targetTop - 1, true, c)));
+    const bottomProfile = Array.from({ length: patchWidth }, (_, x) => [0, 1, 2].map(c => profilePixel(x, targetBottom, true, c)));
+    const leftProfile = Array.from({ length: patchHeight }, (_, y) => [0, 1, 2].map(c => profilePixel(targetLeft - 1, y, false, c)));
+    const rightProfile = Array.from({ length: patchHeight }, (_, y) => [0, 1, 2].map(c => profilePixel(targetRight, y, false, c)));
+
+    const estimateChannel = (x, y, channel) => {
+      const spanX = Math.max(1, targetRight - targetLeft);
+      const spanY = Math.max(1, targetBottom - targetTop);
+      const tx = Math.max(0, Math.min(1, (x - targetLeft + 0.5) / spanX));
+      const ty = Math.max(0, Math.min(1, (y - targetTop + 0.5) / spanY));
+      const vertical = topProfile[x][channel] * (1 - ty) + bottomProfile[x][channel] * ty;
+      const horizontal = leftProfile[y][channel] * (1 - tx) + rightProfile[y][channel] * tx;
+
+      // Trust the closest pair of boundaries most strongly. This makes the
+      // reconstructed field meet the known pixels continuously at every edge.
+      const verticalWeight = 1 / (Math.min(y - targetTop + 1, targetBottom - y) + 0.5);
+      const horizontalWeight = 1 / (Math.min(x - targetLeft + 1, targetRight - x) + 0.5);
+      return (vertical * verticalWeight + horizontal * horizontalWeight) /
+        (verticalWeight + horizontalWeight);
+    };
 
     // Mask every pixel inside the box that deviates from the local background
     // estimate; a moderate threshold plus dilation captures anti-alias halos.
@@ -724,6 +805,28 @@ const OcrCanvas = forwardRef(({
 
     // Fill masked pixels with the background estimate. Pixels the dilation
     // added outside the measured box reuse the nearest in-box estimate.
+    let lamaOutput = null;
+    if (batchInpaintCanvasRef.current) {
+      lamaOutput = batchInpaintCanvasRef.current.getContext('2d')
+        .getImageData(geometry.patchLeft, geometry.patchTop, patchWidth, patchHeight).data;
+    } else try {
+      if (!aiDownloadApproved.current && shouldConfirmLargeDownload()) {
+        aiDownloadApproved.current = window.confirm('高品質 AI 背景修補首次需要下載約 198 MB 模型。建議使用 Wi-Fi。是否繼續？');
+        if (!aiDownloadApproved.current) throw new DOMException('使用者選擇省流量模式', 'AbortError');
+      }
+      lamaOutput = await inpaintWithLama(source, dilated, patchWidth, patchHeight, {
+        onStatus: status => {
+          onAiStatusChange?.(status);
+          if (status.message) onWorkerStatusChange?.(status.message);
+        }
+      });
+    } catch (error) {
+      // Missing model, unsupported WebGPU operators, or memory pressure must
+      // never break OCR. The deterministic spatial reconstruction below is the
+      // offline/low-memory fallback.
+      if (error?.name !== 'AbortError') console.warn('LaMa inpainting unavailable; using spatial fallback.', error);
+      onAiStatusChange?.({ phase: error?.name === 'AbortError' ? 'cancelled' : 'error', message: error.message });
+    }
     const output = new Uint8ClampedArray(source);
     for (let y = 0; y < patchHeight; y += 1) {
       for (let x = 0; x < patchWidth; x += 1) {
@@ -733,9 +836,9 @@ const OcrCanvas = forwardRef(({
         const clampedY = Math.max(targetTop, Math.min(targetBottom - 1, y));
         const bgIndex = (clampedY * patchWidth + clampedX) * 3;
         const index = pixelIndex * 4;
-        output[index] = clampByte(background[bgIndex]);
-        output[index + 1] = clampByte(background[bgIndex + 1]);
-        output[index + 2] = clampByte(background[bgIndex + 2]);
+        output[index] = lamaOutput ? lamaOutput[index] : clampByte(background[bgIndex]);
+        output[index + 1] = lamaOutput ? lamaOutput[index + 1] : clampByte(background[bgIndex + 1]);
+        output[index + 2] = lamaOutput ? lamaOutput[index + 2] : clampByte(background[bgIndex + 2]);
         output[index + 3] = 255;
       }
     }
@@ -808,7 +911,7 @@ const OcrCanvas = forwardRef(({
     if (!textbox || textbox.manual || textbox.isManualText) return false;
     if (!force && !textbox.isOcrReview) return false;
 
-    const patchInfo = createTextPatch(
+    const patchInfo = await createTextPatch(
       textbox.originalLeft, 
       textbox.originalTop, 
       textbox.originalWidth, 
@@ -1122,6 +1225,7 @@ const OcrCanvas = forwardRef(({
       }
 
       const addedTextboxes = [];
+      await prepareBatchInpaint(blocks);
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
         const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height);
@@ -1228,6 +1332,7 @@ const OcrCanvas = forwardRef(({
     const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
     const sanitizedBlocks = sanitizeOcrBlocks(blocks, imageLayout.current);
     const reviewBlocks = dedupeOcrBlocks(sanitizedBlocks);
+    await prepareBatchInpaint(sanitizedBlocks);
 
     // Dedupe controls which editable text layers are shown, but every valid OCR
     // box must still erase its source glyphs. Otherwise a more complete box can
