@@ -69,6 +69,7 @@ const SIMPLIFIED_CHINESE_FONT_LABELS = {
 };
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
 const WINDOWS_OCR_STARTER_URL = 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.bat';
+const WINDOWS_PROJECT_ZIP_URL = 'https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip';
 // Shown until ListModels succeeds (or when it fails: offline, invalid key…).
 // Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
 const STATIC_GEMINI_MODEL_OPTIONS = [
@@ -976,6 +977,33 @@ function App() {
                   >
                     ⬇ {t('downloadWindowsOcrStarter')}
                   </button>
+                  <details className="windows-ocr-help">
+                    <summary>{t('windowsTroubleshootingTitle')}</summary>
+                    <ol>
+                      <li>{t('windowsTroubleshootingDownload')}</li>
+                      <li>
+                        {t('windowsTroubleshootingUnblock')}
+                        <code>cd /d "%USERPROFILE%\Downloads"</code>
+                        <code>powershell -NoProfile -Command "Unblock-File -Path '.\setup_and_run_ocr.bat'"</code>
+                      </li>
+                      <li>
+                        {t('windowsTroubleshootingRun')}
+                        <code>setup_and_run_ocr.bat</code>
+                      </li>
+                      <li>
+                        {t('windowsTroubleshootingPython')}
+                        <code>winget install -e --id Python.Python.3.12</code>
+                      </li>
+                      <li>
+                        {t('windowsTroubleshootingVerify')}
+                        <code>powershell -NoProfile -Command "Invoke-RestMethod http://127.0.0.1:5001/status"</code>
+                      </li>
+                      <li>{t('windowsTroubleshootingKeepOpen')}</li>
+                    </ol>
+                    <a href={WINDOWS_PROJECT_ZIP_URL} target="_blank" rel="noopener noreferrer">
+                      {t('downloadWindowsProjectZip')}
+                    </a>
+                  </details>
                 </div>
               )}
 

@@ -509,6 +509,48 @@ body {
   outline: none;
 }
 
+.windows-ocr-help {
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.18);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.windows-ocr-help summary {
+  cursor: pointer;
+  color: #FBBF24;
+  font-weight: 700;
+}
+
+.windows-ocr-help ol {
+  margin: 8px 0 8px 18px;
+}
+
+.windows-ocr-help li {
+  margin-bottom: 9px;
+}
+
+.windows-ocr-help code {
+  display: block;
+  overflow-x: auto;
+  margin-top: 5px;
+  padding: 6px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  background: #111;
+  color: #D7F3FF;
+  font-family: Consolas, 'Courier New', monospace;
+  user-select: all;
+  white-space: nowrap;
+}
+
+.windows-ocr-help a {
+  color: #60CDFF;
+  font-weight: 700;
+}
+
 .native-ocr-current {
   margin-top: 5px;
   color: #FBBF24;
