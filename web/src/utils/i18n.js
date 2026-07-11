@@ -80,7 +80,7 @@ const english = {
   modelListLoading: 'Fetching the live model list from Google…',
   modelListLoaded: 'Live model list loaded',
   modelListFailed: 'Could not fetch the live model list; using the built-in defaults.',
-  windowsServerStartHint: 'Windows: download setup_and_run_ocr.bat, open it once, wait for the ready prompt, then click Test connection. After it is ready, the Command Prompt window can be closed.',
+  windowsServerStartHint: 'Windows: download and open setup_and_run_ocr.bat once. It automatically installs Python and OCR, then enables startup after sign-in. When ready, click Test Connection.',
   downloadWindowsOcrStarter: 'Download the Windows OCR installer/startup file',
   windowsStarterDownloadedHint: 'The Windows OCR starter has been downloaded. Open setup_and_run_ocr.bat from Downloads. After the ready prompt appears, return here and click Test Connection.',
   windowsTroubleshootingTitle: 'Blocked or still offline? Complete beginner steps',
@@ -88,8 +88,9 @@ const english = {
   windowsTroubleshootingUnblock: 'Open Command Prompt, then copy and run these two commands to enter Downloads and unblock the official file:',
   windowsTroubleshootingRun: 'In the same Command Prompt, start the installer:',
   windowsTroubleshootingReady: 'Wait until the prompt says Windows Native OCR is ready, then return to this page and click Test Connection.',
-  windowsTroubleshootingPython: 'If it says Python is missing, install Python with this command, close and reopen Command Prompt, then run the BAT file again:',
+  windowsTroubleshootingPython: 'Python is installed automatically. Use this fallback only when Windows Security or a corporate network blocks the automatic installer:',
   windowsTroubleshootingVerify: 'When the server window says it is running, open a second Command Prompt and verify it. A successful result contains status running and engine WindowsOCR:',
+  windowsTroubleshootingFiles: 'After success, the downloaded BAT and old OCR files in Downloads may be deleted. Keep %LOCALAPPDATA%\\AI OCR Pro Editor\\OCR Server because it contains the installed runtime.',
   windowsTroubleshootingBackground: 'After the ready prompt appears, the OCR server keeps running in the background. Closing the setup window will not disconnect OCR.',
   downloadWindowsProjectZip: 'Corporate network blocks the single file? Download the complete official project ZIP.'
 };
@@ -146,7 +147,7 @@ const traditionalChinese = {
   modelListLoading: '正在從 Google 取得線上可用模型清單…',
   modelListLoaded: '已取得線上可用模型清單',
   modelListFailed: '無法取得線上模型清單，改用內建預設清單。',
-  windowsServerStartHint: 'Windows：請下載 setup_and_run_ocr.bat，開啟執行一次，等出現已啟動提示後回來按「測試連接」。啟動完成後可關閉命令視窗。',
+  windowsServerStartHint: 'Windows：下載並開啟 setup_and_run_ocr.bat 一次；程式會自動安裝 Python 與 OCR，並設定登入後自動啟動。完成後按「測試連接」。',
   downloadWindowsOcrStarter: '下載 Windows OCR 安裝／啟動檔',
   windowsStarterDownloadedHint: 'Windows OCR 啟動檔已下載。請從「下載」資料夾開啟 setup_and_run_ocr.bat；看到已啟動提示後，回到本頁按「測試連接」。',
   windowsTroubleshootingTitle: '被安全機制擋下或仍無法連線？零基礎完整步驟',
@@ -154,9 +155,10 @@ const traditionalChinese = {
   windowsTroubleshootingUnblock: '開啟「命令提示字元」，複製並依序執行以下兩行，進入下載資料夾並解除官方檔案封鎖：',
   windowsTroubleshootingRun: '在同一個命令提示字元視窗執行安裝／啟動檔：',
   windowsTroubleshootingReady: '等到畫面提示 Windows Native OCR 已啟動，再回到本頁按「測試連接」。',
-  windowsTroubleshootingPython: '若顯示找不到 Python，複製以下指令安裝；完成後關閉並重開命令提示字元，再執行 BAT 檔：',
+  windowsTroubleshootingPython: 'Python 會自動安裝；只有 Windows 安全性或公司網路攔截自動安裝時，才使用下列備援指令：',
   windowsTroubleshootingVerify: '當伺服器視窗顯示正在執行，再開一個命令提示字元驗證。成功時會看到 status running 與 engine WindowsOCR：',
   windowsTroubleshootingBackground: '出現已啟動提示後，OCR 會在背景持續執行；關閉這個安裝／啟動視窗不會中斷原生 OCR。',
+  windowsTroubleshootingFiles: '安裝成功後，可刪除「下載」資料夾中的 BAT 與舊 OCR 檔案；請保留 %LOCALAPPDATA%\\AI OCR Pro Editor\\OCR Server，這是正式執行環境。',
   downloadWindowsProjectZip: '公司網路擋下單檔下載？改下載完整官方專案 ZIP。'
 };
 

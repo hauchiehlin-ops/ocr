@@ -1010,6 +1010,7 @@ function App() {
                         <code>powershell -NoProfile -Command "Invoke-RestMethod http://127.0.0.1:5001/status"</code>
                       </li>
                       <li>{t('windowsTroubleshootingBackground')}</li>
+                      <li>{t('windowsTroubleshootingFiles')}</li>
                     </ol>
                     <a href={WINDOWS_PROJECT_ZIP_URL} target="_blank" rel="noopener noreferrer">
                       {t('downloadWindowsProjectZip')}

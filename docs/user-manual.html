@@ -293,8 +293,9 @@
             <li data-i18n="manual_native_windows_download">下載官方啟動檔：<a class="download-link" href="https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.bat">setup_and_run_ocr.bat</a>。若公司網路封鎖單檔，改下載<a class="download-link" href="https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip">完整專案 ZIP</a>。</li>
             <li data-i18n="manual_native_windows_security">Chrome 警告時，只有在網址確認為 raw.githubusercontent.com/hauchiehlin-ops/ocr 後才選擇保留；SmartScreen 出現時選「其他資訊」→「仍要執行」。</li>
             <li><span data-i18n="manual_native_windows_unblock">開啟「命令提示字元」，解除下載檔案封鎖並執行：</span><code class="command-block">cd /d "%USERPROFILE%\Downloads"<br>powershell -NoProfile -Command "Unblock-File -Path '.\setup_and_run_ocr.bat'"<br>setup_and_run_ocr.bat</code></li>
-            <li><span data-i18n="manual_native_windows_python">若提示找不到 Python，執行下列指令，完成後關閉並重開命令提示字元，再重新執行 BAT：</span><code class="command-block">winget install -e --id Python.Python.3.12</code></li>
+            <li><span data-i18n="manual_native_windows_python">新版 BAT 會自動偵測並安裝 Python、建立隔離環境、下載 OCR 元件及設定登入後自動啟動；只有安全軟體或公司網路攔截時才需使用下列手動備援指令：</span><code class="command-block">winget install -e --id Python.Python.3.12</code></li>
             <li><span data-i18n="manual_native_verify">等 BAT 顯示 Windows Native OCR is ready 後，可關閉命令視窗；若要手動驗證，另開命令提示字元執行：</span><code class="command-block">powershell -NoProfile -Command "Invoke-RestMethod http://127.0.0.1:5001/status"</code><span data-i18n="manual_native_windows_success">成功時應看到 status 為 running、engine 為 WindowsOCR。</span></li>
+            <li data-i18n="manual_native_windows_files">安裝成功後，「下載」資料夾中的 setup_and_run_ocr.bat 與舊版產生的 venv、logs、ocr_server.py、windows_ocr_helper.ps1 均可刪除；正式環境位於 %LOCALAPPDATA%\AI OCR Pro Editor\OCR Server，必須保留，否則自動啟動與辨識會失效。</li>
         </ol>
 
         <h3 data-i18n="manual_native_macos_steps">macOS 處理步驟</h3>

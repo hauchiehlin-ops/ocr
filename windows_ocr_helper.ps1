@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true, Position = 0)]
-  [ValidateSet("start", "wait", "popup", "download")]
+  [ValidateSet("start", "wait", "popup", "download", "autostart")]
   [string]$Mode,
 
   [Parameter(Position = 1)]
@@ -30,6 +30,27 @@ switch ($Mode) {
     exit 0
   }
 
+  "autostart" {
+    $root = (Get-Location).Path
+    $pythonw = Join-Path $root "venv\Scripts\pythonw.exe"
+    $server = Join-Path $root "ocr_server.py"
+    $startup = [Environment]::GetFolderPath("Startup")
+    $shortcutPath = Join-Path $startup "AI OCR Pro Editor OCR.lnk"
+
+    if (-not (Test-Path $pythonw)) {
+      throw "The OCR Python environment is missing."
+    }
+
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $pythonw
+    $shortcut.Arguments = '"' + $server + '"'
+    $shortcut.WorkingDirectory = $root
+    $shortcut.Description = "AI OCR Pro Editor Windows Native OCR"
+    $shortcut.Save()
+    exit 0
+  }
+
   "wait" {
     $deadline = (Get-Date).AddSeconds(90)
     while ((Get-Date) -lt $deadline) {
@@ -49,7 +70,7 @@ switch ($Mode) {
     # Keep this helper strictly ASCII. Windows PowerShell 5.1 interprets a
     # UTF-8 file without a BOM as the active ANSI code page, which can corrupt
     # non-ASCII string literals and cause a parser error before any mode runs.
-    $message = "Windows Native OCR is ready. Return to the web page and click Test Connection."
+    $message = "Windows Native OCR is installed and ready. Return to the web page and click Test Connection. The downloaded BAT file can now be deleted."
     try {
       $shell = New-Object -ComObject WScript.Shell
       $null = $shell.Popup($message, 0, "AI OCR Pro Editor", 64)
