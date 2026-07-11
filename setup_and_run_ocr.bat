@@ -8,9 +8,14 @@ echo   AI OCR Pro Editor - Windows Native OCR Server
 echo ============================================================
 echo.
 
+if exist "windows_ocr_helper.ps1" goto :server_source_ready
+echo [0/3] Downloading the Windows OCR helper component...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/windows_ocr_helper.ps1' -OutFile 'windows_ocr_helper.ps1'"
+if errorlevel 1 goto :download_failed
+
 if exist "ocr_server.py" goto :server_source_ready
 echo [0/3] Downloading the official OCR server component...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/ocr_server.py' -OutFile 'ocr_server.py'"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0windows_ocr_helper.ps1" download "ocr_server.py"
 if errorlevel 1 goto :download_failed
 
 :server_source_ready
@@ -63,12 +68,11 @@ echo.
 "venv\Scripts\python.exe" -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/status', timeout=2).read()" >nul 2>nul
 if not errorlevel 1 goto :server_ready
 
-if not exist "logs" mkdir "logs" >nul 2>nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $root=(Get-Location).Path; $py=Join-Path $root 'venv\Scripts\python.exe'; $log=Join-Path $root 'logs\ocr_server.log'; $err=Join-Path $root 'logs\ocr_server.err.log'; Start-Process -FilePath $py -ArgumentList 'ocr_server.py' -WorkingDirectory $root -RedirectStandardOutput $log -RedirectStandardError $err -WindowStyle Hidden"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0windows_ocr_helper.ps1" start
 if errorlevel 1 goto :server_failed
 
 echo Waiting for Windows OCR to become ready...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(90); $ok=$false; while((Get-Date) -lt $deadline){ try { $s=Invoke-RestMethod -UseBasicParsing 'http://127.0.0.1:5001/status' -TimeoutSec 3; if($s.status -eq 'running'){ $ok=$true; break } } catch {}; Start-Sleep -Seconds 1 }; if(-not $ok){ exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0windows_ocr_helper.ps1" wait
 if errorlevel 1 goto :server_failed
 
 :server_ready
@@ -79,7 +83,7 @@ echo   You can close this window now; OCR will keep running.
 echo   Return to the web page and click "Test Connection".
 echo ============================================================
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$message='Windows 原生 OCR 已啟動。您可以關閉這個視窗；OCR 會在背景繼續執行。請回到網頁點擊「測試連接」。'; try { $shell=New-Object -ComObject WScript.Shell; $null=$shell.Popup($message, 0, 'AI OCR Pro Editor', 64) } catch { Write-Host $message }"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0windows_ocr_helper.ps1" popup
 echo Press any key to close this setup window.
 pause >nul
 goto :end
