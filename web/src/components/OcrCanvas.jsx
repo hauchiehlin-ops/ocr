@@ -289,7 +289,7 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     const json = JSON.stringify(canvas.toJSON([
-      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'confidence',
+      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'cleanupExpandX', 'cleanupExpandY', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'confidence',
       'selectable', 'evented'
     ]));
 
@@ -570,7 +570,13 @@ const OcrCanvas = forwardRef(({
   // mistaken for the background), masks every pixel that deviates from that
   // estimate, and fills masked pixels directly with the estimate. The fill
   // never averages neighbouring pixels, so missed glyph remnants cannot smear.
-  const createTextPatch = (left, top, width, height) => {
+  const createTextPatch = (left, top, width, height, expandX = 0, expandY = 0) => {
+    // The OCR bbox positions replacement text; cleanup needs a separate,
+    // slightly wider target because native engines return glyph-tight boxes.
+    left -= expandX;
+    top -= expandY;
+    width += expandX * 2;
+    height += expandY * 2;
     const layout = imageLayout.current;
     const scale = layout.scale || 1;
     const imageWidth = Math.max(1, Math.abs(width / scale));
@@ -826,7 +832,9 @@ const OcrCanvas = forwardRef(({
       textbox.originalLeft, 
       textbox.originalTop, 
       textbox.originalWidth, 
-      textbox.originalHeight
+      textbox.originalHeight,
+      textbox.cleanupExpandX || 0,
+      textbox.cleanupExpandY || 0
     );
     if (!patchInfo) return false;
     
@@ -1074,6 +1082,8 @@ const OcrCanvas = forwardRef(({
             width: blockWidth,
             height: blockHeight,
             confidence: item.confidence ?? 0,
+            cleanupExpandX: Math.max(2, blockWidth * 0.06),
+            cleanupExpandY: Math.max(2, blockHeight * 0.22),
             id: `layer_${Date.now()}_${index}`
           });
         });
@@ -1155,7 +1165,9 @@ const OcrCanvas = forwardRef(({
           originalLeft: block.left,
           originalTop: block.top,
           originalWidth: block.width,
-          originalHeight: block.height
+          originalHeight: block.height,
+          cleanupExpandX: block.cleanupExpandX || 0,
+          cleanupExpandY: block.cleanupExpandY || 0
         });
 
         // Replace the source glyphs after the OCR box is accepted. The patch is
@@ -1243,7 +1255,9 @@ const OcrCanvas = forwardRef(({
         originalLeft: block.bbox.x,
         originalTop: block.bbox.y,
         originalWidth: block.bbox.w,
-        originalHeight: block.bbox.h
+        originalHeight: block.bbox.h,
+        cleanupExpandX: block.cleanupExpandX || 0,
+        cleanupExpandY: block.cleanupExpandY || 0
       }, { force: true });
     }
 
@@ -1275,7 +1289,9 @@ const OcrCanvas = forwardRef(({
         originalLeft: block.bbox.x,
         originalTop: block.bbox.y,
         originalWidth: block.bbox.w,
-        originalHeight: block.bbox.h
+        originalHeight: block.bbox.h,
+        cleanupExpandX: block.cleanupExpandX || 0,
+        cleanupExpandY: block.cleanupExpandY || 0
       });
       
       canvas.add(text);
@@ -1837,16 +1853,20 @@ const OcrCanvas = forwardRef(({
 
       normalizeCustomOcrItems(customResult).forEach((item, index) => {
         const [ymin, xmin, ymax, xmax] = item.bbox;
+        const nativeBoxWidth = ((xmax - xmin) / 1000) * layout.width;
+        const nativeBoxHeight = ((ymax - ymin) / 1000) * layout.height;
 
           blocks.push({
             id: `layer_${Date.now()}_${index}`,
             text: correctOcrText(item.text),
             confidence: item.confidence ?? 0,
+            cleanupExpandX: Math.max(2, nativeBoxWidth * 0.06),
+            cleanupExpandY: Math.max(2, nativeBoxHeight * 0.22),
           bbox: {
             x: layout.left + (xmin / 1000) * layout.width,
             y: layout.top + (ymin / 1000) * layout.height,
-            w: ((xmax - xmin) / 1000) * layout.width,
-            h: ((ymax - ymin) / 1000) * layout.height
+            w: nativeBoxWidth,
+            h: nativeBoxHeight
           }
         });
       });
