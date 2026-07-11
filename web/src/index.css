@@ -305,6 +305,70 @@ body {
   margin-top: 16px;
 }
 
+.font-style-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.font-size-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.font-size-control input {
+  width: 66px;
+  min-width: 0;
+  height: 32px;
+  padding: 4px 6px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: #111;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.font-size-control input:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.font-style-toggles,
+.font-apply-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.font-style-toggles .btn,
+.font-apply-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.font-style-toggles .btn {
+  padding-inline: 6px;
+}
+
+.font-apply-actions .btn {
+  padding: 7px 5px;
+  font-size: 11px;
+}
+
+.font-style-toggles .btn.active {
+  border-color: var(--accent-primary);
+  background: rgba(96, 205, 255, 0.18);
+  color: var(--accent-primary);
+}
+
 .ai-operation-row {
   display: flex;
   gap: 8px;

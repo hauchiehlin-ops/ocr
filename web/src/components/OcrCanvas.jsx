@@ -238,6 +238,9 @@ const OcrCanvas = forwardRef(({
   onHistoryStatusChange,
   onWorkerStatusChange,
   presetFontFamily = DEFAULT_OCR_FONT_FAMILY,
+  presetFontSize = 16,
+  presetBold = false,
+  presetItalic = false,
   forcePresetFont = false,
   ocrEngine = 'local',
   geminiApiKey = '',
@@ -1126,7 +1129,9 @@ const OcrCanvas = forwardRef(({
           left: block.left,
           top: block.top,
           width: block.width,
-          fontSize: regionalFontSize,
+          fontSize: forcePresetFont ? presetFontSize : regionalFontSize,
+          fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
+          fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
           fill: block.manual ? '#000000' : 'rgba(0,0,0,0.78)',
           backgroundColor: 'transparent',
           id: block.id,
@@ -1196,6 +1201,8 @@ const OcrCanvas = forwardRef(({
       text: obj.text,
       isBold: obj.fontWeight === 'bold',
       isItalic: obj.fontStyle === 'italic',
+      fontSize: obj.fontSize,
+      fontFamily: obj.fontFamily,
       fill: obj.isOcrReview ? '#000000' : obj.fill
     }));
     
@@ -1248,7 +1255,9 @@ const OcrCanvas = forwardRef(({
         left: block.bbox.x,
         top: block.bbox.y,
         width: block.bbox.w,
-        fontSize: calculatedFontSize,
+        fontSize: forcePresetFont ? presetFontSize : calculatedFontSize,
+        fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
+        fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
         // OCR output is a review/replacement layer. The patch removes only the
         // recognized glyph pixels; surrounding diagram content remains intact.
         // A slight transparency makes disagreements easy to spot.
@@ -1291,7 +1300,8 @@ const OcrCanvas = forwardRef(({
         isBold: activeObject.fontWeight === 'bold',
         isItalic: activeObject.fontStyle === 'italic',
         fill: activeObject.isOcrReview ? '#000000' : activeObject.fill,
-        fontFamily: activeObject.fontFamily
+        fontFamily: activeObject.fontFamily,
+        fontSize: activeObject.fontSize
       });
       syncLayers();
     }
@@ -1331,7 +1341,8 @@ const OcrCanvas = forwardRef(({
         isBold: activeObject.fontWeight === 'bold',
         isItalic: activeObject.fontStyle === 'italic',
         fill: activeObject.isOcrReview ? '#000000' : activeObject.fill,
-        fontFamily: activeObject.fontFamily
+        fontFamily: activeObject.fontFamily,
+        fontSize: activeObject.fontSize
       });
     }
   };
@@ -1411,7 +1422,9 @@ const OcrCanvas = forwardRef(({
       left,
       top,
       width,
-      fontSize: 16,
+      fontSize: forcePresetFont ? presetFontSize : 16,
+      fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
+      fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
       fill: '#000000',
       backgroundColor: 'transparent',
       id: `layer_${Date.now()}`,
@@ -1503,7 +1516,8 @@ const OcrCanvas = forwardRef(({
           isBold: obj.fontWeight === 'bold',
           isItalic: obj.fontStyle === 'italic',
           fill: obj.isOcrReview ? '#000000' : obj.fill,
-          fontFamily: obj.fontFamily
+          fontFamily: obj.fontFamily,
+          fontSize: obj.fontSize
         });
         canvas.renderAll();
       }
@@ -1523,16 +1537,21 @@ const OcrCanvas = forwardRef(({
         syncLayers();
       }
     },
-    applyDefaultFontToAll: (customFontStack) => {
+    applyTextStyleToAll: (styleObject) => {
       const canvas = fabricCanvas.current;
       if (!canvas) return 0;
-      const fontToUse = customFontStack || DEFAULT_OCR_FONT_FAMILY;
       let appliedCount = 0;
       isHistoryDisabled.current = true;
       canvas.getObjects().forEach(obj => {
         if (obj.type === 'textbox') {
-          obj.set({ fontFamily: fontToUse });
+          obj.set(styleObject);
           refreshTextboxMetrics(obj);
+          if (obj.isOcrReview) {
+            void materializeReviewLayer(obj).then(() => {
+              refreshTextboxMetrics(obj);
+              canvas.renderAll();
+            });
+          }
           appliedCount += 1;
         }
       });

@@ -310,6 +310,12 @@ function App() {
   // Preset Fonts
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
   const [englishFont, setEnglishFont] = useState('Century Gothic');
+  const [presetFontSize, setPresetFontSize] = useState(() => {
+    const saved = Number(localStorage.getItem('preset_font_size'));
+    return Number.isFinite(saved) && saved >= 6 && saved <= 200 ? saved : 16;
+  });
+  const [presetBold, setPresetBold] = useState(() => localStorage.getItem('preset_font_bold') === 'true');
+  const [presetItalic, setPresetItalic] = useState(() => localStorage.getItem('preset_font_italic') === 'true');
   const [forcePresetFont, setForcePresetFont] = useState(() => localStorage.getItem('force_preset_font') === 'true');
   const [availableFontFamilies, setAvailableFontFamilies] = useState(FALLBACK_FONT_FAMILIES);
   const [fontLoadStatus, setFontLoadStatus] = useState('');
@@ -504,10 +510,22 @@ function App() {
   const handleApplyDefaultFontAll = async () => {
      if (canvasRef.current) {
         await ensurePresetFontsReady();
-        const appliedCount = canvasRef.current.applyDefaultFontToAll(presetFontFamily);
+        const style = {
+          fontFamily: presetFontFamily,
+          fontSize: presetFontSize,
+          fontWeight: presetBold ? 'bold' : 'normal',
+          fontStyle: presetItalic ? 'italic' : 'normal'
+        };
+        const appliedCount = canvasRef.current.applyTextStyleToAll(style);
         setFontApplyStatus(appliedCount > 0 ? 'fontAppliedAll' : 'fontApplyNoSelection');
         if (selectedRegion && appliedCount > 0) {
-          setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
+          setSelectedRegion(prev => ({
+            ...prev,
+            fontFamily: presetFontFamily,
+            fontSize: presetFontSize,
+            isBold: presetBold,
+            isItalic: presetItalic
+          }));
         }
      }
   };
@@ -515,9 +533,21 @@ function App() {
   const handleApplyPresetFontSelected = async () => {
      if (canvasRef.current && selectedRegion) {
         await ensurePresetFontsReady();
-        const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, { fontFamily: presetFontFamily });
+        const style = {
+          fontFamily: presetFontFamily,
+          fontSize: presetFontSize,
+          fontWeight: presetBold ? 'bold' : 'normal',
+          fontStyle: presetItalic ? 'italic' : 'normal'
+        };
+        const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, style);
         if (applied) {
-          setSelectedRegion(prev => ({ ...prev, fontFamily: presetFontFamily }));
+          setSelectedRegion(prev => ({
+            ...prev,
+            fontFamily: presetFontFamily,
+            fontSize: presetFontSize,
+            isBold: presetBold,
+            isItalic: presetItalic
+          }));
           setFontApplyStatus('fontAppliedSelected');
         } else {
           setFontApplyStatus('fontApplyNoSelection');
@@ -747,6 +777,9 @@ function App() {
             onOcrProcessing={setIsOcrProcessing}
             onHistoryStatusChange={handleHistoryStatusChange}
             presetFontFamily={presetFontFamily}
+            presetFontSize={presetFontSize}
+            presetBold={presetBold}
+            presetItalic={presetItalic}
             forcePresetFont={forcePresetFont}
             ocrEngine={ocrEngine}
             geminiApiKey={geminiApiKey}
@@ -825,34 +858,6 @@ function App() {
             }}
             placeholder={selectedRegion ? t('placeholderActive') : t('placeholder')}
           />
-
-          <div className="panel-subtitle">{t('paragraph')}</div>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            <button
-              className={`btn btn-secondary ${selectedRegion?.isBold ? 'active' : ''}`}
-              style={{ flex: 1 }}
-              disabled={!selectedRegion}
-              onClick={() => {
-                 const isBold = !selectedRegion.isBold;
-                 setSelectedRegion(prev => ({...prev, isBold}));
-                 canvasRef.current?.updateRegionStyle(selectedRegion.id, { fontWeight: isBold ? 'bold' : 'normal' });
-              }}
-            >
-              {t('bold')}
-            </button>
-            <button
-              className={`btn btn-secondary ${selectedRegion?.isItalic ? 'active' : ''}`}
-              style={{ flex: 1 }}
-              disabled={!selectedRegion}
-              onClick={() => {
-                 const isItalic = !selectedRegion.isItalic;
-                 setSelectedRegion(prev => ({...prev, isItalic}));
-                 canvasRef.current?.updateRegionStyle(selectedRegion.id, { fontStyle: isItalic ? 'italic' : 'normal' });
-              }}
-            >
-              {t('italic')}
-            </button>
-          </div>
 
           <div className="panel-subtitle">{t('color')}</div>
           <div className="color-presets">
@@ -1228,6 +1233,75 @@ function App() {
               </select>
             </div>
 
+            <div className="font-style-editor">
+              <label className="font-size-control">
+                <span>{t('fontSize')}:</span>
+                <input
+                  type="number"
+                  min="6"
+                  max="200"
+                  step="1"
+                  inputMode="numeric"
+                  value={presetFontSize}
+                  onChange={(e) => {
+                    const next = Math.min(200, Math.max(6, Number(e.target.value) || 6));
+                    setPresetFontSize(next);
+                    localStorage.setItem('preset_font_size', String(next));
+                    setFontApplyStatus('');
+                  }}
+                  aria-label={t('fontSize')}
+                />
+                <span>px</span>
+              </label>
+              <div className="font-style-toggles">
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${presetBold ? 'active' : ''}`}
+                  aria-pressed={presetBold}
+                  onClick={() => {
+                    const next = !presetBold;
+                    setPresetBold(next);
+                    localStorage.setItem('preset_font_bold', String(next));
+                    setFontApplyStatus('');
+                  }}
+                >
+                  {t('bold')}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${presetItalic ? 'active' : ''}`}
+                  aria-pressed={presetItalic}
+                  onClick={() => {
+                    const next = !presetItalic;
+                    setPresetItalic(next);
+                    localStorage.setItem('preset_font_italic', String(next));
+                    setFontApplyStatus('');
+                  }}
+                >
+                  {t('italic')}
+                </button>
+              </div>
+            </div>
+
+            <div className="font-apply-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!selectedRegion}
+                onClick={handleApplyPresetFontSelected}
+              >
+                {t('applyStyleSelected')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!imageLoaded}
+                onClick={handleApplyDefaultFontAll}
+              >
+                {t('applyStyleAll')}
+              </button>
+            </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
               <input
                 type="checkbox"
@@ -1278,15 +1352,6 @@ function App() {
               </div>
             )}
           </div>
-
-          <button
-            className="btn btn-secondary"
-            style={{ width: '100%', marginBottom: '16px' }}
-            disabled={!imageLoaded}
-            onClick={handleApplyDefaultFontAll}
-          >
-            {t('applyFontAllPreset')}
-          </button>
 
           <h2 className="panel-title" style={{marginTop: '24px'}}>{t('aiOps')}</h2>
           <div className="ai-operation-row">
