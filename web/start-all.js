@@ -17,20 +17,25 @@ const serverPath = path.join(__dirname, '../ocr_server.py');
 const venvPython = process.platform === 'win32'
   ? path.join(__dirname, '../venv/Scripts/python.exe')
   : path.join(__dirname, '../venv/bin/python');
-const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3';
+const pythonCmd = fs.existsSync(venvPython)
+  ? venvPython
+  : process.platform === 'win32'
+    ? 'python'
+    : 'python3';
 
-if (pythonCmd === 'python3') {
-  console.log("⚠️  No venv found at ../venv — using system python3.");
-  console.log("   If the OCR server fails to install dependencies, run:");
-    console.log("   python3 -m venv venv && venv/bin/pip install flask flask-cors Pillow pyobjc-framework-Vision pyobjc-framework-Quartz\n");
+if (!fs.existsSync(venvPython)) {
+  console.log(`⚠️  No venv found at ../venv — using system ${pythonCmd}.`);
+  console.log("   For a reliable native OCR setup, run setup_and_run_ocr.bat on Windows");
+  console.log("   or setup_and_run_ocr.sh on macOS/Linux.\n");
 }
 
 // 1. Spawn Python OCR Server
 const ocrServer = spawn(pythonCmd, [serverPath], { stdio: 'inherit', shell: true });
 
-ocrServer.on('error', () => {
-  console.log("Failed to launch with venv/python3, trying python...");
-  spawn('python', [serverPath], { stdio: 'inherit', shell: true });
+ocrServer.on('exit', (code) => {
+  if (code && code !== 0) {
+    console.error(`OCR server exited with code ${code}. Run the platform setup script to install its dependencies.`);
+  }
 });
 
 // 2. Spawn Vite Web Server

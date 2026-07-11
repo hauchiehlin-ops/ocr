@@ -75,7 +75,8 @@ const english = {
   engineNeedsServerHint: 'Native OCR server is not connected: Regional OCR and Re-run OCR are unavailable until it connects (or switch to a fallback engine).',
   modelListLoading: 'Fetching the live model list from Google…',
   modelListLoaded: 'Live model list loaded',
-  modelListFailed: 'Could not fetch the live model list; using the built-in defaults.'
+  modelListFailed: 'Could not fetch the live model list; using the built-in defaults.',
+  windowsServerStartHint: 'Windows: run setup_and_run_ocr.bat, keep its window open, then click Test connection.'
 };
 
 const traditionalChinese = {
@@ -125,7 +126,8 @@ const traditionalChinese = {
   engineNeedsServerHint: '本地原生 OCR 伺服器未連接：「區域 OCR」與「重新辨識」暫時停用，待連接後恢復（或改用備援引擎）。',
   modelListLoading: '正在從 Google 取得線上可用模型清單…',
   modelListLoaded: '已取得線上可用模型清單',
-  modelListFailed: '無法取得線上模型清單，改用內建預設清單。'
+  modelListFailed: '無法取得線上模型清單，改用內建預設清單。',
+  windowsServerStartHint: 'Windows：請執行 setup_and_run_ocr.bat，保持視窗開啟，再按「測試連接」。'
 };
 
 // The native editor promises all eleven languages.  The dictionaries below

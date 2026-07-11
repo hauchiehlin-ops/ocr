@@ -23,6 +23,19 @@ except ImportError:
 app = Flask(__name__)
 CORS(app)
 
+
+@app.after_request
+def allow_browser_loopback_access(response):
+    """Allow Chrome/Edge HTTPS pages to reach this loopback OCR service.
+
+    Chromium's Private Network Access check can preflight localhost requests
+    even when ordinary CORS is already enabled. Without this response header
+    Windows Chrome reports the server as unavailable although Python is up.
+    """
+    response.headers["Access-Control-Allow-Private-Network"] = "true"
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 IS_MACOS = platform.system() == "Darwin"
 
 # ---------------------------------------------------------------------------
@@ -354,5 +367,5 @@ def perform_ocr():
 
 
 if __name__ == '__main__':
-    print(f"Starting Local OCR server ({ACTIVE_ENGINE}) on http://localhost:5001")
-    app.run(host='0.0.0.0', port=5001, debug=False)
+    print(f"Starting Local OCR server ({ACTIVE_ENGINE}) on http://127.0.0.1:5001")
+    app.run(host='127.0.0.1', port=5001, debug=False)

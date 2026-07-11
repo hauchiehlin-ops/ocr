@@ -247,7 +247,7 @@ const OcrCanvas = forwardRef(({
   geminiApiKey = '',
   geminiModel = 'gemini-3.5-flash',
   geminiApiUrl = 'https://generativelanguage.googleapis.com',
-  localServerUrl = 'http://localhost:5001/ocr',
+  localServerUrl = 'http://127.0.0.1:5001/ocr',
   t = (key) => key
 }, ref) => {
   const containerRef = useRef(null);

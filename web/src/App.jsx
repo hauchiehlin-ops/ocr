@@ -110,9 +110,9 @@ function App() {
   const [localServerUrl, setLocalServerUrl] = useState(() => {
     const saved = localStorage.getItem('local_server_url');
     // Migrate the old default: port 5000 is occupied by macOS AirPlay Receiver
-    if (!saved || saved === 'http://localhost:5000/ocr') {
-      localStorage.setItem('local_server_url', 'http://localhost:5001/ocr');
-      return 'http://localhost:5001/ocr';
+    if (!saved || saved === 'http://localhost:5000/ocr' || saved === 'http://localhost:5001/ocr') {
+      localStorage.setItem('local_server_url', 'http://127.0.0.1:5001/ocr');
+      return 'http://127.0.0.1:5001/ocr';
     }
     return saved;
   });
@@ -195,6 +195,7 @@ function App() {
   const [localServerStatus, setLocalServerStatus] = useState(() => nativeOcrAvailableAtStartup ? 'connected' : 'disconnected');
   const [localServerEngine, setLocalServerEngine] = useState(() => nativeOcrAvailableAtStartup ? getNativeOcrEngineLabel() : '');
   const [mobileNativeOcrAvailable] = useState(nativeOcrAvailableAtStartup);
+  const isWindowsBrowser = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent);
 
   const testLocalServerConnection = async () => {
     if (mobileNativeOcrAvailable) {
@@ -840,7 +841,7 @@ function App() {
                     type="text"
                     value={localServerUrl}
                     onChange={(e) => handleLocalServerUrlChange(e.target.value)}
-                    placeholder="http://localhost:5001/ocr"
+                    placeholder="http://127.0.0.1:5001/ocr"
                     style={{
                       background: '#111111',
                       color: '#fff',
@@ -888,6 +889,9 @@ function App() {
                   {t('testConnection')}
                 </button>
               </div>
+              {isWindowsBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
+                <div className="native-ocr-warning">{t('windowsServerStartHint')}</div>
+              )}
 
               <details className="native-ocr-purpose">
                 <summary>{mobileNativeOcrAvailable ? t('onDeviceOcrPurpose') : t('localServerPurpose')}</summary>
