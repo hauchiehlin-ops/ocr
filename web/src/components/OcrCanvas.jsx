@@ -613,18 +613,31 @@ const OcrCanvas = forwardRef(({
     const targetRight = geometry.imgRight - geometry.patchLeft;
     const targetBottom = geometry.imgBottom - geometry.patchTop;
 
-    const channelMedian = (values) => {
-      if (!values.length) return null;
-      values.sort((a, b) => a - b);
-      return values[values.length >> 1];
-    };
-    const medianColor = (indices) => {
+    // Pick a real, jointly occurring RGB cluster instead of taking independent
+    // channel medians. Independent medians can synthesize a grey that never
+    // existed in the source (especially around icons and coloured cards).
+    const dominantColor = (indices) => {
       if (!indices.length) return null;
-      return [
-        channelMedian(indices.map(i => source[i])),
-        channelMedian(indices.map(i => source[i + 1])),
-        channelMedian(indices.map(i => source[i + 2]))
-      ];
+      const buckets = new Map();
+      for (const index of indices) {
+        // 16-level buckets absorb JPEG/anti-alias noise without merging visibly
+        // different background colours. Accumulate the original values so the
+        // returned colour is not itself quantized.
+        const key = `${source[index] >> 4},${source[index + 1] >> 4},${source[index + 2] >> 4}`;
+        const bucket = buckets.get(key) || { count: 0, r: 0, g: 0, b: 0 };
+        bucket.count += 1;
+        bucket.r += source[index];
+        bucket.g += source[index + 1];
+        bucket.b += source[index + 2];
+        buckets.set(key, bucket);
+      }
+      let winner = null;
+      for (const bucket of buckets.values()) {
+        if (!winner || bucket.count > winner.count) winner = bucket;
+      }
+      return winner
+        ? [winner.r / winner.count, winner.g / winner.count, winner.b / winner.count]
+        : null;
     };
 
     // Collect robust bands outside the destructive target. Earlier code built
@@ -639,7 +652,7 @@ const OcrCanvas = forwardRef(({
       }
       return indices;
     };
-    const globalRing = medianColor([
+    const globalRing = dominantColor([
       ...collectBand(0, patchWidth, 0, targetTop),
       ...collectBand(0, patchWidth, targetBottom, patchHeight),
       ...collectBand(0, targetLeft, targetTop, targetBottom),
@@ -647,36 +660,10 @@ const OcrCanvas = forwardRef(({
     ]);
     if (!globalRing) return null;
 
-    const topBand = medianColor(collectBand(0, patchWidth, 0, targetTop));
-    const bottomBand = medianColor(collectBand(0, patchWidth, targetBottom, patchHeight));
-    const leftBand = medianColor(collectBand(0, targetLeft, targetTop, targetBottom));
-    const rightBand = medianColor(collectBand(targetRight, patchWidth, targetTop, targetBottom));
-
-    // Interpolate only low-frequency surfaces between whole-edge medians.
-    // Isolated letters, icons and connector crossings are outvoted and can no
-    // longer generate glyph-shaped or column-shaped fill artefacts.
-    const boxWidth = Math.max(1, targetRight - targetLeft);
-    const boxHeight = Math.max(1, targetBottom - targetTop);
-    const verticalWeight = 1 / (boxHeight * boxHeight);
-    const horizontalWeight = 1 / (boxWidth * boxWidth);
-    const estimateChannel = (x, y, channel) => {
-      const ty = Math.max(0, Math.min(1, (y - targetTop + 1) / (boxHeight + 1)));
-      const tx = Math.max(0, Math.min(1, (x - targetLeft + 1) / (boxWidth + 1)));
-      let vertical = null;
-      if (topBand && bottomBand) vertical = topBand[channel] * (1 - ty) + bottomBand[channel] * ty;
-      else if (topBand) vertical = topBand[channel];
-      else if (bottomBand) vertical = bottomBand[channel];
-      let horizontal = null;
-      if (leftBand && rightBand) horizontal = leftBand[channel] * (1 - tx) + rightBand[channel] * tx;
-      else if (leftBand) horizontal = leftBand[channel];
-      else if (rightBand) horizontal = rightBand[channel];
-      if (vertical !== null && horizontal !== null) {
-        return (vertical * verticalWeight + horizontal * horizontalWeight) / (verticalWeight + horizontalWeight);
-      }
-      if (vertical !== null) return vertical;
-      if (horizontal !== null) return horizontal;
-      return globalRing[channel];
-    };
+    // The winning joint colour is deliberately constant. Only glyph-mask
+    // pixels are replaced, so surrounding gradients remain untouched; using a
+    // constant real source colour prevents broad synthetic grey rectangles.
+    const estimateChannel = (_x, _y, channel) => globalRing[channel];
 
     // Mask every pixel inside the box that deviates from the local background
     // estimate; a moderate threshold plus dilation captures anti-alias halos.
