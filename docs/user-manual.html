@@ -197,6 +197,12 @@
             color: var(--text-muted);
         }
 
+        .platform-table { width: 100%; margin: 18px 0 24px; border-collapse: collapse; color: var(--text-muted); }
+        .platform-table th, .platform-table td { padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.1); text-align: left; vertical-align: top; }
+        .platform-table th { color: var(--text-color); }
+        .command-block { display: block; overflow-x: auto; margin: 7px 0 12px; padding: 10px 12px; border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 8px; background: #080b12; color: #cffafe; font: 13px/1.5 Consolas, "Courier New", monospace; white-space: pre-wrap; user-select: all; }
+        .download-link { color: #67e8f9; font-weight: 700; }
+
         footer {
             text-align: center;
             padding: 48px;
@@ -269,6 +275,36 @@
             <li><span class="tool-icon">🔄</span><span data-i18n="manual_start_rerun">切換 OCR 設定或調整圖片後，按 <span class="button-token primary">🔄 重新辨識</span> 會套用目前引擎重新產生文字圖層。</span></li>
             <li><span class="tool-icon">▸</span><span data-i18n="manual_start_details">右側 <span class="button-token">本地伺服器的用途</span> 是可收合面板；點擊 <span class="button-token">▸/▾</span> 可展開或收起，節省版面空間。</span></li>
         </ul>
+
+        <h2 data-i18n="manual_h2_native_troubleshooting">2.1 原生 OCR 無法連線：平台判斷與完整排除</h2>
+        <p data-i18n="manual_native_mode_intro">先確認使用模式：Windows/macOS 桌面瀏覽器需要本機 OCR 伺服器；打包後的 iOS/Android App 直接呼叫裝置 OCR，不使用 localhost；手機瀏覽器無法啟動原生 OCR 伺服器，請改用 Gemini/Tesseract 或安裝打包 App。</p>
+        <table class="platform-table">
+            <thead><tr><th data-i18n="manual_native_platform">平台</th><th data-i18n="manual_native_connection">正確連線方式</th></tr></thead>
+            <tbody>
+                <tr><td>Windows Chrome / Edge</td><td data-i18n="manual_native_windows_mode">執行 setup_and_run_ocr.bat，等出現已啟動提示後回網頁按「測試連接」；啟動完成後可關閉命令視窗。</td></tr>
+                <tr><td>macOS Chrome / Safari</td><td data-i18n="manual_native_macos_mode">在專案資料夾執行 setup_and_run_ocr.sh，保持終端機開啟，再按「測試連接」。</td></tr>
+                <tr><td>iOS / Android App</td><td data-i18n="manual_native_mobile_app_mode">必須是 Capacitor 打包版本，直接使用 iOS Vision / Android ML Kit，不需要也不應填 localhost。</td></tr>
+                <tr><td data-i18n="manual_native_mobile_browser">手機瀏覽器</td><td data-i18n="manual_native_mobile_browser_mode">無法直接使用作業系統原生 OCR；請使用 Gemini/Tesseract，或安裝打包 App。</td></tr>
+            </tbody>
+        </table>
+
+        <h3 data-i18n="manual_native_windows_steps">Windows 零基礎處理步驟</h3>
+        <ol>
+            <li data-i18n="manual_native_windows_download">下載官方啟動檔：<a class="download-link" href="https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.bat">setup_and_run_ocr.bat</a>。若公司網路封鎖單檔，改下載<a class="download-link" href="https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip">完整專案 ZIP</a>。</li>
+            <li data-i18n="manual_native_windows_security">Chrome 警告時，只有在網址確認為 raw.githubusercontent.com/hauchiehlin-ops/ocr 後才選擇保留；SmartScreen 出現時選「其他資訊」→「仍要執行」。</li>
+            <li><span data-i18n="manual_native_windows_unblock">開啟「命令提示字元」，解除下載檔案封鎖並執行：</span><code class="command-block">cd /d "%USERPROFILE%\Downloads"<br>powershell -NoProfile -Command "Unblock-File -Path '.\setup_and_run_ocr.bat'"<br>setup_and_run_ocr.bat</code></li>
+            <li><span data-i18n="manual_native_windows_python">若提示找不到 Python，執行下列指令，完成後關閉並重開命令提示字元，再重新執行 BAT：</span><code class="command-block">winget install -e --id Python.Python.3.12</code></li>
+            <li><span data-i18n="manual_native_verify">等 BAT 顯示 Windows Native OCR is ready 後，可關閉命令視窗；若要手動驗證，另開命令提示字元執行：</span><code class="command-block">powershell -NoProfile -Command "Invoke-RestMethod http://127.0.0.1:5001/status"</code><span data-i18n="manual_native_windows_success">成功時應看到 status 為 running、engine 為 WindowsOCR。</span></li>
+        </ol>
+
+        <h3 data-i18n="manual_native_macos_steps">macOS 處理步驟</h3>
+        <p data-i18n="manual_native_macos_command_intro">開啟「終端機」、進入專案資料夾並執行；保持終端機視窗開啟：</p>
+        <code class="command-block">cd /path/to/OCR<br>chmod +x setup_and_run_ocr.sh<br>./setup_and_run_ocr.sh<br>curl http://127.0.0.1:5001/status</code>
+        <p data-i18n="manual_native_macos_success">成功時會看到 engine 為 AppleVision。若 5001 已被占用，先關閉舊的 OCR 伺服器視窗再重試。</p>
+
+        <h3 data-i18n="manual_native_mobile_steps">iOS / Android App 處理步驟</h3>
+        <p data-i18n="manual_native_mobile_steps_desc">App 顯示原生 OCR 不可用時，先確認安裝的是最新 Capacitor 打包版本而不是手機瀏覽器捷徑；重新執行 Web build 與 cap sync 後再以 Xcode/Android Studio 建置安裝。iOS 必須註冊 NativeOcrPlugin 並使用 Vision；Android 必須包含 ML Kit 中文文字辨識依賴。重新安裝後仍不可用時，先切換 Gemini/Tesseract，並將裝置型號、OS 版本與錯誤畫面提供給維護者。</p>
+        <div class="note-box" data-i18n="manual_native_security_note">安全提醒：只從本專案官方 GitHub 下載 BAT/ZIP。localhost 服務僅監聽 127.0.0.1，不需開放 Windows 防火牆公用網路；請勿為了解決連線而停用防毒或整體防火牆。</div>
 
         <h2 data-i18n="manual_h2_edit">3. 編輯已辨識文字</h2>
         <ul class="flow-list">

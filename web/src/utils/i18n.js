@@ -76,15 +76,17 @@ const english = {
   modelListLoading: 'Fetching the live model list from Google…',
   modelListLoaded: 'Live model list loaded',
   modelListFailed: 'Could not fetch the live model list; using the built-in defaults.',
-  windowsServerStartHint: 'Windows: download and run setup_and_run_ocr.bat, keep its window open, then click Test connection.',
+  windowsServerStartHint: 'Windows: download setup_and_run_ocr.bat, open it once, wait for the ready prompt, then click Test connection. After it is ready, the Command Prompt window can be closed.',
   downloadWindowsOcrStarter: 'Download the Windows OCR installer/startup file',
+  windowsStarterDownloadedHint: 'The Windows OCR starter has been downloaded. Open setup_and_run_ocr.bat from Downloads. After the ready prompt appears, return here and click Test Connection.',
   windowsTroubleshootingTitle: 'Blocked or still offline? Complete beginner steps',
   windowsTroubleshootingDownload: 'If Chrome warns about the download, open Downloads, choose Keep only after confirming the source is raw.githubusercontent.com/hauchiehlin-ops/ocr.',
   windowsTroubleshootingUnblock: 'Open Command Prompt, then copy and run these two commands to enter Downloads and unblock the official file:',
   windowsTroubleshootingRun: 'In the same Command Prompt, start the installer:',
+  windowsTroubleshootingReady: 'Wait until the prompt says Windows Native OCR is ready, then return to this page and click Test Connection.',
   windowsTroubleshootingPython: 'If it says Python is missing, install Python with this command, close and reopen Command Prompt, then run the BAT file again:',
   windowsTroubleshootingVerify: 'When the server window says it is running, open a second Command Prompt and verify it. A successful result contains status running and engine WindowsOCR:',
-  windowsTroubleshootingKeepOpen: 'Keep the OCR server window open. Return to this page and click Test connection. Closing that window stops native OCR.',
+  windowsTroubleshootingBackground: 'After the ready prompt appears, the OCR server keeps running in the background. Closing the setup window will not disconnect OCR.',
   downloadWindowsProjectZip: 'Corporate network blocks the single file? Download the complete official project ZIP.'
 };
 
@@ -136,15 +138,17 @@ const traditionalChinese = {
   modelListLoading: '正在從 Google 取得線上可用模型清單…',
   modelListLoaded: '已取得線上可用模型清單',
   modelListFailed: '無法取得線上模型清單，改用內建預設清單。',
-  windowsServerStartHint: 'Windows：請下載並執行 setup_and_run_ocr.bat，保持視窗開啟，再按「測試連接」。',
+  windowsServerStartHint: 'Windows：請下載 setup_and_run_ocr.bat，開啟執行一次，等出現已啟動提示後回來按「測試連接」。啟動完成後可關閉命令視窗。',
   downloadWindowsOcrStarter: '下載 Windows OCR 安裝／啟動檔',
+  windowsStarterDownloadedHint: 'Windows OCR 啟動檔已下載。請從「下載」資料夾開啟 setup_and_run_ocr.bat；看到已啟動提示後，回到本頁按「測試連接」。',
   windowsTroubleshootingTitle: '被安全機制擋下或仍無法連線？零基礎完整步驟',
   windowsTroubleshootingDownload: '若 Chrome 警告檔案有風險，請開啟「下載」，確認來源為 raw.githubusercontent.com/hauchiehlin-ops/ocr 後才選擇「保留」。',
   windowsTroubleshootingUnblock: '開啟「命令提示字元」，複製並依序執行以下兩行，進入下載資料夾並解除官方檔案封鎖：',
   windowsTroubleshootingRun: '在同一個命令提示字元視窗執行安裝／啟動檔：',
+  windowsTroubleshootingReady: '等到畫面提示 Windows Native OCR 已啟動，再回到本頁按「測試連接」。',
   windowsTroubleshootingPython: '若顯示找不到 Python，複製以下指令安裝；完成後關閉並重開命令提示字元，再執行 BAT 檔：',
   windowsTroubleshootingVerify: '當伺服器視窗顯示正在執行，再開一個命令提示字元驗證。成功時會看到 status running 與 engine WindowsOCR：',
-  windowsTroubleshootingKeepOpen: '保持 OCR 伺服器視窗開啟，回到本頁按「測試連接」。關閉該視窗就會停止原生 OCR。',
+  windowsTroubleshootingBackground: '出現已啟動提示後，OCR 會在背景持續執行；關閉這個安裝／啟動視窗不會中斷原生 OCR。',
   downloadWindowsProjectZip: '公司網路擋下單檔下載？改下載完整官方專案 ZIP。'
 };
 

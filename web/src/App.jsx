@@ -242,6 +242,7 @@ function App() {
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      window.alert(t('windowsStarterDownloadedHint'));
     } catch (error) {
       console.warn('Direct Windows OCR starter download failed; opening the official source.', error);
       window.open(WINDOWS_OCR_STARTER_URL, '_blank', 'noopener,noreferrer');
@@ -990,6 +991,7 @@ function App() {
                         {t('windowsTroubleshootingRun')}
                         <code>setup_and_run_ocr.bat</code>
                       </li>
+                      <li>{t('windowsTroubleshootingReady')}</li>
                       <li>
                         {t('windowsTroubleshootingPython')}
                         <code>winget install -e --id Python.Python.3.12</code>
@@ -998,7 +1000,7 @@ function App() {
                         {t('windowsTroubleshootingVerify')}
                         <code>powershell -NoProfile -Command "Invoke-RestMethod http://127.0.0.1:5001/status"</code>
                       </li>
-                      <li>{t('windowsTroubleshootingKeepOpen')}</li>
+                      <li>{t('windowsTroubleshootingBackground')}</li>
                     </ol>
                     <a href={WINDOWS_PROJECT_ZIP_URL} target="_blank" rel="noopener noreferrer">
                       {t('downloadWindowsProjectZip')}

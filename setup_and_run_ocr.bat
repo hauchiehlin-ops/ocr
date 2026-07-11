@@ -50,12 +50,28 @@ if errorlevel 1 goto :setup_failed
 if errorlevel 1 goto :setup_failed
 
 :run_server
-echo [3/3] Starting Windows OCR on http://127.0.0.1:5001
-echo Keep this window open while using the web editor.
-echo Press Ctrl+C to stop the server.
+echo [3/3] Starting Windows OCR in the background on http://127.0.0.1:5001
 echo.
-"venv\Scripts\python.exe" ocr_server.py
+"venv\Scripts\python.exe" -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5001/status', timeout=2).read()" >nul 2>nul
+if not errorlevel 1 goto :server_ready
+
+if not exist "logs" mkdir "logs" >nul 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $root=(Get-Location).Path; $py=Join-Path $root 'venv\Scripts\python.exe'; $log=Join-Path $root 'logs\ocr_server.log'; $err=Join-Path $root 'logs\ocr_server.err.log'; Start-Process -FilePath $py -ArgumentList 'ocr_server.py' -WorkingDirectory $root -RedirectStandardOutput $log -RedirectStandardError $err -WindowStyle Hidden"
 if errorlevel 1 goto :server_failed
+
+echo Waiting for Windows OCR to become ready...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(90); $ok=$false; while((Get-Date) -lt $deadline){ try { $s=Invoke-RestMethod -UseBasicParsing 'http://127.0.0.1:5001/status' -TimeoutSec 3; if($s.status -eq 'running'){ $ok=$true; break } } catch {}; Start-Sleep -Seconds 1 }; if(-not $ok){ exit 1 }"
+if errorlevel 1 goto :server_failed
+
+:server_ready
+echo.
+echo ============================================================
+echo   Windows Native OCR is ready.
+echo   You can close this window now; OCR will keep running.
+echo   Return to the web page and click "Test Connection".
+echo ============================================================
+echo.
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$message='Windows 原生 OCR 已啟動。您可以關閉這個視窗；OCR 會在背景繼續執行。請回到網頁點擊「測試連接」。'; try { $shell=New-Object -ComObject WScript.Shell; $null=$shell.Popup($message, 0, 'AI OCR Pro Editor', 64) } catch { Write-Host $message }"
 goto :end
 
 :python_missing
@@ -89,7 +105,9 @@ echo Check the messages above and verify that this PC can access PyPI.
 goto :fail
 
 :server_failed
-echo ERROR: The OCR server stopped unexpectedly.
+echo ERROR: The OCR server could not be started or did not become ready in time.
+echo.
+echo Check logs\ocr_server.err.log for details.
 echo If port 5001 is already in use, close the other OCR server and retry.
 
 :fail
