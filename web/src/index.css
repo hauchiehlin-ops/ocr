@@ -487,6 +487,26 @@ body {
   color: #FFB86C;
 }
 
+.windows-ocr-download {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  margin-top: 7px;
+  padding: 5px 9px;
+  border: 1px solid rgba(96, 205, 255, 0.45);
+  border-radius: 4px;
+  background: rgba(96, 205, 255, 0.1);
+  color: #60CDFF;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.windows-ocr-download:hover,
+.windows-ocr-download:focus-visible {
+  background: rgba(96, 205, 255, 0.2);
+  outline: none;
+}
+
 .native-ocr-current {
   margin-top: 5px;
   color: #FBBF24;

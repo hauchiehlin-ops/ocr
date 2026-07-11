@@ -76,7 +76,8 @@ const english = {
   modelListLoading: 'Fetching the live model list from Google…',
   modelListLoaded: 'Live model list loaded',
   modelListFailed: 'Could not fetch the live model list; using the built-in defaults.',
-  windowsServerStartHint: 'Windows: run setup_and_run_ocr.bat, keep its window open, then click Test connection.'
+  windowsServerStartHint: 'Windows: download and run setup_and_run_ocr.bat, keep its window open, then click Test connection.',
+  downloadWindowsOcrStarter: 'Download the Windows OCR installer/startup file'
 };
 
 const traditionalChinese = {
@@ -127,7 +128,8 @@ const traditionalChinese = {
   modelListLoading: '正在從 Google 取得線上可用模型清單…',
   modelListLoaded: '已取得線上可用模型清單',
   modelListFailed: '無法取得線上模型清單，改用內建預設清單。',
-  windowsServerStartHint: 'Windows：請執行 setup_and_run_ocr.bat，保持視窗開啟，再按「測試連接」。'
+  windowsServerStartHint: 'Windows：請下載並執行 setup_and_run_ocr.bat，保持視窗開啟，再按「測試連接」。',
+  downloadWindowsOcrStarter: '下載 Windows OCR 安裝／啟動檔'
 };
 
 // The native editor promises all eleven languages.  The dictionaries below

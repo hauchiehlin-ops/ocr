@@ -8,6 +8,12 @@ echo   AI OCR Pro Editor - Windows Native OCR Server
 echo ============================================================
 echo.
 
+if exist "ocr_server.py" goto :server_source_ready
+echo [0/3] Downloading the official OCR server component...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/ocr_server.py' -OutFile 'ocr_server.py'"
+if errorlevel 1 goto :download_failed
+
+:server_source_ready
 if exist "venv\Scripts\python.exe" goto :run_server
 
 echo [1/3] Preparing an isolated Python environment...
@@ -40,6 +46,11 @@ goto :end
 echo ERROR: Python 3 was not found.
 echo Install Python from https://www.python.org/downloads/windows/
 echo IMPORTANT: enable "Add python.exe to PATH" in the installer.
+goto :fail
+
+:download_failed
+echo ERROR: Unable to download ocr_server.py from the official GitHub repository.
+echo Check the network connection or download the complete project instead.
 goto :fail
 
 :setup_failed

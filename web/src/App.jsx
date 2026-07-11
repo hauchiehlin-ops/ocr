@@ -68,6 +68,7 @@ const SIMPLIFIED_CHINESE_FONT_LABELS = {
   'Noto Serif SC': 'Noto Serif 简体中文'
 };
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
+const WINDOWS_OCR_STARTER_URL = 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.bat';
 // Shown until ListModels succeeds (or when it fails: offline, invalid key…).
 // Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
 const STATIC_GEMINI_MODEL_OPTIONS = [
@@ -944,7 +945,18 @@ function App() {
                 </button>
               </div>
               {isWindowsBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
-                <div className="native-ocr-warning">{t('windowsServerStartHint')}</div>
+                <div className="native-ocr-warning">
+                  <div>{t('windowsServerStartHint')}</div>
+                  <a
+                    className="windows-ocr-download"
+                    href={WINDOWS_OCR_STARTER_URL}
+                    download="setup_and_run_ocr.bat"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    ⬇ {t('downloadWindowsOcrStarter')}
+                  </a>
+                </div>
               )}
 
               <details className="native-ocr-purpose">
