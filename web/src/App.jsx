@@ -70,6 +70,7 @@ const SIMPLIFIED_CHINESE_FONT_LABELS = {
 const OCR_ENGINE_CONFIG_VERSION = 'native-primary-v1';
 const WINDOWS_OCR_STARTER_URL = 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.bat';
 const MACOS_OCR_INSTALLER_URL = 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.sh';
+const MACOS_OCR_INSTALL_COMMAND = `OCR_SETUP="$(mktemp -t ai_ocr_setup).sh" && curl -fL "${MACOS_OCR_INSTALLER_URL}" -o "$OCR_SETUP" && /bin/bash "$OCR_SETUP"`;
 const WINDOWS_PROJECT_ZIP_URL = 'https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip';
 // Shown until ListModels succeeds (or when it fails: offline, invalid key…).
 // Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
@@ -1061,7 +1062,7 @@ function App() {
                       <li>{t('macTroubleshootingDownload')}</li>
                       <li>
                         {t('macTroubleshootingRun')}
-                        <code>bash "$HOME/Downloads/setup_and_run_ocr.sh"</code>
+                        <code>{MACOS_OCR_INSTALL_COMMAND}</code>
                       </li>
                       <li>{t('macTroubleshootingPassword')}</li>
                       <li>{t('macTroubleshootingReady')}</li>
