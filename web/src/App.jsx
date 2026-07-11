@@ -253,23 +253,26 @@ function App() {
     }
   };
 
-  const handleDownloadMacOcrInstaller = async () => {
+  const handleCopyMacOcrInstallCommand = async () => {
     try {
-      const response = await fetch(MACOS_OCR_INSTALLER_URL, { cache: 'no-store' });
-      if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-      const blob = await response.blob();
-      const objectUrl = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = 'setup_and_run_ocr.sh';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-      window.alert(t('macInstallerDownloadedHint'));
+      if (navigator.clipboard?.writeText && window.isSecureContext) {
+        await navigator.clipboard.writeText(MACOS_OCR_INSTALL_COMMAND);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = MACOS_OCR_INSTALL_COMMAND;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const copied = document.execCommand('copy');
+        textarea.remove();
+        if (!copied) throw new Error('Clipboard copy was rejected');
+      }
+      window.alert(t('macCommandCopiedHint'));
     } catch (error) {
-      console.warn('Direct macOS OCR installer download failed; opening the official source.', error);
-      window.open(MACOS_OCR_INSTALLER_URL, '_blank', 'noopener,noreferrer');
+      console.warn('Could not copy the macOS OCR install command.', error);
+      window.prompt(t('macCommandCopyFallback'), MACOS_OCR_INSTALL_COMMAND);
     }
   };
 
@@ -1071,9 +1074,9 @@ function App() {
                   <button
                     type="button"
                     className="windows-ocr-download"
-                    onClick={handleDownloadMacOcrInstaller}
+                    onClick={handleCopyMacOcrInstallCommand}
                   >
-                    ⬇ {t('downloadMacOcrInstaller')}
+                    📋 {t('copyMacOcrInstallCommand')}
                   </button>
                   <details className="windows-ocr-help">
                     <summary>{t('macTroubleshootingTitle')}</summary>
