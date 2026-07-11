@@ -67,8 +67,9 @@ function App() {
   const [zoom, setZoom] = useState(1);
 
   // Panel visible states to align with View Menu in WPF
-  const [showLeftPanel, setShowLeftPanel] = useState(true);
-  const [showRightPanel, setShowRightPanel] = useState(true);
+  const compactLayoutAtStartup = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 1024px)').matches;
+  const [showLeftPanel, setShowLeftPanel] = useState(!compactLayoutAtStartup);
+  const [showRightPanel, setShowRightPanel] = useState(!compactLayoutAtStartup);
 
   // Settings States. Keep the selected language between visits and use the
   // same eleven-language list as the native editor.
@@ -524,7 +525,7 @@ function App() {
           <div className="menu-bar">
             {/* File Menu */}
             <div className="menu-container">
-              <div className="menu-item">{t('file')}</div>
+              <div className="menu-item" tabIndex={0}>{t('file')}</div>
               <div className="dropdown-menu">
                 <div className="dropdown-item" onClick={triggerImageUpload}>{t('loadImage')}</div>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleCloseImage : null}>{t('closeImage')}</div>
@@ -537,7 +538,7 @@ function App() {
 
             {/* Edit Menu */}
             <div className="menu-container">
-              <div className="menu-item">{t('edit')}</div>
+              <div className="menu-item" tabIndex={0}>{t('edit')}</div>
               <div className="dropdown-menu">
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={handleInsertText}>{t('insertText')}</div>
                 <div className="dropdown-separator"></div>
@@ -550,13 +551,19 @@ function App() {
 
             {/* View Menu */}
             <div className="menu-container">
-              <div className="menu-item">{t('view')}</div>
+              <div className="menu-item" tabIndex={0}>{t('view')}</div>
               <div className="dropdown-menu">
-                <div className="dropdown-item" onClick={() => setShowLeftPanel(!showLeftPanel)}>
+                <div className="dropdown-item" onClick={() => {
+                  setShowLeftPanel(!showLeftPanel);
+                  if (!showLeftPanel && compactLayoutAtStartup) setShowRightPanel(false);
+                }}>
                   <span>{t('showLeft')}</span>
                   <span>{showLeftPanel ? '✓' : ''}</span>
                 </div>
-                <div className="dropdown-item" onClick={() => setShowRightPanel(!showRightPanel)}>
+                <div className="dropdown-item" onClick={() => {
+                  setShowRightPanel(!showRightPanel);
+                  if (!showRightPanel && compactLayoutAtStartup) setShowLeftPanel(false);
+                }}>
                   <span>{t('showRight')}</span>
                   <span>{showRightPanel ? '✓' : ''}</span>
                 </div>

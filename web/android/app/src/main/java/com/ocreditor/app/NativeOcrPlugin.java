@@ -47,8 +47,17 @@ public class NativeOcrPlugin extends Plugin {
 
         InputImage inputImage = InputImage.fromBitmap(bitmap, 0);
         recognizer.process(inputImage)
-            .addOnSuccessListener(text -> call.resolve(buildResponse(text, bitmap.getWidth(), bitmap.getHeight())))
-            .addOnFailureListener(error -> call.reject("Android ML Kit OCR failed: " + error.getMessage(), error));
+            .addOnSuccessListener(text -> {
+                try {
+                    call.resolve(buildResponse(text, bitmap.getWidth(), bitmap.getHeight()));
+                } finally {
+                    bitmap.recycle();
+                }
+            })
+            .addOnFailureListener(error -> {
+                bitmap.recycle();
+                call.reject("Android ML Kit OCR failed: " + error.getMessage(), error);
+            });
     }
 
     private Bitmap decodeDataUrl(String imageData) {
