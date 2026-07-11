@@ -65,6 +65,12 @@ platforms/macos/OCREditor/Bridge/OCREngineBridge.o
 # Sensitive credentials
 *.p8
 AuthKey_*.p8
+.env
+.env.*
+!.env.example
+*.local
+credentials.json
+secrets.json
 
 # Build logs and temp scripts
 *.log

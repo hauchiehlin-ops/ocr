@@ -112,20 +112,16 @@ function createUpscaledCanvas(sourceCanvas, scale = 2) {
   return upscaledCanvas;
 }
 
-// Font size constrained by BOTH box height (per line) and box width (per character):
-// loose bounding boxes from cloud OCR would otherwise produce oversized text.
-function calcOcrFontSize(text, boxW, boxH, maxSize = 32) {
+// Preserve the source text's visual height. Width-based fitting made every OCR
+// wording difference shrink the entire replacement, even when the source font
+// size had not changed. Fabric may wrap genuinely longer text inside the same
+// box, but its font size now remains anchored to the detected line height.
+function calcOcrFontSize(text, _boxW, boxH, maxSize = 96) {
   const lines = String(text).split('\n').filter(l => l.trim() !== '');
   const linesCount = lines.length || 1;
-  // CJK characters occupy ~1em width, Latin characters ~0.55em
-  const maxLineUnits = Math.max(1, ...lines.map(l =>
-    [...l].reduce((units, ch) => units + (ch.charCodeAt(0) > 0x2E7F ? 1 : 0.55), 0)
-  ));
-  // Fabric renders a line taller than its fontSize. The former 10px floor made
-  // tiny OCR boxes wrap into oversized labels over neighbouring text.
+  // Fabric's default line box is approximately 1.18 × fontSize.
   const byHeight = (boxH - 2) / (linesCount * 1.18);
-  const byWidth = (boxW - 2) / maxLineUnits;
-  return Math.max(3, Math.min(maxSize, byHeight, byWidth));
+  return Math.max(3, Math.min(maxSize, byHeight));
 }
 
 function normalizedText(text) {

@@ -951,6 +951,8 @@ function App() {
                   <span style={{ fontSize: '11px', opacity: 0.8 }}>{t('geminiKey')}:</span>
                   <input
                     type="password"
+                    autoComplete="off"
+                    spellCheck={false}
                     value={geminiApiKey}
                     onChange={(e) => handleGeminiApiKeyChange(e.target.value)}
                     placeholder="AI_zaSy..."
