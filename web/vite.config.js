@@ -19,6 +19,14 @@ const ortAssetNames = [
   'ort-wasm-simd-threaded.asyncify.mjs',
   'ort-wasm-simd-threaded.asyncify.wasm'
 ]
+const legacyOrtChunkNames = [
+  'ort.min-Bgswy73C.js',
+  'ort.min-Dl_q-Pp8.js',
+  'ort.min-DPC0xN6p.js',
+  'ort.min-C2BdMUwU.js',
+  'ort.min-DCuPjLYf.js',
+  'ort.min-CO-ebZzt.js'
+]
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -94,6 +102,15 @@ const ortAssetsPlugin = () => ({
       if (!existsSync(source)) throw new Error(`Missing ONNX Runtime asset: ${assetName}`)
       copyFileSync(source, resolve(ortOutDir, assetName))
     }
+    // Older tabs may still hold a previously deployed main bundle whose
+    // dynamic import points to a hashed ORT filename. Keep compatibility
+    // aliases while all new builds use the stable ort-runtime.js URL.
+    const stableRuntime = resolve(__dirname, 'dist/assets/ort-runtime.js')
+    if (existsSync(stableRuntime)) {
+      for (const legacyName of legacyOrtChunkNames) {
+        copyFileSync(stableRuntime, resolve(__dirname, 'dist/assets', legacyName))
+      }
+    }
   }
 })
 
@@ -105,4 +122,13 @@ export default defineConfig({
   resolve: {
     conditions: ['onnxruntime-web-use-extern-wasm']
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        chunkFileNames: chunk => chunk.name === 'ort.min'
+          ? 'assets/ort-runtime.js'
+          : 'assets/[name]-[hash].js'
+      }
+    }
+  }
 })
