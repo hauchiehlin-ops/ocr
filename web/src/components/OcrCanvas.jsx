@@ -599,6 +599,7 @@ const OcrCanvas = forwardRef(({
     }
     if (!mask.some(Boolean)) return;
     onAiStatusChange?.({ phase: 'preparing', progress: 0, message: '已啟用 AI 修補，正在準備本張圖片…' });
+    onWorkerStatusChange?.('步驟 2/2：AI 修補模型正在分析並重建背景…');
     if (!aiDownloadApproved.current) {
       const modelAlreadyStored = await hasCachedLamaModel();
       if (!modelAlreadyStored) {
@@ -1906,9 +1907,13 @@ const OcrCanvas = forwardRef(({
       // Send the original-resolution image untouched: sharpening/upscaling
       // lowers Apple Vision's confidence and results get filtered server-side.
       if (onWorkerStatusChange) {
-        onWorkerStatusChange(isNativeOcrAvailable()
-          ? `Running on-device OCR (${getNativeOcrEngineLabel()})...`
-          : 'Calling Local OCR Server...');
+        onWorkerStatusChange(enableAiInpaintRef.current
+          ? (isNativeOcrAvailable()
+            ? `步驟 1/2：原生 OCR (${getNativeOcrEngineLabel()}) 正在定位文字…`
+            : '步驟 1/2：原生 OCR 伺服器正在定位文字…')
+          : (isNativeOcrAvailable()
+            ? `Running on-device OCR (${getNativeOcrEngineLabel()})...`
+            : 'Calling Local OCR Server...'));
       }
       const customResult = isNativeOcrAvailable()
         ? await runNativeOcr(data)

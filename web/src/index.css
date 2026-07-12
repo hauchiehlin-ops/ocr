@@ -502,6 +502,25 @@ body {
 .ai-model-storage.unavailable { color: #ff8a8a; }
 .ai-model-storage .btn-secondary { flex: 0 0 auto; padding: 4px 8px; font-size: 10px; }
 
+.ai-inpaint-run-status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.ai-inpaint-run-status strong { color: var(--text-primary); }
+.ai-inpaint-run-status.preparing,
+.ai-inpaint-run-status.loading,
+.ai-inpaint-run-status.inference { border-left-color: #60cdff; }
+.ai-inpaint-run-status.complete { border-left-color: #64d98b; color: #64d98b; }
+.ai-inpaint-run-status.error { border-left-color: #ff8a8a; color: #ff8a8a; }
+
 .ai-inpaint-guide {
   padding: 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);

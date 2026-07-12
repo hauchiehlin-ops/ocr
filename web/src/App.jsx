@@ -1199,6 +1199,10 @@ function App() {
                 <button type="button" className="btn-secondary" onClick={refreshAiModelStorage}>{t('checkAgain')}</button>
               )}
             </div>
+            <div className={`ai-inpaint-run-status ${aiStatus?.phase || 'idle'}`} role="status" aria-live="polite">
+              <strong>{t('aiCurrentImageStatus')}</strong>
+              <span>{aiStatus?.message || (enableAiInpaint ? t('aiWaitingForImage') : t('aiInferenceDisabled'))}</span>
+            </div>
             <details className="ai-inpaint-guide">
               <summary>{t('aiInpaintGuideTitle')}</summary>
               <ol>
