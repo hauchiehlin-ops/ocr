@@ -38,6 +38,11 @@ export async function hasCachedLamaModel() {
   return Boolean(await getCachedModel());
 }
 
+export async function preloadLamaModel(options = {}) {
+  await getSession(options);
+  return true;
+}
+
 async function verifyBytes(bytes, expectedSha256, label) {
   if (!crypto?.subtle) return;
   const digest = await crypto.subtle.digest('SHA-256', bytes);

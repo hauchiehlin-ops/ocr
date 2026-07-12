@@ -484,6 +484,36 @@ body {
   display: block;
 }
 
+.ai-model-storage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.ai-model-storage.available { color: #64d98b; }
+.ai-model-storage.missing { color: #ffd166; }
+.ai-model-storage.unavailable { color: #ff8a8a; }
+.ai-model-storage .btn-secondary { flex: 0 0 auto; padding: 4px 8px; font-size: 10px; }
+
+.ai-inpaint-guide {
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.ai-inpaint-guide summary { cursor: pointer; color: #60cdff; }
+.ai-inpaint-guide ol { margin: 7px 0 0; padding-left: 18px; }
+
 .ai-inpaint-option strong {
   color: var(--text-primary);
   font-size: 11px;

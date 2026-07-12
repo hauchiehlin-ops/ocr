@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import OcrCanvas from './components/OcrCanvas';
-import { cancelLamaOperation } from './utils/lamaInpaint';
+import { cancelLamaOperation, hasCachedLamaModel, preloadLamaModel } from './utils/lamaInpaint';
 import { fixText, extractEntities } from './utils/llm';
 import { listGeminiOcrModels } from './utils/geminiOcr';
 import { getTranslation, SUPPORTED_UI_LANGUAGES } from './utils/i18n';
@@ -125,6 +125,38 @@ function App() {
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
   const [aiStatus, setAiStatus] = useState(null);
   const [enableAiInpaint, setEnableAiInpaint] = useState(() => localStorage.getItem('enable_ai_inpaint') === 'true');
+  const [aiModelStorage, setAiModelStorage] = useState('checking');
+  const [isPreparingAiModel, setIsPreparingAiModel] = useState(false);
+
+  const refreshAiModelStorage = useCallback(async () => {
+    try {
+      setAiModelStorage(await hasCachedLamaModel() ? 'available' : 'missing');
+    } catch {
+      setAiModelStorage('unavailable');
+    }
+  }, []);
+
+  useEffect(() => { refreshAiModelStorage(); }, [refreshAiModelStorage]);
+
+  useEffect(() => {
+    if (['cache-hit', 'loading', 'complete'].includes(aiStatus?.phase)) refreshAiModelStorage();
+  }, [aiStatus?.phase, refreshAiModelStorage]);
+
+  const downloadAiInpaintModel = async () => {
+    if (isPreparingAiModel) return;
+    setIsPreparingAiModel(true);
+    try {
+      await preloadLamaModel({ onStatus: setAiStatus });
+      await refreshAiModelStorage();
+      setEnableAiInpaint(true);
+      localStorage.setItem('enable_ai_inpaint', 'true');
+    } catch (error) {
+      setAiStatus({ phase: error?.name === 'AbortError' ? 'cancelled' : 'error', message: error.message });
+      await refreshAiModelStorage();
+    } finally {
+      setIsPreparingAiModel(false);
+    }
+  };
 
   // OCR Engine: native OS OCR is the main path; browser/cloud engines remain fallback only.
   const [ocrEngine, setOcrEngine] = useState(() => {
@@ -1156,6 +1188,26 @@ function App() {
                 <small>{t('enableAiInpaintHelp')}</small>
               </span>
             </label>
+            <div className={`ai-model-storage ${aiModelStorage}`} role="status">
+              <span>{t(`aiModelStorage_${aiModelStorage}`)}</span>
+              {aiModelStorage === 'missing' && (
+                <button type="button" className="btn-secondary" onClick={downloadAiInpaintModel} disabled={isPreparingAiModel}>
+                  {isPreparingAiModel ? t('aiModelDownloading') : t('downloadAndEnableAiModel')}
+                </button>
+              )}
+              {aiModelStorage === 'unavailable' && (
+                <button type="button" className="btn-secondary" onClick={refreshAiModelStorage}>{t('checkAgain')}</button>
+              )}
+            </div>
+            <details className="ai-inpaint-guide">
+              <summary>{t('aiInpaintGuideTitle')}</summary>
+              <ol>
+                <li>{t('aiInpaintGuideStep1')}</li>
+                <li>{t('aiInpaintGuideStep2')}</li>
+                <li>{t('aiInpaintGuideStep3')}</li>
+                <li>{t('aiInpaintGuideStep4')}</li>
+              </ol>
+            </details>
 
             <button
               className="btn btn-primary"
