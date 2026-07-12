@@ -259,8 +259,15 @@ const OcrCanvas = forwardRef(({
   const sampleCanvasRef = useRef(null);
   const batchInpaintCanvasRef = useRef(null);
   const aiDownloadApproved = useRef(false);
+  const enableAiInpaintRef = useRef(enableAiInpaint);
   const tesseractWorker = useRef(null);
   const originalDimensions = useRef({ width: 0, height: 0 });
+  // File selection and OCR contain long asynchronous stages. Always read the
+  // latest switch value instead of the render-time closure that started them.
+  useEffect(() => {
+    enableAiInpaintRef.current = enableAiInpaint;
+    if (!enableAiInpaint) batchInpaintCanvasRef.current = null;
+  }, [enableAiInpaint]);
   // Where the background image actually sits on the canvas:
   // canvas is sized to the visible workspace, the image is fit-scaled and centered inside it.
   const imageLayout = useRef({ scale: 1, left: 0, top: 0, width: 0, height: 0 });
@@ -570,7 +577,10 @@ const OcrCanvas = forwardRef(({
     const sourceCanvas = sampleCanvasRef.current;
     const layout = imageLayout.current;
     batchInpaintCanvasRef.current = null;
-    if (!enableAiInpaint) return;
+    if (!enableAiInpaintRef.current) {
+      onAiStatusChange?.({ phase: 'disabled', progress: 0, message: 'AI 背景修補未啟用，使用原生修補流程' });
+      return;
+    }
     if (!sourceCanvas || !blocks?.length || !layout.scale) return;
     const width = sourceCanvas.width, height = sourceCanvas.height;
     const source = sourceCanvas.getContext('2d').getImageData(0, 0, width, height).data;
@@ -588,6 +598,7 @@ const OcrCanvas = forwardRef(({
       for (let y = y0; y < y1; y++) mask.fill(1, y * width + x0, y * width + x1);
     }
     if (!mask.some(Boolean)) return;
+    onAiStatusChange?.({ phase: 'preparing', progress: 0, message: '已啟用 AI 修補，正在準備本張圖片…' });
     if (!aiDownloadApproved.current) {
       const modelAlreadyStored = await hasCachedLamaModel();
       if (!modelAlreadyStored) {
