@@ -39,7 +39,9 @@ export async function hasCachedLamaModel() {
 }
 
 export async function preloadLamaModel(options = {}) {
-  await getSession(options);
+  await requestPersistentStorage();
+  await fetchModel(options);
+  emit(options?.onStatus, { phase: 'stored', progress: 1, message: 'AI 修補模型已下載、驗證並儲存；使用時才會載入推論引擎' });
   return true;
 }
 
@@ -127,6 +129,11 @@ async function getSession(options) {
   return sessionPromise;
 }
 
+async function disposeSession(session) {
+  sessionPromise = undefined;
+  try { await session?.release?.(); } catch (error) { console.warn('Unable to release AI inference session.', error); }
+}
+
 export function cancelLamaOperation() {
   activeController?.abort(new DOMException('使用者取消模型下載', 'AbortError'));
 }
@@ -178,9 +185,18 @@ export async function inpaintWithLama(source, mask, width, height, options = {})
     [session.inputNames.find(name => /image/i.test(name)) || session.inputNames[0]]: new ort.Tensor('float32', imageTensor, [1, 3, MODEL_SIZE, MODEL_SIZE]),
     [session.inputNames.find(name => /mask/i.test(name)) || session.inputNames[1]]: new ort.Tensor('float32', maskTensor, [1, 1, MODEL_SIZE, MODEL_SIZE])
   };
-  const results = await session.run(feeds);
+  let results;
+  try {
+    results = await session.run(feeds);
+  } catch (error) {
+    await disposeSession(session);
+    throw error;
+  }
   const tensor = results[session.outputNames[0]];
-  if (!tensor?.data) return null;
+  if (!tensor?.data) {
+    await disposeSession(session);
+    return null;
+  }
   const outputCanvas = document.createElement('canvas'); outputCanvas.width = MODEL_SIZE; outputCanvas.height = MODEL_SIZE;
   const outputContext = outputCanvas.getContext('2d'); const outputData = outputContext.createImageData(MODEL_SIZE, MODEL_SIZE);
   let max = 0; for (let i = 0; i < tensor.data.length; i += 384) max = Math.max(max, Math.abs(tensor.data[i]));
@@ -196,5 +212,7 @@ export async function inpaintWithLama(source, mask, width, height, options = {})
   const restoredContext = restored.getContext('2d', { willReadFrequently: true });
   restoredContext.drawImage(outputCanvas, offsetX, offsetY, scaledWidth, scaledHeight, 0, 0, width, height);
   emit(options.onStatus, { phase: 'complete', progress: 1, message: 'AI 背景修補完成' });
-  return restoredContext.getImageData(0, 0, width, height).data;
+  const restoredData = restoredContext.getImageData(0, 0, width, height).data;
+  await disposeSession(session);
+  return restoredData;
 }

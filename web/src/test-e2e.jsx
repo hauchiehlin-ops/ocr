@@ -3,7 +3,7 @@
 //   chrome --headless --dump-dom http://localhost:<port>/test-e2e.html?w=1200&h=800
 // Requires the stub OCR server (web/test-e2e-stub-server.mjs) on :5001.
 import { createRoot } from 'react-dom/client';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import OcrCanvas from './components/OcrCanvas';
 import './index.css';
 
@@ -169,6 +169,8 @@ async function measure() {
 }
 
 function App() {
+  const canvasRef = useRef(null);
+  useEffect(() => { window.__ocrCanvasRef = canvasRef; }, []);
   useEffect(() => {
     (async () => {
       await new Promise(r => setTimeout(r, 400));
@@ -185,6 +187,7 @@ function App() {
   return (
     <div style={{ width: W + 'px', height: H + 'px', position: 'relative' }}>
       <OcrCanvas
+        ref={canvasRef}
         onRegionSelect={() => {}}
         onLayersUpdate={() => {}}
         onImageLoaded={() => {}}
@@ -210,7 +213,14 @@ const iv = setInterval(async () => {
     // let the final renderAll settle
     await new Promise(r => setTimeout(r, 300));
     try {
-      resultsEl().textContent = 'E2E_RESULTS ' + JSON.stringify(await measure(), null, 1);
+      const result = await measure();
+      window.__ocrCanvasRef?.current?.clearCanvas();
+      await new Promise(r => setTimeout(r, 100));
+      result.closeImage = {
+        objectCount: window.__fabricCanvas?.getObjects()?.length,
+        backgroundCleared: !window.__fabricCanvas?.backgroundImage
+      };
+      resultsEl().textContent = 'E2E_RESULTS ' + JSON.stringify(result, null, 1);
     } catch (e) {
       resultsEl().textContent = 'E2E_ERROR ' + (e.stack || e.message);
     }

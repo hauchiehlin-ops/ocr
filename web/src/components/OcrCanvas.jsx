@@ -4,7 +4,7 @@ import Tesseract from 'tesseract.js';
 import { jsPDF } from 'jspdf';
 import { runGeminiOcrTiled, runGeminiRegionalOcr } from '../utils/geminiOcr';
 import { getNativeOcrEngineLabel, isNativeOcrAvailable, runNativeOcr } from '../utils/nativeOcr';
-import { hasCachedLamaModel, inpaintWithLama } from '../utils/lamaInpaint';
+import { cancelLamaOperation, hasCachedLamaModel, inpaintWithLama } from '../utils/lamaInpaint';
 
 // Fabric v7 changed the default object origin from left/top to center, so every
 // object placed by (left, top) rendered shifted up-left by half its size: cover
@@ -1686,6 +1686,10 @@ const OcrCanvas = forwardRef(({
     clearCanvas: () => {
       const canvas = fabricCanvas.current;
       if (!canvas) return;
+      cancelLamaOperation();
+      onAiStatusChange?.(enableAiInpaintRef.current
+        ? { phase: 'idle', progress: 0, message: 'AI 修補已就緒，等待下一張圖片' }
+        : { phase: 'disabled', progress: 0, message: 'AI 背景修補未啟用，使用原生修補流程' });
       canvas.clear();
       bgImage.current = null;
       sampleCanvasRef.current = null;

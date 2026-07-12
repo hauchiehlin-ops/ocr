@@ -139,7 +139,7 @@ function App() {
   useEffect(() => { refreshAiModelStorage(); }, [refreshAiModelStorage]);
 
   useEffect(() => {
-    if (['cache-hit', 'loading', 'complete'].includes(aiStatus?.phase)) refreshAiModelStorage();
+    if (['cache-hit', 'loading', 'stored', 'complete'].includes(aiStatus?.phase)) refreshAiModelStorage();
   }, [aiStatus?.phase, refreshAiModelStorage]);
 
   const downloadAiInpaintModel = async () => {
@@ -645,10 +645,12 @@ function App() {
   };
 
   const triggerImageUpload = () => {
+     if (isOcrProcessing) return;
      canvasRef.current?.triggerUpload();
   };
 
   const handleCloseImage = () => {
+     if (isOcrProcessing) return;
      canvasRef.current?.clearCanvas();
   };
 
@@ -707,8 +709,8 @@ function App() {
             <div className="menu-container">
               <div className="menu-item" tabIndex={0}>{t('file')}</div>
               <div className="dropdown-menu">
-                <div className="dropdown-item" onClick={triggerImageUpload}>{t('loadImage')}</div>
-                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleCloseImage : null}>{t('closeImage')}</div>
+                <div className={`dropdown-item ${isOcrProcessing ? 'disabled' : ''}`} onClick={!isOcrProcessing ? triggerImageUpload : null}>{t('loadImage')}</div>
+                <div className={`dropdown-item ${!imageLoaded || isOcrProcessing ? 'disabled' : ''}`} onClick={imageLoaded && !isOcrProcessing ? handleCloseImage : null}>{t('closeImage')}</div>
                 <div className="dropdown-separator"></div>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExport : null}>{t('saveImage')}</div>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportCSV : null}>{t('exportCsv')}</div>
