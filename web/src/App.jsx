@@ -124,6 +124,7 @@ function App() {
   });
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
   const [aiStatus, setAiStatus] = useState(null);
+  const [enableAiInpaint, setEnableAiInpaint] = useState(() => localStorage.getItem('enable_ai_inpaint') === 'true');
 
   // OCR Engine: native OS OCR is the main path; browser/cloud engines remain fallback only.
   const [ocrEngine, setOcrEngine] = useState(() => {
@@ -799,6 +800,7 @@ function App() {
 
             onWorkerStatusChange={setWorkerStatus}
             onAiStatusChange={setAiStatus}
+            enableAiInpaint={enableAiInpaint}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
             onRegionSelect={setSelectedRegion}
             onLayersUpdate={setLayers}
@@ -859,7 +861,7 @@ function App() {
                   <div style={{ height: '8px', background: 'rgba(255,255,255,.15)', borderRadius: '6px', overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${Math.round((aiStatus.progress || 0) * 100)}%`, background: '#60CDFF' }} />
                   </div>
-                  <button className="btn-secondary" style={{ marginTop: '14px' }} onClick={cancelLamaOperation}>取消下載並使用快速修補</button>
+                  <button className="btn-secondary" style={{ marginTop: '14px' }} onClick={cancelLamaOperation}>{t('cancelAiInpaint')}</button>
                 </div>
               )}
               {aiStatus?.phase === 'error' && <div style={{ color: '#ff8a8a', maxWidth: '70%', textAlign: 'center' }}>{aiStatus.message}</div>}
@@ -876,7 +878,7 @@ function App() {
           )}
           {aiStatus?.phase === 'error' && !isOcrProcessing && (
             <div style={{ position: 'absolute', right: '16px', bottom: '16px', zIndex: 950, maxWidth: '420px', padding: '12px 16px', background: '#4a1f24', border: '1px solid #ff7b86', borderRadius: '8px', color: '#fff' }}>
-              <div>AI 修補載入失敗，已自動改用快速修補。</div>
+              <div>{t('aiInpaintFallbackNotice')}</div>
               <div style={{ fontSize: '12px', opacity: .8, marginTop: '4px' }}>{aiStatus.message}</div>
               <button className="btn-secondary" style={{ marginTop: '8px' }} onClick={() => setAiStatus(null)}>關閉</button>
             </div>
@@ -1134,6 +1136,26 @@ function App() {
                 </div>
               </details>
             </div>
+
+            <label className="ai-inpaint-option">
+              <input
+                type="checkbox"
+                checked={enableAiInpaint}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setEnableAiInpaint(enabled);
+                  localStorage.setItem('enable_ai_inpaint', String(enabled));
+                  if (!enabled) {
+                    cancelLamaOperation();
+                    setAiStatus(null);
+                  }
+                }}
+              />
+              <span>
+                <strong>{t('enableAiInpaint')}</strong>
+                <small>{t('enableAiInpaintHelp')}</small>
+              </span>
+            </label>
 
             <button
               className="btn btn-primary"

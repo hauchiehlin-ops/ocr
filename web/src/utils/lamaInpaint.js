@@ -1,5 +1,3 @@
-import * as ort from 'onnxruntime-web';
-
 const MODEL_SIZE = 512;
 const MODEL_URL = import.meta.env.VITE_LAMA_MODEL_URL ||
   'https://huggingface.co/Carve/LaMa-ONNX/resolve/c3c0c9e468934d62e79c329e35d82dd09ff8c444/lama_fp32.onnx';
@@ -11,8 +9,15 @@ const MODEL_SHA256 = '1faef5301d78db7dda502fe59966957ec4b79dd64e16f03ed96913c7a4
 const DEFAULT_TIMEOUT = 120000;
 let sessionPromise;
 let activeController;
+let runtimePromise;
 
-ort.env.wasm.wasmPaths = WASM_BASE_URL.endsWith('/') ? WASM_BASE_URL : `${WASM_BASE_URL}/`;
+async function getRuntime() {
+  if (!runtimePromise) runtimePromise = import('onnxruntime-web').then(ort => {
+    ort.env.wasm.wasmPaths = WASM_BASE_URL.endsWith('/') ? WASM_BASE_URL : `${WASM_BASE_URL}/`;
+    return ort;
+  });
+  return runtimePromise;
+}
 
 function emit(callback, state) {
   callback?.({ provider: 'lama', ...state });
@@ -27,6 +32,10 @@ function combineSignals(controller, externalSignal) {
 async function getCachedModel() {
   if (!('caches' in globalThis)) return null;
   return (await caches.open(MODEL_CACHE)).match(MODEL_URL);
+}
+
+export async function hasCachedLamaModel() {
+  return Boolean(await getCachedModel());
 }
 
 async function verifyBytes(bytes, expectedSha256, label) {
@@ -86,6 +95,7 @@ async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}
       const headers = new Headers(response.headers);
       headers.set('X-Model-SHA256', MODEL_SHA256);
       await (await caches.open(MODEL_CACHE)).put(MODEL_URL, new Response(bytes, { headers }));
+      await requestPersistentStorage();
     }
     return bytes;
   } finally {
@@ -96,7 +106,7 @@ async function fetchModel({ signal, onStatus, timeoutMs = DEFAULT_TIMEOUT } = {}
 
 async function createSession(options) {
   await requestPersistentStorage();
-  const bytes = await fetchModel(options);
+  const [ort, bytes] = await Promise.all([getRuntime(), fetchModel(options)]);
   emit(options?.onStatus, { phase: 'loading', progress: 1, message: '載入 AI 修補引擎…' });
   return ort.InferenceSession.create(bytes, {
     executionProviders: ['wasm'],
@@ -129,7 +139,7 @@ export function shouldConfirmLargeDownload() {
 
 export async function inpaintWithLama(source, mask, width, height, options = {}) {
   if (!source?.length || !mask?.length || width < 2 || height < 2) return null;
-  const session = await getSession(options);
+  const [ort, session] = await Promise.all([getRuntime(), getSession(options)]);
   emit(options.onStatus, { phase: 'inference', progress: null, message: 'AI 正在重建背景…' });
   const scale = Math.min(MODEL_SIZE / width, MODEL_SIZE / height);
   const scaledWidth = Math.max(1, Math.round(width * scale));

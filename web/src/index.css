@@ -463,6 +463,39 @@ body {
   background: rgba(96, 205, 255, 0.08);
 }
 
+.ai-inpaint-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.ai-inpaint-option input {
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.ai-inpaint-option span,
+.ai-inpaint-option small {
+  display: block;
+}
+
+.ai-inpaint-option strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.ai-inpaint-option small {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
 .native-ocr-header {
   display: flex;
   align-items: flex-start;
