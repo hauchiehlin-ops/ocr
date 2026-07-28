@@ -408,6 +408,9 @@ const OcrCanvas = forwardRef(({
   geminiModel = 'gemini-3.5-flash',
   geminiApiUrl = 'https://generativelanguage.googleapis.com',
   localServerUrl = 'http://127.0.0.1:5001/ocr',
+  isPasteModeActive = false,
+  onPasteModeChange,
+  onRegionClipboardChange,
   t = (key) => key
 }, ref) => {
   const containerRef = useRef(null);
@@ -454,6 +457,11 @@ const OcrCanvas = forwardRef(({
   useEffect(() => {
     regionalActionRef.current = regionalAction;
   }, [regionalAction]);
+  const isPasteModeActiveRef = useRef(isPasteModeActive);
+  useEffect(() => {
+    isPasteModeActiveRef.current = isPasteModeActive;
+  }, [isPasteModeActive]);
+  const regionClipboardRef = useRef(null);
 
   // History stack for Undo/Redo
   const history = useRef([]);
@@ -574,6 +582,28 @@ const OcrCanvas = forwardRef(({
         addManualTextBox(pointer.x, pointer.y, t('manualRegionText'));
         opt.e?.preventDefault?.();
         opt.e?.stopPropagation?.();
+        return;
+      }
+
+      if (isPasteModeActiveRef.current) {
+        const clipboard = regionClipboardRef.current;
+        if (!clipboard) {
+          onWorkerStatusChange?.(t('pasteRegionMissing'));
+          isPasteModeActiveRef.current = false;
+          onPasteModeChange?.(false);
+          return;
+        }
+        const pointer = typeof canvas.getScenePoint === 'function'
+          ? canvas.getScenePoint(opt.e)
+          : canvas.getPointer(opt.e);
+        opt.e?.preventDefault?.();
+        opt.e?.stopPropagation?.();
+        isPasteModeActiveRef.current = false;
+        onPasteModeChange?.(false);
+        void pasteCopiedRegion(pointer).catch((error) => {
+          console.warn('Paste region failed:', error);
+          onWorkerStatusChange?.(t('pasteRegionFailed'));
+        });
         return;
       }
 
@@ -1212,6 +1242,79 @@ const OcrCanvas = forwardRef(({
     }
   };
 
+  const captureCopyRegion = (left, top, width, height) => {
+    const sourceCanvas = sampleCanvasRef.current;
+    const layout = imageLayout.current;
+    if (!sourceCanvas || !layout.scale || width <= 1 || height <= 1) return null;
+
+    const rawLeft = Math.max(0, Math.floor((left - layout.left) / layout.scale));
+    const rawTop = Math.max(0, Math.floor((top - layout.top) / layout.scale));
+    const rawRight = Math.min(sourceCanvas.width, Math.ceil((left + width - layout.left) / layout.scale));
+    const rawBottom = Math.min(sourceCanvas.height, Math.ceil((top + height - layout.top) / layout.scale));
+    const cropWidth = rawRight - rawLeft;
+    const cropHeight = rawBottom - rawTop;
+    if (cropWidth <= 1 || cropHeight <= 1) return null;
+
+    const cropCanvas = document.createElement('canvas');
+    cropCanvas.width = cropWidth;
+    cropCanvas.height = cropHeight;
+    const ctx = cropCanvas.getContext('2d');
+    ctx.drawImage(sourceCanvas, rawLeft, rawTop, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+    return {
+      dataUrl: cropCanvas.toDataURL('image/png'),
+      width: cropWidth,
+      height: cropHeight
+    };
+  };
+
+  const pasteCopiedRegion = async (pointer) => {
+    const canvas = fabricCanvas.current;
+    const layout = imageLayout.current;
+    const clipboard = regionClipboardRef.current;
+    if (!canvas || !clipboard || !layout.scale) return false;
+
+    isHistoryDisabled.current = true;
+    try {
+      const pastedImage = await fabric.FabricImage.fromURL(clipboard.dataUrl);
+      pastedImage.set({
+        left: pointer.x - (clipboard.width * layout.scale) / 2,
+        top: pointer.y - (clipboard.height * layout.scale) / 2,
+        scaleX: layout.scale,
+        scaleY: layout.scale,
+        selectable: true,
+        evented: true,
+        hasControls: true,
+        hasBorders: true,
+        cornerColor: '#60CDFF',
+        borderColor: '#60CDFF',
+        cornerSize: 8,
+        touchCornerSize: 18,
+        transparentCorners: true,
+        isPastedRegion: true
+      });
+
+      canvas.discardActiveObject();
+      canvas.add(pastedImage);
+      const objects = canvas.getObjects();
+      const firstTextboxIndex = objects.findIndex(obj => obj.type === 'textbox');
+      if (firstTextboxIndex >= 0) {
+        canvas.moveObjectTo(pastedImage, firstTextboxIndex);
+      } else {
+        canvas.bringObjectToFront(pastedImage);
+      }
+      canvas.setActiveObject(pastedImage);
+      canvas.renderAll();
+      onRegionSelect?.(null);
+      saveHistory();
+      syncLayers();
+      onWorkerStatusChange?.(t('pasteRegionReady'));
+      return true;
+    } finally {
+      isHistoryDisabled.current = false;
+    }
+  };
+
   // Mouse Events for Drawing Area
   const handleMouseDown = (opt) => {
     const canvas = fabricCanvas.current;
@@ -1281,6 +1384,20 @@ const OcrCanvas = forwardRef(({
         if (regionalActionRef.current === 'erase') {
           if (onWorkerStatusChange) onWorkerStatusChange(t('eraseRegionRunning'));
           await eraseRegion(rectState.left, rectState.top, rectState.width, rectState.height);
+        } else if (regionalActionRef.current === 'copy') {
+          onWorkerStatusChange?.(t('copyRegionRunning'));
+          const copied = captureCopyRegion(rectState.left, rectState.top, rectState.width, rectState.height);
+          regionClipboardRef.current = copied;
+          onRegionClipboardChange?.(Boolean(copied));
+          if (copied) {
+            onWorkerStatusChange?.(t('copyRegionReady'));
+            isPasteModeActiveRef.current = true;
+            onPasteModeChange?.(true);
+          } else {
+            onWorkerStatusChange?.(t('copyRegionFailed'));
+            isPasteModeActiveRef.current = false;
+            onPasteModeChange?.(false);
+          }
         } else {
           await runRegionalOcr(rectState.left, rectState.top, rectState.width, rectState.height);
         }
@@ -2029,6 +2146,10 @@ const OcrCanvas = forwardRef(({
       onAiStatusChange?.(enableAiInpaintRef.current
         ? { phase: 'idle', progress: 0, message: 'AI 修補已就緒，等待下一張圖片' }
         : { phase: 'disabled', progress: 0, message: 'AI 背景修補未啟用，使用原生修補流程' });
+      regionClipboardRef.current = null;
+      onRegionClipboardChange?.(false);
+      isPasteModeActiveRef.current = false;
+      onPasteModeChange?.(false);
       canvas.clear();
       bgImage.current = null;
       sampleCanvasRef.current = null;

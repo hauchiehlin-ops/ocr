@@ -107,6 +107,8 @@ function App() {
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [isRegionalOcrActive, setIsRegionalOcrActive] = useState(false);
   const [regionalAction, setRegionalAction] = useState('ocr');
+  const [hasCopiedRegion, setHasCopiedRegion] = useState(false);
+  const [isPasteModeActive, setIsPasteModeActive] = useState(false);
 
   const [isLoadingLLM, setIsLoadingLLM] = useState(false);
   const [llmProgress, setLlmProgress] = useState('');
@@ -714,12 +716,25 @@ function App() {
     }
   }, [ocrActionsBlocked, isRegionalOcrActive, regionalAction]);
 
+  useEffect(() => {
+    if (!hasCopiedRegion && isPasteModeActive) {
+      setIsPasteModeActive(false);
+    }
+  }, [hasCopiedRegion, isPasteModeActive]);
+
   const handleRegionTool = (action) => {
     if (!imageLoaded) return;
     if (action === 'ocr' && ocrActionsBlocked) return;
+    setIsPasteModeActive(false);
     const shouldTurnOff = isRegionalOcrActive && regionalAction === action;
     setRegionalAction(action);
     setIsRegionalOcrActive(!shouldTurnOff);
+  };
+
+  const handlePasteRegion = () => {
+    if (!imageLoaded || !hasCopiedRegion) return;
+    setIsRegionalOcrActive(false);
+    setIsPasteModeActive((current) => !current);
   };
 
   const t = (key) => getTranslation(uiLanguage, key);
@@ -893,6 +908,7 @@ function App() {
             onZoomChange={setZoom}
             isRegionalOcrActive={isRegionalOcrActive}
             regionalAction={regionalAction}
+            isPasteModeActive={isPasteModeActive}
 
             onWorkerStatusChange={setWorkerStatus}
             onAiStatusChange={setAiStatus}
@@ -901,9 +917,16 @@ function App() {
             onRegionSelect={setSelectedRegion}
             onLayersUpdate={setLayers}
             onSourceFileNameChange={setSourceFileName}
-            onImageLoaded={(loaded) => { setImageLoaded(loaded); if (loaded) setZoom(1); }}
+            onImageLoaded={(loaded) => {
+              setImageLoaded(loaded);
+              setHasCopiedRegion(false);
+              setIsPasteModeActive(false);
+              if (loaded) setZoom(1);
+            }}
             onOcrProcessing={setIsOcrProcessing}
             onHistoryStatusChange={handleHistoryStatusChange}
+            onRegionClipboardChange={setHasCopiedRegion}
+            onPasteModeChange={setIsPasteModeActive}
             presetFontFamily={presetFontFamily}
             presetFontSize={presetFontSize}
             presetBold={presetBold}
@@ -1232,6 +1255,22 @@ function App() {
               onClick={() => handleRegionTool('erase')}
             >
               {isRegionalOcrActive && regionalAction === 'erase' ? t('eraseDrawingMode') : t('eraseRegion')}
+            </button>
+            <button
+              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'copy' ? 'active' : ''}`}
+              style={{flex: 1}}
+              disabled={!imageLoaded}
+              onClick={() => handleRegionTool('copy')}
+            >
+              {isRegionalOcrActive && regionalAction === 'copy' ? t('copyRegionMode') : t('copyRegion')}
+            </button>
+            <button
+              className={`btn btn-secondary ${isPasteModeActive ? 'active' : ''}`}
+              style={{flex: 1}}
+              disabled={!imageLoaded || !hasCopiedRegion}
+              onClick={handlePasteRegion}
+            >
+              {isPasteModeActive ? t('pasteRegionMode') : t('pasteRegion')}
             </button>
             <button
               className="btn btn-secondary"
