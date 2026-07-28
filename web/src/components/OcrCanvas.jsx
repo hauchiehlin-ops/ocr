@@ -134,50 +134,105 @@ function createUpscaledCanvas(sourceCanvas, scale = 2) {
 // box, but its font size now remains anchored to the detected line height.
 //
 // The OCR box height is a tight ink bounding box around the *specific*
-// recognized characters, not a fixed font-metric line height. "RED TEXT" (no
-// descenders) and "Apply" (has one) produce different box heights at the
-// identical font size, so dividing by one constant (≈1.18) systematically
-// under- or over-estimates the size depending on which glyphs happen to be
-// present. Instead, measure how tall that exact string actually renders at a
-// reference size in the target font, then scale the box height against that
-// measured ink ratio.
+// recognized characters, not a fixed font-metric line height, so a single
+// hardcoded divisor (≈1.18) systematically under- or over-estimates the size
+// depending on which glyphs happen to be present ("RED TEXT" has no
+// descenders; "Apply" or "權重分工" do). Measuring each block's own text and
+// dividing by its own ink ratio fixed that bias, but introduced a worse
+// problem: real words/phrases legitimately measure anywhere from ~0.70 (all
+// caps, no descenders) to ~0.93 (CJK), so blocks with the *same* true font
+// size but different content still ended up with visibly different
+// estimated sizes — and short blocks (bullets, dashes, single CJK strokes
+// like "一", punctuation) measured ink ratios as low as 0.05–0.28, which
+// blew the estimate up to the max font size entirely.
 //
-// That per-string ratio must be clamped. Short OCR blocks are common in
-// mind-maps/infographics (bullets, dashes, single CJK strokes like "一",
-// punctuation), and their ink height can be a tiny fraction of the em square
-// (measured as low as ~0.05–0.28 for ".", "-", "一", "。"). Dividing box
-// height by a near-zero ratio exploded the estimate up to the max font size,
-// which is exactly what made text sizes look wildly inconsistent after OCR.
-// Real words/phrases (Latin or CJK) measured 0.70–0.93 across many samples,
-// so anything far outside that band is clamped rather than trusted verbatim.
+// The fix has two parts:
+//
+// 1. Calibrate ink ratio from the batch's own reliable (multi-character)
+//    text instead of trusting a single hardcoded constant, so it adapts to
+//    whatever this image's text actually looks like.
+// 2. Calibrate CJK and Latin/other text *separately*. CJK glyphs are
+//    genuinely taller relative to their nominal font size than Latin ones
+//    (full-width ink vs. x-height/ascender/descender) — that's a real
+//    difference between scripts, not noise. A single shared ratio across
+//    both just traded "different characters get different sizes" for
+//    "different scripts get different sizes" (CJK rendered ~40% larger than
+//    Latin text at the same source size in testing). Two calibrated ratios,
+//    chosen per block by its own script, keep every block consistent with
+//    same-script neighbors while still respecting the real size difference
+//    between scripts.
+//
+// Short blocks (bullets, dashes, single CJK strokes like "一", punctuation)
+// are excluded from calibration — their own ink ratio can be a tiny fraction
+// of the em square (measured as low as 0.05–0.28) and isn't representative —
+// but are still sized using their script's calibrated ratio rather than a
+// self-measurement, and the final ratio is clamped to a realistic band
+// regardless.
 const MIN_INK_RATIO = 0.55;
 const MAX_INK_RATIO = 0.95;
+const DEFAULT_CJK_INK_RATIO = 0.9;
+const DEFAULT_LATIN_INK_RATIO = 0.75;
 let ocrFontMeasureCtx = null;
-function measureInkHeightRatio(text, fontFamily) {
+function measureRawInkHeightRatio(text, fontFamily) {
   const referenceSize = 100;
   try {
     if (!ocrFontMeasureCtx) ocrFontMeasureCtx = document.createElement('canvas').getContext('2d');
     ocrFontMeasureCtx.font = `${referenceSize}px ${fontFamily}`;
     const metrics = ocrFontMeasureCtx.measureText(text || 'M');
     const inkHeight = (metrics.actualBoundingBoxAscent || 0) + (metrics.actualBoundingBoxDescent || 0);
-    if (inkHeight > 0) return Math.min(MAX_INK_RATIO, Math.max(MIN_INK_RATIO, inkHeight / referenceSize));
+    if (inkHeight > 0) return inkHeight / referenceSize;
   } catch {
-    // Fall through to the fixed-ratio fallback below.
+    // Ignored; caller treats a missing measurement as "not reliable".
   }
   return null;
 }
 
-function calcOcrFontSize(text, _boxW, boxH, fontFamily = DEFAULT_OCR_FONT_FAMILY, maxSize = 96) {
+function longestLineOf(text) {
+  const lines = String(text).split('\n').filter(l => l.trim() !== '');
+  return lines.reduce((a, b) => (b.length > a.length ? b : a), lines[0] || String(text));
+}
+
+function isCjkDominant(text) {
+  const stripped = normalizedText(text);
+  if (!stripped) return false;
+  const cjkCount = (stripped.match(/\p{Script=Han}/gu) || []).length;
+  return cjkCount / stripped.length >= 0.5;
+}
+
+function medianOf(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+// Single-glyph or punctuation-only blocks are excluded from calibration:
+// their ink ratio is a real property of that one glyph, not a representative
+// sample of this document's typical text proportions.
+function computeDocumentInkRatios(texts, fontFamily) {
+  const cjkRatios = [];
+  const latinRatios = [];
+  texts.forEach((text) => {
+    const line = longestLineOf(text);
+    if (normalizedText(line).length < 2) return;
+    const ratio = measureRawInkHeightRatio(line, fontFamily);
+    if (ratio == null) return;
+    (isCjkDominant(line) ? cjkRatios : latinRatios).push(ratio);
+  });
+  const clamp = (value) => Math.min(MAX_INK_RATIO, Math.max(MIN_INK_RATIO, value));
+  return {
+    cjk: clamp(medianOf(cjkRatios) ?? DEFAULT_CJK_INK_RATIO),
+    latin: clamp(medianOf(latinRatios) ?? DEFAULT_LATIN_INK_RATIO)
+  };
+}
+
+function calcOcrFontSize(text, _boxW, boxH, inkRatios, maxSize = 96) {
   const lines = String(text).split('\n').filter(l => l.trim() !== '');
   const linesCount = lines.length || 1;
   const singleLineHeight = (boxH - 2) / linesCount;
-  const longestLine = lines.reduce((a, b) => (b.length > a.length ? b : a), lines[0] || String(text));
-
-  const inkRatio = measureInkHeightRatio(longestLine, fontFamily);
-  if (inkRatio) return Math.max(3, Math.min(maxSize, singleLineHeight / inkRatio));
-
-  // Fabric's default line box is approximately 1.18 × fontSize.
-  return Math.max(3, Math.min(maxSize, singleLineHeight / 1.18));
+  const ratios = inkRatios || { cjk: DEFAULT_CJK_INK_RATIO, latin: DEFAULT_LATIN_INK_RATIO };
+  const ratio = isCjkDominant(String(text)) ? ratios.cjk : ratios.latin;
+  return Math.max(3, Math.min(maxSize, singleLineHeight / ratio));
 }
 
 function normalizedText(text) {
@@ -1285,10 +1340,11 @@ const OcrCanvas = forwardRef(({
       }
 
       const addedTextboxes = [];
+      const sharedInkRatios = computeDocumentInkRatios(blocks.map(b => b.text), fontToUse);
       await prepareBatchInpaint(blocks);
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
-        const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height, fontToUse);
+        const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height, sharedInkRatios);
         const text = new fabric.Textbox(block.text, {
           left: block.left,
           top: block.top,
@@ -1395,6 +1451,9 @@ const OcrCanvas = forwardRef(({
     const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
     const sanitizedBlocks = sanitizeOcrBlocks(blocks, imageLayout.current);
     const reviewBlocks = dedupeOcrBlocks(sanitizedBlocks);
+    // One shared ratio for the whole batch: every block's font size then
+    // depends only on its own box height, not on what characters it contains.
+    const sharedInkRatios = computeDocumentInkRatios(reviewBlocks.map(b => b.text), fontToUse);
     await prepareBatchInpaint(sanitizedBlocks);
 
     // Dedupe controls which editable text layers are shown, but every valid OCR
@@ -1419,7 +1478,7 @@ const OcrCanvas = forwardRef(({
 
     for (let i = 0; i < reviewBlocks.length; i++) {
       const block = reviewBlocks[i];
-      const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h, fontToUse);
+      const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h, sharedInkRatios);
       const detectedColor = textColorById.get(block.id) || null;
 
       const text = new fabric.Textbox(block.text, {
