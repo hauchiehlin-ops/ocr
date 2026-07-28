@@ -103,6 +103,7 @@ function App() {
   const canvasRef = useRef(null);
 
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [sourceFileName, setSourceFileName] = useState(null);
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [isRegionalOcrActive, setIsRegionalOcrActive] = useState(false);
   const [regionalAction, setRegionalAction] = useState('ocr');
@@ -618,7 +619,13 @@ function App() {
 
   const handleExport = () => {
     if (canvasRef.current) {
-      canvasRef.current.exportImage();
+      canvasRef.current.saveImage();
+    }
+  };
+
+  const handleExportAs = () => {
+    if (canvasRef.current) {
+      canvasRef.current.saveImageAs();
     }
   };
 
@@ -713,6 +720,7 @@ function App() {
                 <div className={`dropdown-item ${!imageLoaded || isOcrProcessing ? 'disabled' : ''}`} onClick={imageLoaded && !isOcrProcessing ? handleCloseImage : null}>{t('closeImage')}</div>
                 <div className="dropdown-separator"></div>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExport : null}>{t('saveImage')}</div>
+                <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportAs : null}>{t('saveImageAs')}</div>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportCSV : null}>{t('exportCsv')}</div>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={imageLoaded ? handleExportPDF : null}>{t('exportPdf')}</div>
               </div>
@@ -756,6 +764,11 @@ function App() {
               📖 {t('manualGuide')}
             </a>
           </div>
+          {sourceFileName && (
+            <span className="loaded-file-name" title={`${t('loadedFileNameHint')} ${sourceFileName}`}>
+              📄 {sourceFileName}
+            </span>
+          )}
         </div>
 
         <div className="header-right">
@@ -829,6 +842,7 @@ function App() {
           <OcrCanvas
             ref={canvasRef}
             zoomLevel={zoom}
+            onZoomChange={setZoom}
             isRegionalOcrActive={isRegionalOcrActive}
             regionalAction={regionalAction}
 
@@ -838,6 +852,7 @@ function App() {
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
             onRegionSelect={setSelectedRegion}
             onLayersUpdate={setLayers}
+            onSourceFileNameChange={setSourceFileName}
             onImageLoaded={(loaded) => { setImageLoaded(loaded); if (loaded) setZoom(1); }}
             onOcrProcessing={setIsOcrProcessing}
             onHistoryStatusChange={handleHistoryStatusChange}
@@ -979,6 +994,176 @@ function App() {
                 }}
               />
             </label>
+          </div>
+
+          <div className="panel-subtitle">{t('presetFonts')}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('engFont')}:</span>
+              <select
+                value={englishFont}
+                onChange={(e) => {
+                  setEnglishFont(e.target.value);
+                  setFontApplyStatus('');
+                }}
+                style={{
+                  background: '#2D2D2D',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '12px',
+                  width: '180px'
+                }}
+              >
+                {availableFontFamilies.map((family) => (
+                  <option value={family} key={`english-${family}`}>{family}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('zhFont')}:</span>
+              <select
+                value={chineseFont}
+                onChange={(e) => {
+                  setChineseFont(e.target.value);
+                  setFontApplyStatus('');
+                }}
+                style={{
+                  background: '#2D2D2D',
+                  color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '12px',
+                  width: '180px'
+                }}
+              >
+                {sortedChineseFontOptions.map((family) => (
+                  <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="font-style-editor">
+              <label className="font-size-control">
+                <span>{t('fontSize')}:</span>
+                <input
+                  type="number"
+                  min="6"
+                  max="200"
+                  step="1"
+                  inputMode="numeric"
+                  value={presetFontSize}
+                  onChange={(e) => {
+                    const next = Math.min(200, Math.max(6, Number(e.target.value) || 6));
+                    setPresetFontSize(next);
+                    localStorage.setItem('preset_font_size', String(next));
+                    setFontApplyStatus('');
+                  }}
+                  aria-label={t('fontSize')}
+                />
+                <span>px</span>
+              </label>
+              <div className="font-style-toggles">
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${presetBold ? 'active' : ''}`}
+                  aria-pressed={presetBold}
+                  onClick={() => {
+                    const next = !presetBold;
+                    setPresetBold(next);
+                    localStorage.setItem('preset_font_bold', String(next));
+                    setFontApplyStatus('');
+                  }}
+                >
+                  {t('bold')}
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-secondary ${presetItalic ? 'active' : ''}`}
+                  aria-pressed={presetItalic}
+                  onClick={() => {
+                    const next = !presetItalic;
+                    setPresetItalic(next);
+                    localStorage.setItem('preset_font_italic', String(next));
+                    setFontApplyStatus('');
+                  }}
+                >
+                  {t('italic')}
+                </button>
+              </div>
+            </div>
+
+            <div className="font-apply-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!selectedRegion}
+                onClick={handleApplyPresetFontSelected}
+              >
+                {t('applyStyleSelected')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!imageLoaded}
+                onClick={handleApplyDefaultFontAll}
+              >
+                {t('applyStyleAll')}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <input
+                type="checkbox"
+                id="forcePresetFontCheckbox"
+                checked={forcePresetFont}
+                onChange={(e) => {
+                  setForcePresetFont(e.target.checked);
+                  localStorage.setItem('force_preset_font', String(e.target.checked));
+                }}
+                style={{ cursor: 'pointer' }}
+              />
+              <label
+                htmlFor="forcePresetFontCheckbox"
+                style={{ fontSize: '11px', opacity: 0.8, cursor: 'pointer', userSelect: 'none' }}
+              >
+                {t('forceFont')}
+              </label>
+            </div>
+
+            <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
+              {t('localFontsHint')}
+            </div>
+            <details className="font-workflow-panel">
+              <summary>{t('presetFontWorkflowTitle')}</summary>
+              <ol>
+                <li>{t('presetFontWorkflowStep1')}</li>
+                <li>{t('presetFontWorkflowStep2')}</li>
+                <li>{t('presetFontWorkflowStep3')}</li>
+                <li>{t('presetFontWorkflowStep4')}</li>
+              </ol>
+            </details>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '6px', fontSize: '11px' }}
+              onClick={handleLoadLocalFonts}
+            >
+              {t('loadDeviceFonts')} ({availableFontFamilies.length})
+            </button>
+            {fontLoadStatus && (
+              <div className="font-load-status">
+                {t(fontLoadStatus)}
+              </div>
+            )}
+            {fontApplyStatus && (
+              <div className="font-load-status">
+                {t(fontApplyStatus)}
+              </div>
+            )}
           </div>
 
           <div className="panel-subtitle">{t('ocrEngine')}</div>
@@ -1335,176 +1520,6 @@ function App() {
                 </div>
               )}
             </details>
-          </div>
-
-          <div className="panel-subtitle">{t('presetFonts')}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('engFont')}:</span>
-              <select
-                value={englishFont}
-                onChange={(e) => {
-                  setEnglishFont(e.target.value);
-                  setFontApplyStatus('');
-                }}
-                style={{
-                  background: '#2D2D2D',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  width: '180px'
-                }}
-              >
-                {availableFontFamilies.map((family) => (
-                  <option value={family} key={`english-${family}`}>{family}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('zhFont')}:</span>
-              <select
-                value={chineseFont}
-                onChange={(e) => {
-                  setChineseFont(e.target.value);
-                  setFontApplyStatus('');
-                }}
-                style={{
-                  background: '#2D2D2D',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  width: '180px'
-                }}
-              >
-                {sortedChineseFontOptions.map((family) => (
-                  <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="font-style-editor">
-              <label className="font-size-control">
-                <span>{t('fontSize')}:</span>
-                <input
-                  type="number"
-                  min="6"
-                  max="200"
-                  step="1"
-                  inputMode="numeric"
-                  value={presetFontSize}
-                  onChange={(e) => {
-                    const next = Math.min(200, Math.max(6, Number(e.target.value) || 6));
-                    setPresetFontSize(next);
-                    localStorage.setItem('preset_font_size', String(next));
-                    setFontApplyStatus('');
-                  }}
-                  aria-label={t('fontSize')}
-                />
-                <span>px</span>
-              </label>
-              <div className="font-style-toggles">
-                <button
-                  type="button"
-                  className={`btn btn-secondary ${presetBold ? 'active' : ''}`}
-                  aria-pressed={presetBold}
-                  onClick={() => {
-                    const next = !presetBold;
-                    setPresetBold(next);
-                    localStorage.setItem('preset_font_bold', String(next));
-                    setFontApplyStatus('');
-                  }}
-                >
-                  {t('bold')}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-secondary ${presetItalic ? 'active' : ''}`}
-                  aria-pressed={presetItalic}
-                  onClick={() => {
-                    const next = !presetItalic;
-                    setPresetItalic(next);
-                    localStorage.setItem('preset_font_italic', String(next));
-                    setFontApplyStatus('');
-                  }}
-                >
-                  {t('italic')}
-                </button>
-              </div>
-            </div>
-
-            <div className="font-apply-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!selectedRegion}
-                onClick={handleApplyPresetFontSelected}
-              >
-                {t('applyStyleSelected')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!imageLoaded}
-                onClick={handleApplyDefaultFontAll}
-              >
-                {t('applyStyleAll')}
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-              <input
-                type="checkbox"
-                id="forcePresetFontCheckbox"
-                checked={forcePresetFont}
-                onChange={(e) => {
-                  setForcePresetFont(e.target.checked);
-                  localStorage.setItem('force_preset_font', String(e.target.checked));
-                }}
-                style={{ cursor: 'pointer' }}
-              />
-              <label
-                htmlFor="forcePresetFontCheckbox"
-                style={{ fontSize: '11px', opacity: 0.8, cursor: 'pointer', userSelect: 'none' }}
-              >
-                {t('forceFont')}
-              </label>
-            </div>
-
-            <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
-              {t('localFontsHint')}
-            </div>
-            <details className="font-workflow-panel">
-              <summary>{t('presetFontWorkflowTitle')}</summary>
-              <ol>
-                <li>{t('presetFontWorkflowStep1')}</li>
-                <li>{t('presetFontWorkflowStep2')}</li>
-                <li>{t('presetFontWorkflowStep3')}</li>
-                <li>{t('presetFontWorkflowStep4')}</li>
-              </ol>
-            </details>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: '100%', padding: '6px', fontSize: '11px' }}
-              onClick={handleLoadLocalFonts}
-            >
-              {t('loadDeviceFonts')} ({availableFontFamilies.length})
-            </button>
-            {fontLoadStatus && (
-              <div className="font-load-status">
-                {t(fontLoadStatus)}
-              </div>
-            )}
-            {fontApplyStatus && (
-              <div className="font-load-status">
-                {t(fontApplyStatus)}
-              </div>
-            )}
           </div>
 
           <h2 className="panel-title" style={{marginTop: '24px'}}>{t('aiOps')}</h2>

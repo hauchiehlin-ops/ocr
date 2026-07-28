@@ -96,6 +96,21 @@ function clampByte(value) {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
+function rgbToHex([r, g, b]) {
+  return `#${[r, g, b].map(v => clampByte(v).toString(16).padStart(2, '0')).join('')}`;
+}
+
+// The review overlay is intentionally translucent so unresolved OCR text reads
+// as "pending", not final. Tinting it with the detected glyph colour (instead
+// of a fixed black) keeps that affordance while previewing the real colour.
+function withReviewTint(hexColor) {
+  if (!hexColor) return 'rgba(0, 0, 0, 0.78)';
+  const r = parseInt(hexColor.slice(1, 3), 16);
+  const g = parseInt(hexColor.slice(3, 5), 16);
+  const b = parseInt(hexColor.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, 0.78)`;
+}
+
 // Native OS OCR engines (Apple Vision, Windows OCR) run their own internal
 // preprocessing. Upscaling or sharpening the bitmap before sending it lowers
 // Apple Vision's confidence (0.5 → 0.3 on the same text), which drops results
@@ -228,10 +243,12 @@ function normalizeCustomOcrItems(result) {
 }
 
 const OcrCanvas = forwardRef(({
-  onRegionSelect, 
-  onLayersUpdate, 
-  onImageLoaded, 
-  onOcrProcessing, 
+  onRegionSelect,
+  onLayersUpdate,
+  onImageLoaded,
+  onOcrProcessing,
+  onSourceFileNameChange,
+  onZoomChange,
   zoomLevel = 1,
   isRegionalOcrActive = false,
   regionalAction = 'ocr',
@@ -262,6 +279,14 @@ const OcrCanvas = forwardRef(({
   const enableAiInpaintRef = useRef(enableAiInpaint);
   const tesseractWorker = useRef(null);
   const originalDimensions = useRef({ width: 0, height: 0 });
+  // Save/Save As state: the loaded file's name (for the suggested filename and
+  // the header badge) and the File System Access handle to overwrite on repeat
+  // saves. Reset whenever a new image is loaded or the image is closed.
+  const sourceFileNameRef = useRef(null);
+  const saveFileHandleRef = useRef(null);
+  const saveRevisionRef = useRef(0);
+  const onZoomChangeRef = useRef(onZoomChange);
+  useEffect(() => { onZoomChangeRef.current = onZoomChange; }, [onZoomChange]);
   // File selection and OCR contain long asynchronous stages. Always read the
   // latest switch value instead of the render-time closure that started them.
   useEffect(() => {
@@ -300,7 +325,7 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     const json = JSON.stringify(canvas.toJSON([
-      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'cleanupExpandX', 'cleanupExpandY', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'confidence',
+      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'cleanupExpandX', 'cleanupExpandY', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'confidence', 'originalTextColor',
       'selectable', 'evented'
     ]));
 
@@ -441,6 +466,17 @@ const OcrCanvas = forwardRef(({
         canvas.isDragging = false;
         canvas.selection = true;
       }
+    });
+
+    // Mouse-wheel zoom over the editing area. Zoom is a controlled prop owned
+    // by the parent (mirrors the +/- buttons), so this only reports the next
+    // value upward instead of calling canvas.setZoom() directly.
+    canvas.on('mouse:wheel', (opt) => {
+      opt.e.preventDefault();
+      opt.e.stopPropagation();
+      if (!onZoomChangeRef.current) return;
+      const step = opt.e.deltaY > 0 ? -0.05 : 0.05;
+      onZoomChangeRef.current((prev) => Math.min(5, Math.max(0.1, Math.round((prev + step) * 100) / 100)));
     });
 
     canvas.on('object:modified', saveHistory);
@@ -767,6 +803,18 @@ const OcrCanvas = forwardRef(({
     }
     if (!maskedCount) return null;
 
+    // Sample the glyph colour itself (pixels the mask just flagged as text,
+    // before dilation pulls in background-adjacent pixels) so the replacement
+    // textbox can preview the source colour instead of a fixed black.
+    const glyphIndices = [];
+    for (let y = targetTop; y < targetBottom; y += 1) {
+      for (let x = targetLeft; x < targetRight; x += 1) {
+        const pixelIndex = y * patchWidth + x;
+        if (mask[pixelIndex]) glyphIndices.push(pixelIndex * 4);
+      }
+    }
+    const glyphColor = dominantColor(glyphIndices);
+
     // Dilate so anti-aliased edges and glyph strokes that poke slightly past
     // a tight OCR bounding box are rebuilt as well.
     const dilationRadius = Math.max(2, Math.min(6, Math.round(imageHeight * 0.16)));
@@ -823,7 +871,7 @@ const OcrCanvas = forwardRef(({
 
     imageData.data.set(output);
     ctx.putImageData(imageData, 0, 0);
-    return finishPatch(patchCanvas, geometry);
+    return { ...finishPatch(patchCanvas, geometry), textColor: glyphColor ? rgbToHex(glyphColor) : null };
   };
 
   // Manual rectangle erasing intentionally clears the entire selection. Use a
@@ -891,7 +939,7 @@ const OcrCanvas = forwardRef(({
       textbox.cleanupExpandY || 0
     );
     if (!patchInfo) return false;
-    
+
     const patchImg = await fabric.FabricImage.fromURL(patchInfo.dataUrl);
     // Fabric images treat width/height as a source crop, not a resize: the
     // bitmap is at original image resolution, so map it into canvas space
@@ -906,11 +954,12 @@ const OcrCanvas = forwardRef(({
       isPatch: true,
       sourceLayerId: textbox.id
     });
-    
+
     const canvas = fabricCanvas.current;
     canvas.add(patchImg);
     canvas.sendObjectToBack(patchImg);
-    return true;
+    if (patchInfo.textColor) textbox.originalTextColor = patchInfo.textColor;
+    return patchInfo;
   };
 
   const eraseRegion = async (left, top, width, height) => {
@@ -1231,7 +1280,10 @@ const OcrCanvas = forwardRef(({
 
         // Replace the source glyphs after the OCR box is accepted. The patch is
         // pixel-masked, so surrounding diagram lines and colours remain intact.
-        if (!block.manual) await _addCoverPatch(text);
+        if (!block.manual) {
+          await _addCoverPatch(text);
+          if (text.originalTextColor) text.set('fill', withReviewTint(text.originalTextColor));
+        }
         canvas.add(text);
         addedTextboxes.push(text);
       }
@@ -1278,7 +1330,7 @@ const OcrCanvas = forwardRef(({
       isItalic: obj.fontStyle === 'italic',
       fontSize: obj.fontSize,
       fontFamily: obj.fontFamily,
-      fill: obj.isOcrReview ? '#000000' : obj.fill
+      fill: obj.isOcrReview ? (obj.originalTextColor || '#000000') : obj.fill
     }));
     
     if (onLayersUpdate) {
@@ -1309,9 +1361,10 @@ const OcrCanvas = forwardRef(({
     // box must still erase its source glyphs. Otherwise a more complete box can
     // be suppressed by a shorter overlapping result (for example, the full
     // label versus its trailing words) and the unpatched prefix remains visible.
+    const textColorById = new Map();
     for (let i = 0; i < sanitizedBlocks.length; i += 1) {
       const block = sanitizedBlocks[i];
-      await _addCoverPatch({
+      const patchInfo = await _addCoverPatch({
         id: block.id || `source_patch_${Date.now()}_${i}`,
         isOcrReview: true,
         originalLeft: block.bbox.x,
@@ -1321,11 +1374,13 @@ const OcrCanvas = forwardRef(({
         cleanupExpandX: block.cleanupExpandX || 0,
         cleanupExpandY: block.cleanupExpandY || 0
       }, { force: true });
+      if (patchInfo?.textColor && block.id) textColorById.set(block.id, patchInfo.textColor);
     }
 
     for (let i = 0; i < reviewBlocks.length; i++) {
       const block = reviewBlocks[i];
       const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h);
+      const detectedColor = textColorById.get(block.id) || null;
 
       const text = new fabric.Textbox(block.text, {
         left: block.bbox.x,
@@ -1336,8 +1391,9 @@ const OcrCanvas = forwardRef(({
         fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
         // OCR output is a review/replacement layer. The patch removes only the
         // recognized glyph pixels; surrounding diagram content remains intact.
-        // A slight transparency makes disagreements easy to spot.
-        fill: 'rgba(0,0,0,0.78)',
+        // A slight transparency (tinted with the detected source colour) makes
+        // disagreements easy to spot while still previewing the real colour.
+        fill: withReviewTint(detectedColor),
         backgroundColor: 'transparent',
         id: block.id || `layer_${Date.now()}_${Math.random()}`,
         fontFamily: fontToUse,
@@ -1349,6 +1405,7 @@ const OcrCanvas = forwardRef(({
         transparentCorners: true,
         isOcrReview: true,
         confidence: block.confidence,
+        originalTextColor: detectedColor,
 
         originalLeft: block.bbox.x,
         originalTop: block.bbox.y,
@@ -1357,7 +1414,7 @@ const OcrCanvas = forwardRef(({
         cleanupExpandX: block.cleanupExpandX || 0,
         cleanupExpandY: block.cleanupExpandY || 0
       });
-      
+
       canvas.add(text);
     }
 
@@ -1375,7 +1432,7 @@ const OcrCanvas = forwardRef(({
         text: activeObject.text,
         isBold: activeObject.fontWeight === 'bold',
         isItalic: activeObject.fontStyle === 'italic',
-        fill: activeObject.isOcrReview ? '#000000' : activeObject.fill,
+        fill: activeObject.isOcrReview ? (activeObject.originalTextColor || '#000000') : activeObject.fill,
         fontFamily: activeObject.fontFamily,
         fontSize: activeObject.fontSize
       });
@@ -1416,7 +1473,7 @@ const OcrCanvas = forwardRef(({
         text: activeObject.text,
         isBold: activeObject.fontWeight === 'bold',
         isItalic: activeObject.fontStyle === 'italic',
-        fill: activeObject.isOcrReview ? '#000000' : activeObject.fill,
+        fill: activeObject.isOcrReview ? (activeObject.originalTextColor || '#000000') : activeObject.fill,
         fontFamily: activeObject.fontFamily,
         fontSize: activeObject.fontSize
       });
@@ -1425,15 +1482,19 @@ const OcrCanvas = forwardRef(({
 
   const materializeReviewLayer = async (textbox) => {
     if (!textbox?.isOcrReview) return;
+    // Flip the flag before the await: repeated calls (e.g. one per keystroke
+    // while the user retypes a review textbox) must see isOcrReview already
+    // false and bail out above, or each keystroke races to add its own
+    // duplicate cover patch and the canvas backs up.
+    textbox.set({
+      isOcrReview: false,
+      fill: textbox.originalTextColor || '#000000'
+    });
     const canvas = fabricCanvas.current;
     const alreadyPatched = canvas?.getObjects().some(obj =>
       obj.isPatch && obj.sourceLayerId === textbox.id
     );
     if (!alreadyPatched) await _addCoverPatch(textbox, { force: true });
-    textbox.set({
-      isOcrReview: false,
-      fill: '#000000'
-    });
   };
 
   const centerCanvasOnObject = (obj) => {
@@ -1486,6 +1547,45 @@ const OcrCanvas = forwardRef(({
       }
       canvas.renderAll();
     }
+  };
+
+  // Save / Save As helpers. The suggested filename is always the loaded
+  // file's own name plus a revision suffix, never a generic placeholder, per
+  // the "first save = <name>-rev-1" requirement.
+  const buildExportBaseName = () => {
+    const original = sourceFileNameRef.current || 'ocr-exported';
+    return original.replace(/\.[^./\\]+$/, '');
+  };
+
+  const buildSaveSuggestedName = (revision) => `${buildExportBaseName()}-rev-${revision}.png`;
+
+  const buildExportDataUrl = () => {
+    const canvas = fabricCanvas.current;
+    const layout = imageLayout.current;
+    return withIdentityViewport(canvas, () => canvas.toDataURL({
+      format: 'png',
+      left: layout.left,
+      top: layout.top,
+      width: layout.width,
+      height: layout.height,
+      multiplier: 1 / layout.scale
+    }));
+  };
+
+  const downloadDataUrl = (dataUrl, filename) => {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const writeDataUrlToHandle = async (handle, dataUrl) => {
+    const blob = await (await fetch(dataUrl)).blob();
+    const writable = await handle.createWritable();
+    await writable.write(blob);
+    await writable.close();
   };
 
   const addManualTextBox = (left, top, initialText = t('manualRegionText'), width = 140) => {
@@ -1591,7 +1691,7 @@ const OcrCanvas = forwardRef(({
           text: obj.text,
           isBold: obj.fontWeight === 'bold',
           isItalic: obj.fontStyle === 'italic',
-          fill: obj.isOcrReview ? '#000000' : obj.fill,
+          fill: obj.isOcrReview ? (obj.originalTextColor || '#000000') : obj.fill,
           fontFamily: obj.fontFamily,
           fontSize: obj.fontSize
         });
@@ -1603,9 +1703,9 @@ const OcrCanvas = forwardRef(({
       if (!canvas) return;
       const activeObj = canvas.getActiveObject();
       if (activeObj) {
-        canvas.getObjects()
-          .filter(obj => obj.isPatch && obj.sourceLayerId === activeObj.id)
-          .forEach(obj => canvas.remove(obj));
+        // Keep the cover patch: it is what erased the source glyphs. Removing
+        // it along with the textbox uncovers the original, un-corrected OCR
+        // text underneath instead of leaving the area cleanly erased.
         canvas.remove(activeObj);
         canvas.discardActiveObject();
         canvas.renderAll();
@@ -1696,11 +1796,15 @@ const OcrCanvas = forwardRef(({
       batchInpaintCanvasRef.current = null;
       originalDimensions.current = { width: 0, height: 0 };
       imageLayout.current = { scale: 1, left: 0, top: 0, width: 0, height: 0 };
+      sourceFileNameRef.current = null;
+      saveFileHandleRef.current = null;
+      saveRevisionRef.current = 0;
+      if (onSourceFileNameChange) onSourceFileNameChange(null);
       setImageLoaded(false);
       if (onImageLoaded) onImageLoaded(false);
       if (onLayersUpdate) onLayersUpdate([]);
       if (onRegionSelect) onRegionSelect(null);
-      
+
       history.current = [];
       historyIndex.current = -1;
       if (onHistoryStatusChange) {
@@ -1719,27 +1823,62 @@ const OcrCanvas = forwardRef(({
       if (onWorkerStatusChange) onWorkerStatusChange(t('clickCanvasToInsertText'));
       canvas.renderAll();
     },
-    exportImage: () => {
+    // "Save Image": the first save prompts once (suggesting <name>-rev-1.png)
+    // and remembers the resulting file handle; every later save overwrites
+    // that same file with no further prompt. Only Chromium-based browsers
+    // expose the File System Access API needed for a true overwrite — other
+    // browsers fall back to a normal download each time.
+    saveImage: async () => {
       const canvas = fabricCanvas.current;
       if (!canvas || !originalDimensions.current.width) return;
 
-      const layout = imageLayout.current;
-      // Crop to the image area and restore original image resolution
-      const dataUrl = withIdentityViewport(canvas, () => canvas.toDataURL({
-        format: 'png',
-        left: layout.left,
-        top: layout.top,
-        width: layout.width,
-        height: layout.height,
-        multiplier: 1 / layout.scale
-      }));
+      if (typeof window.showSaveFilePicker === 'function') {
+        try {
+          if (!saveFileHandleRef.current) {
+            saveRevisionRef.current = 1;
+            saveFileHandleRef.current = await window.showSaveFilePicker({
+              suggestedName: buildSaveSuggestedName(saveRevisionRef.current),
+              types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }]
+            });
+          }
+          await writeDataUrlToHandle(saveFileHandleRef.current, buildExportDataUrl());
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+          console.error('Save Image failed:', error);
+          alert('Save Image failed: ' + error.message);
+        }
+        return;
+      }
 
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = "ocr-exported.png";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      downloadDataUrl(buildExportDataUrl(), buildSaveSuggestedName(saveRevisionRef.current || 1));
+    },
+    // "Save As": always prompts for a new file and, on success, makes that
+    // new file the target of subsequent plain "Save Image" calls.
+    saveImageAs: async () => {
+      const canvas = fabricCanvas.current;
+      if (!canvas || !originalDimensions.current.width) return;
+
+      const nextRevision = (saveRevisionRef.current || 0) + 1;
+
+      if (typeof window.showSaveFilePicker === 'function') {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: buildSaveSuggestedName(nextRevision),
+            types: [{ description: 'PNG Image', accept: { 'image/png': ['.png'] } }]
+          });
+          saveFileHandleRef.current = handle;
+          saveRevisionRef.current = nextRevision;
+          await writeDataUrlToHandle(handle, buildExportDataUrl());
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+          console.error('Save Image As failed:', error);
+          alert('Save Image As failed: ' + error.message);
+        }
+        return;
+      }
+
+      saveRevisionRef.current = nextRevision;
+      downloadDataUrl(buildExportDataUrl(), buildSaveSuggestedName(nextRevision));
     },
     exportPDF: () => {
       const canvas = fabricCanvas.current;
@@ -1988,6 +2127,11 @@ const OcrCanvas = forwardRef(({
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file || !fabricCanvas.current || !containerRef.current) return;
+
+    sourceFileNameRef.current = file.name || null;
+    saveFileHandleRef.current = null;
+    saveRevisionRef.current = 0;
+    if (onSourceFileNameChange) onSourceFileNameChange(sourceFileNameRef.current);
 
     const reader = new FileReader();
     reader.onload = async (f) => {

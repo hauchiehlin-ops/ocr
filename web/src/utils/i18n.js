@@ -19,7 +19,8 @@ export const SUPPORTED_UI_LANGUAGES = [
 
 const english = {
   title: 'AI OCR Pro Editor', file: 'File', edit: 'Edit', view: 'View', settings: 'Settings', manualGuide: 'User Manual',
-  loadImage: 'Load Image...', closeImage: 'Close Image', saveImage: 'Save Image',
+  loadImage: 'Load Image...', closeImage: 'Close Image', saveImage: 'Save Image', saveImageAs: 'Save Image As...',
+  loadedFileNameHint: 'Loaded file (browsers cannot expose the full folder path):',
   exportCsv: 'Export to CSV', exportPdf: 'Export to Searchable PDF', exportImage: 'Export Image',
   insertText: 'Insert Text', applyFont: 'Apply Preset Font & Style', applyFontAll: 'Apply Preset Font & Style to All',
   undo: 'Undo', redo: 'Redo', showLeft: 'Show Left Panel', showRight: 'Show Right Panel',
@@ -127,7 +128,8 @@ const english = {
 const traditionalChinese = {
   ...english,
   file: '檔案', edit: '編輯', view: '檢視', settings: '設定', manualGuide: '操作說明', loadImage: '載入圖片...', closeImage: '關閉圖片',
-  saveImage: '儲存圖片', exportCsv: '匯出至 CSV', exportPdf: '匯出至可搜尋 PDF', exportImage: '匯出圖片', insertText: '插入文字',
+  saveImage: '儲存圖片', saveImageAs: '另存新檔', loadedFileNameHint: '已載入的檔案（瀏覽器基於安全限制，無法取得完整資料夾路徑）：',
+  exportCsv: '匯出至 CSV', exportPdf: '匯出至可搜尋 PDF', exportImage: '匯出圖片', insertText: '插入文字',
   applyFont: '套用預設字型與格式', applyFontAll: '套用預設字型與格式至全部', undo: '復原', redo: '重做', showLeft: '顯示左側面板', showRight: '顯示右側面板',
   uiLang: 'UI 介面語言', zoom: '縮放', docStatus: '文件狀態', noImage: '尚未載入圖片', loaded: '✓ 圖片已載入並處理完成',
   processingOcr: '正在進行 OCR...', runningTess: '執行 OCR 引擎中...', layers: '互動圖層', noLayers: '尚未偵測到圖層', emptyLayer: '[空白圖層]',
