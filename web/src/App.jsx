@@ -1062,23 +1062,6 @@ function App() {
         <aside className="sidebar right-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
           <h2 className="panel-title">{t('formatting')}</h2>
 
-          <div className="panel-subtitle">{t('editContent')}</div>
-          <textarea
-            className="textarea inspector-textarea"
-            rows={3}
-            aria-label={t('editContent')}
-            value={selectedRegion?.text || ''}
-            disabled={!selectedRegion}
-            onChange={(e) => {
-              const newText = e.target.value;
-              setSelectedRegion(prev => ({ ...prev, text: newText }));
-              if (canvasRef.current && selectedRegion?.id) {
-                canvasRef.current.updateRegionText(selectedRegion.id, newText);
-              }
-            }}
-            placeholder={selectedRegion ? t('placeholderActive') : t('placeholder')}
-          />
-
           <div className="panel-subtitle">{t('color')}</div>
           <div className="color-presets">
             {['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'].map(color => (
