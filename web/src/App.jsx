@@ -402,7 +402,6 @@ function App() {
   const [englishFont, setEnglishFont] = useState('Century Gothic');
   const [applyPresetFontFamily, setApplyPresetFontFamily] = useState(() => localStorage.getItem('apply_preset_font_family') !== 'false');
   const [applyPresetTypography, setApplyPresetTypography] = useState(() => localStorage.getItem('apply_preset_typography') !== 'false');
-  const [singleWordAdjustMode, setSingleWordAdjustMode] = useState(() => localStorage.getItem('single_word_adjust_mode') === 'true');
   const [presetFontSize, setPresetFontSize] = useState(() => {
     const saved = Number(localStorage.getItem('preset_font_size'));
     return Number.isFinite(saved) && saved >= 6 && saved <= 200 ? saved : 16;
@@ -1145,7 +1144,6 @@ function App() {
             applyPresetFontFamily={applyPresetFontFamily}
             applyPresetTypography={applyPresetTypography}
             forcePresetFont={forcePresetFont}
-            singleWordAdjustMode={singleWordAdjustMode}
             ocrEngine={ocrEngine}
             geminiApiKey={geminiApiKey}
             geminiModel={geminiModel}
@@ -1297,21 +1295,6 @@ function App() {
               </div>
             )}
           </div>
-
-          <label className="font-apply-option">
-            <input
-              type="checkbox"
-              checked={singleWordAdjustMode}
-              onChange={(e) => {
-                setSingleWordAdjustMode(e.target.checked);
-                localStorage.setItem('single_word_adjust_mode', String(e.target.checked));
-              }}
-            />
-            <span>
-              <strong>{t('singleWordAdjustMode')}</strong>
-              <small>{t('singleWordAdjustHelp')}</small>
-            </span>
-          </label>
 
           <div className="panel-subtitle">{t('presetFonts')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
