@@ -172,6 +172,7 @@ const DEFAULT_CJK_INK_RATIO = 0.9;
 const DEFAULT_LATIN_INK_RATIO = 0.75;
 const DEFAULT_TEXTBOX_LINE_HEIGHT = 1;
 const DEFAULT_TEXTBOX_CHAR_SPACING = 0;
+const HISTORY_LIMIT = 30;
 let ocrFontMeasureCtx = null;
 function measureRawInkHeightRatio(text, fontFamily) {
   const referenceSize = 100;
@@ -408,6 +409,7 @@ const OcrCanvas = forwardRef(({
   onWorkerStatusChange,
   onAiStatusChange,
   enableAiInpaint = false,
+  autoRunOcr = true,
   presetFontFamily = DEFAULT_OCR_FONT_FAMILY,
   presetFontSize = 16,
   presetBold = false,
@@ -439,6 +441,9 @@ const OcrCanvas = forwardRef(({
   const sourceFileNameRef = useRef(null);
   const saveFileHandleRef = useRef(null);
   const saveRevisionRef = useRef(0);
+  const documentSessionRef = useRef(0);
+  const activeFileReaderRef = useRef(null);
+  const eventHandlersRef = useRef({});
   const onZoomChangeRef = useRef(onZoomChange);
   useEffect(() => { onZoomChangeRef.current = onZoomChange; }, [onZoomChange]);
   // File selection and OCR contain long asynchronous stages. Always read the
@@ -483,10 +488,17 @@ const OcrCanvas = forwardRef(({
     const canvas = fabricCanvas.current;
     if (!canvas) return;
 
-    const json = JSON.stringify(canvas.toJSON([
+    const snapshot = canvas.toObject([
       'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'cleanupExpandX', 'cleanupExpandY', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'isPastedRegion', 'confidence', 'originalTextColor',
       'selectable', 'evented'
-    ]));
+    ]);
+    // The source image can be many megabytes. Keeping its data URL in every
+    // undo state multiplied memory use until Chromium's renderer became
+    // unresponsive or crashed. The background is document state, not edit
+    // history, so preserve it separately while undoing.
+    delete snapshot.backgroundImage;
+    delete snapshot.background;
+    const json = JSON.stringify(snapshot);
 
     if (history.current[historyIndex.current] === json) {
       syncLayers();
@@ -495,6 +507,9 @@ const OcrCanvas = forwardRef(({
     
     history.current = history.current.slice(0, historyIndex.current + 1);
     history.current.push(json);
+    if (history.current.length > HISTORY_LIMIT) {
+      history.current.splice(0, history.current.length - HISTORY_LIMIT);
+    }
     historyIndex.current = history.current.length - 1;
     
     if (onHistoryStatusChange) {
@@ -593,20 +608,18 @@ const OcrCanvas = forwardRef(({
     fabricCanvas.current = canvas;
     if (import.meta.env.DEV) window.__fabricCanvas = canvas;
 
-    canvas.on('selection:created', handleSelection);
-    canvas.on('selection:updated', handleSelection);
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Fabric listeners
-    // are attached once; the handlers read the latest live state from refs.
+    canvas.on('selection:created', (event) => eventHandlersRef.current.handleSelection?.(event));
+    canvas.on('selection:updated', (event) => eventHandlersRef.current.handleSelection?.(event));
     canvas.on('selection:cleared', () => {
       // Text editing can briefly clear the selection before Fabric settles
       // back onto the same textbox. Re-sync on the next frame so the sidebar
       // doesn't drop its selection state spuriously.
-      requestAnimationFrame(syncSelectedTextbox);
+      requestAnimationFrame(() => eventHandlersRef.current.syncSelectedTextbox?.());
     });
 
-    canvas.on('text:changed', handleTextChanged);
-    canvas.on('text:editing:entered', handleEditingEntered);
-    canvas.on('text:editing:exited', handleEditingExited);
+    canvas.on('text:changed', (event) => eventHandlersRef.current.handleTextChanged?.(event));
+    canvas.on('text:editing:entered', (event) => eventHandlersRef.current.handleEditingEntered?.(event));
+    canvas.on('text:editing:exited', (event) => eventHandlersRef.current.handleEditingExited?.(event));
 
     // Viewport drag-to-pan support
     canvas.on('mouse:down', (opt) => {
@@ -618,7 +631,11 @@ const OcrCanvas = forwardRef(({
         canvas.defaultCursor = 'default';
         canvas.hoverCursor = 'move';
         if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'default';
-        addManualTextBox(pointer.x, pointer.y, t('manualRegionText'));
+        eventHandlersRef.current.addManualTextBox?.(
+          pointer.x,
+          pointer.y,
+          eventHandlersRef.current.translate?.('manualRegionText')
+        );
         opt.e?.preventDefault?.();
         opt.e?.stopPropagation?.();
         return;
@@ -639,9 +656,11 @@ const OcrCanvas = forwardRef(({
         opt.e?.stopPropagation?.();
         isPasteModeActiveRef.current = false;
         onPasteModeChange?.(false);
-        void pasteCopiedRegion(pointer).catch((error) => {
+        void eventHandlersRef.current.pasteCopiedRegion?.(pointer).catch((error) => {
           console.warn('Paste region failed:', error);
-          onWorkerStatusChange?.(t('pasteRegionFailed'));
+          eventHandlersRef.current.notifyWorker?.(
+            eventHandlersRef.current.translate?.('pasteRegionFailed')
+          );
         });
         return;
       }
@@ -689,15 +708,15 @@ const OcrCanvas = forwardRef(({
       onZoomChangeRef.current((prev) => Math.min(5, Math.max(0.1, Math.round((prev + step) * 100) / 100)));
     });
 
-    canvas.on('object:modified', saveHistory);
+    canvas.on('object:modified', () => eventHandlersRef.current.saveHistory?.());
     canvas.on('object:added', (e) => {
       if (e.target && e.target !== bgImage.current && !e.target.isPatch && !e.target.isSelectionRect) {
-        saveHistory();
+        eventHandlersRef.current.saveHistory?.();
       }
     });
     canvas.on('object:removed', (e) => {
       if (e.target && e.target !== bgImage.current && !e.target.isPatch && !e.target.isSelectionRect) {
-        saveHistory();
+        eventHandlersRef.current.saveHistory?.();
       }
     });
 
@@ -719,6 +738,10 @@ const OcrCanvas = forwardRef(({
     }
 
     return () => {
+      documentSessionRef.current += 1;
+      activeFileReaderRef.current?.abort();
+      activeFileReaderRef.current = null;
+      cancelLamaOperation();
       resizeObserver.disconnect();
       if (fabricCanvas.current) {
         fabricCanvas.current.dispose();
@@ -822,7 +845,7 @@ const OcrCanvas = forwardRef(({
     patchHeight: patchCanvas.height * geometry.scale
   });
 
-  const prepareBatchInpaint = async blocks => {
+  const prepareBatchInpaint = async (blocks, sessionId = documentSessionRef.current) => {
     const sourceCanvas = sampleCanvasRef.current;
     const layout = imageLayout.current;
     batchInpaintCanvasRef.current = null;
@@ -859,14 +882,20 @@ const OcrCanvas = forwardRef(({
     }
     try {
       const result = await inpaintWithLama(source, mask, width, height, {
-        onStatus: status => { onAiStatusChange?.(status); if (status.message) onWorkerStatusChange?.(status.message); }
+        onStatus: status => {
+          if (sessionId !== documentSessionRef.current) return;
+          onAiStatusChange?.(status);
+          if (status.message) onWorkerStatusChange?.(status.message);
+        }
       });
+      if (sessionId !== documentSessionRef.current) return;
       if (!result || result.length !== source.length) throw new Error('AI 修補輸出不完整，已拒絕套用');
       const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
       const context = canvas.getContext('2d'); const data = context.createImageData(width, height);
       data.data.set(result); context.putImageData(data, 0, 0);
       batchInpaintCanvasRef.current = canvas;
     } catch (error) {
+      if (sessionId !== documentSessionRef.current) return;
       if (error?.name !== 'AbortError') console.warn('Batch LaMa unavailable; using spatial fallback.', error);
       onAiStatusChange?.({ phase: error?.name === 'AbortError' ? 'cancelled' : 'error', message: error.message });
     }
@@ -1139,10 +1168,15 @@ const OcrCanvas = forwardRef(({
     return finishPatch(patchCanvas, geometry);
   };
 
-  const _addCoverPatch = async (textbox, { force = false } = {}) => {
+  const _addCoverPatch = async (
+    textbox,
+    { force = false, sessionId = documentSessionRef.current } = {}
+  ) => {
     if (!textbox || textbox.manual || textbox.isManualText) return false;
     if (!force && !textbox.isOcrReview) return false;
 
+    const canvas = fabricCanvas.current;
+    if (!canvas || sessionId !== documentSessionRef.current) return false;
     const patchInfo = await createTextPatch(
       textbox.originalLeft, 
       textbox.originalTop, 
@@ -1151,9 +1185,10 @@ const OcrCanvas = forwardRef(({
       textbox.cleanupExpandX || 0,
       textbox.cleanupExpandY || 0
     );
-    if (!patchInfo) return false;
+    if (!patchInfo || sessionId !== documentSessionRef.current) return false;
 
     const patchImg = await fabric.FabricImage.fromURL(patchInfo.dataUrl);
+    if (sessionId !== documentSessionRef.current || fabricCanvas.current !== canvas) return false;
     // Fabric images treat width/height as a source crop, not a resize: the
     // bitmap is at original image resolution, so map it into canvas space
     // with scaleX/scaleY or the patch covers the wrong area.
@@ -1168,7 +1203,6 @@ const OcrCanvas = forwardRef(({
       sourceLayerId: textbox.id
     });
 
-    const canvas = fabricCanvas.current;
     canvas.add(patchImg);
     canvas.sendObjectToBack(patchImg);
     if (patchInfo.textColor) textbox.originalTextColor = patchInfo.textColor;
@@ -1456,6 +1490,7 @@ const OcrCanvas = forwardRef(({
   const runRegionalOcr = async (left, top, width, height) => {
     if (!bgImage.current || !fabricCanvas.current || !sampleCanvasRef.current) return;
     if (ocrEngine === 'local' && !tesseractWorker.current) return;
+    const sessionId = documentSessionRef.current;
     
     const layout = imageLayout.current;
     const scale = layout.scale;
@@ -1498,6 +1533,7 @@ const OcrCanvas = forwardRef(({
         
         const cropDataUrl = cropCanvas.toDataURL('image/png');
         const textResult = await runGeminiRegionalOcr(cropDataUrl, geminiApiKey, onWorkerStatusChange, geminiModel, geminiApiUrl);
+        if (sessionId !== documentSessionRef.current) return;
 
         if (textResult) {
           blocks.push({
@@ -1537,8 +1573,10 @@ const OcrCanvas = forwardRef(({
         // The untouched crop gives native OCR its best confidence. Only very
         // small crops get a smooth 2x retry when the first pass finds nothing.
         let customItems = await recognizeWithCustomEngine(cropCanvas);
+        if (sessionId !== documentSessionRef.current) return;
         if (customItems.length === 0 && Math.min(imgWidth, imgHeight) < 160) {
           customItems = await recognizeWithCustomEngine(createUpscaledCanvas(cropCanvas, 2));
+          if (sessionId !== documentSessionRef.current) return;
         }
 
         customItems.forEach((item, index) => {
@@ -1575,6 +1613,7 @@ const OcrCanvas = forwardRef(({
         prepareTesseractImage(preprocessCropCtx, preprocessCropCanvas.width, preprocessCropCanvas.height);
 
         const result = await tesseractWorker.current.recognize(preprocessCropCanvas, {}, { blocks: true });
+        if (sessionId !== documentSessionRef.current) return;
         const lines = getRecognizedLines(result.data);
 
         lines.forEach((line, index) => {
@@ -1616,7 +1655,8 @@ const OcrCanvas = forwardRef(({
 
       const addedTextboxes = [];
       const sharedInkRatios = computeDocumentInkRatios(blocks.map(b => b.text), fontToUse);
-      await prepareBatchInpaint(blocks);
+      await prepareBatchInpaint(blocks, sessionId);
+      if (sessionId !== documentSessionRef.current) return;
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
         const sourceInkBounds = block.manual
@@ -1665,7 +1705,8 @@ const OcrCanvas = forwardRef(({
         // Replace the source glyphs after the OCR box is accepted. The patch is
         // pixel-masked, so surrounding diagram lines and colours remain intact.
         if (!block.manual) {
-          await _addCoverPatch(text);
+          await _addCoverPatch(text, { sessionId });
+          if (sessionId !== documentSessionRef.current) return;
           if (text.originalTextColor) text.set('fill', withReviewTint(text.originalTextColor));
         }
         canvas.add(text);
@@ -1687,12 +1728,15 @@ const OcrCanvas = forwardRef(({
       canvas.renderAll();
       syncLayers();
     } catch (e) {
+      if (sessionId !== documentSessionRef.current) return;
       console.error("Regional OCR Error:", e);
       alert("Regional OCR failed: " + e.message);
     } finally {
-      isHistoryDisabled.current = false;
-      if (onOcrProcessing) onOcrProcessing(false);
-      if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
+      if (sessionId === documentSessionRef.current) {
+        isHistoryDisabled.current = false;
+        if (onOcrProcessing) onOcrProcessing(false);
+        if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
+      }
     }
   };
 
@@ -1722,9 +1766,9 @@ const OcrCanvas = forwardRef(({
     }
   };
 
-  const renderOcrResults = async (blocks) => {
+  const renderOcrResults = async (blocks, sessionId = documentSessionRef.current) => {
     const canvas = fabricCanvas.current;
-    if (!canvas) return;
+    if (!canvas || sessionId !== documentSessionRef.current) return;
 
     isHistoryDisabled.current = true;
 
@@ -1742,7 +1786,8 @@ const OcrCanvas = forwardRef(({
     // One shared ratio for the whole batch: every block's font size then
     // depends only on its own box height, not on what characters it contains.
     const sharedInkRatios = computeDocumentInkRatios(reviewBlocks.map(b => b.text), fontToUse);
-    await prepareBatchInpaint(sanitizedBlocks);
+    await prepareBatchInpaint(sanitizedBlocks, sessionId);
+    if (sessionId !== documentSessionRef.current || fabricCanvas.current !== canvas) return;
 
     // Dedupe controls which editable text layers are shown, but every valid OCR
     // box must still erase its source glyphs. Otherwise a more complete box can
@@ -1760,7 +1805,8 @@ const OcrCanvas = forwardRef(({
         originalHeight: block.bbox.h,
         cleanupExpandX: block.cleanupExpandX || 0,
         cleanupExpandY: block.cleanupExpandY || 0
-      }, { force: true });
+      }, { force: true, sessionId });
+      if (sessionId !== documentSessionRef.current || fabricCanvas.current !== canvas) return;
       if (patchInfo?.textColor && block.id) textColorById.set(block.id, patchInfo.textColor);
     }
 
@@ -1868,6 +1914,7 @@ const OcrCanvas = forwardRef(({
 
   const materializeReviewLayer = async (textbox) => {
     if (!textbox?.isOcrReview) return;
+    const sessionId = documentSessionRef.current;
     // Flip the flag before the await: repeated calls (e.g. one per keystroke
     // while the user retypes a review textbox) must see isOcrReview already
     // false and bail out above, or each keystroke races to add its own
@@ -1880,7 +1927,7 @@ const OcrCanvas = forwardRef(({
     const alreadyPatched = canvas?.getObjects().some(obj =>
       obj.isPatch && obj.sourceLayerId === textbox.id
     );
-    if (!alreadyPatched) await _addCoverPatch(textbox, { force: true });
+    if (!alreadyPatched) await _addCoverPatch(textbox, { force: true, sessionId });
   };
 
   const centerCanvasOnObject = (obj) => {
@@ -2048,6 +2095,39 @@ const OcrCanvas = forwardRef(({
     return text;
   };
 
+  const restoreHistorySnapshot = async (state) => {
+    const canvas = fabricCanvas.current;
+    if (!canvas || !state) return false;
+    const sessionId = documentSessionRef.current;
+    const backgroundImage = bgImage.current;
+
+    await canvas.loadFromJSON(JSON.parse(state));
+    if (sessionId !== documentSessionRef.current || fabricCanvas.current !== canvas) return false;
+
+    canvas.backgroundImage = backgroundImage;
+    restoreObjectInteractivity(canvas);
+    canvas.renderAll();
+    syncLayers();
+    syncSelectedTextbox();
+    return true;
+  };
+
+  // Fabric listeners live for the lifetime of the canvas. Delegate through a
+  // ref so they never retain first-render props, font settings, translations,
+  // or helper implementations after React has rendered newer ones.
+  eventHandlersRef.current = {
+    addManualTextBox,
+    handleEditingEntered,
+    handleEditingExited,
+    handleSelection,
+    handleTextChanged,
+    notifyWorker: onWorkerStatusChange,
+    pasteCopiedRegion,
+    saveHistory,
+    syncSelectedTextbox,
+    translate: t
+  };
+
   useImperativeHandle(ref, () => ({
     updateRegionText: (id, newText) => {
       const canvas = fabricCanvas.current;
@@ -2146,46 +2226,40 @@ const OcrCanvas = forwardRef(({
     },
     undo: () => {
       const canvas = fabricCanvas.current;
-      if (!canvas || historyIndex.current <= 0) return;
+      if (!canvas || historyIndex.current <= 0 || isHistoryDisabled.current) return;
       
       isHistoryDisabled.current = true;
       historyIndex.current--;
       const state = history.current[historyIndex.current];
-      canvas.loadFromJSON(JSON.parse(state)).then(() => {
-        bgImage.current = canvas.backgroundImage;
-        restoreObjectInteractivity(canvas);
-        canvas.renderAll();
-        isHistoryDisabled.current = false;
+      void restoreHistorySnapshot(state).then((restored) => {
+        if (!restored) return;
         if (onHistoryStatusChange) {
           onHistoryStatusChange({
             canUndo: historyIndex.current > 0,
             canRedo: historyIndex.current < history.current.length - 1
           });
         }
-        syncLayers();
-        syncSelectedTextbox();
+      }).finally(() => {
+        isHistoryDisabled.current = false;
       });
     },
     redo: () => {
       const canvas = fabricCanvas.current;
-      if (!canvas || historyIndex.current >= history.current.length - 1) return;
+      if (!canvas || historyIndex.current >= history.current.length - 1 || isHistoryDisabled.current) return;
       
       isHistoryDisabled.current = true;
       historyIndex.current++;
       const state = history.current[historyIndex.current];
-      canvas.loadFromJSON(JSON.parse(state)).then(() => {
-        bgImage.current = canvas.backgroundImage;
-        restoreObjectInteractivity(canvas);
-        canvas.renderAll();
-        isHistoryDisabled.current = false;
+      void restoreHistorySnapshot(state).then((restored) => {
+        if (!restored) return;
         if (onHistoryStatusChange) {
           onHistoryStatusChange({
             canUndo: historyIndex.current > 0,
             canRedo: historyIndex.current < history.current.length - 1
           });
         }
-        syncLayers();
-        syncSelectedTextbox();
+      }).finally(() => {
+        isHistoryDisabled.current = false;
       });
     },
     triggerUpload: () => {
@@ -2195,6 +2269,9 @@ const OcrCanvas = forwardRef(({
     clearCanvas: () => {
       const canvas = fabricCanvas.current;
       if (!canvas) return;
+      documentSessionRef.current += 1;
+      activeFileReaderRef.current?.abort();
+      activeFileReaderRef.current = null;
       cancelLamaOperation();
       onAiStatusChange?.(enableAiInpaintRef.current
         ? { phase: 'idle', progress: 0, message: 'AI 修補已就緒，等待下一張圖片' }
@@ -2203,6 +2280,16 @@ const OcrCanvas = forwardRef(({
       onRegionClipboardChange?.(false);
       isPasteModeActiveRef.current = false;
       onPasteModeChange?.(false);
+      pendingInsertText.current = false;
+      isDrawing.current = false;
+      activeRect.current = null;
+      isHistoryDisabled.current = true;
+      const activeObject = canvas.getActiveObject();
+      activeObject?.exitEditing?.();
+      canvas.discardActiveObject();
+      // canvas.clear() emits object:removed once per layer. Without this guard,
+      // closing a document generated a large undo snapshot for every removed
+      // textbox and caused the renderer memory spike seen as Chromium error 5.
       canvas.clear();
       bgImage.current = null;
       sampleCanvasRef.current = null;
@@ -2220,6 +2307,15 @@ const OcrCanvas = forwardRef(({
 
       history.current = [];
       historyIndex.current = -1;
+      isHistoryDisabled.current = false;
+      canvas.isDragging = false;
+      canvas.selection = true;
+      canvas.skipTargetFind = false;
+      canvas.defaultCursor = 'default';
+      canvas.hoverCursor = 'move';
+      if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'default';
+      const fileInput = containerRef.current?.querySelector('input[type="file"]');
+      if (fileInput) fileInput.value = '';
       if (onHistoryStatusChange) {
         onHistoryStatusChange({ canUndo: false, canRedo: false });
       }
@@ -2342,20 +2438,24 @@ const OcrCanvas = forwardRef(({
     },
     rerunOcr: async () => {
       if (!sampleCanvasRef.current) return;
+      const sessionId = documentSessionRef.current;
       if (onOcrProcessing) onOcrProcessing(true);
       try {
-        await runFullOcr();
+        await runFullOcr(sessionId);
       } catch (error) {
+        if (sessionId !== documentSessionRef.current) return;
         console.error("Error re-running OCR:", error);
         alert("OCR Failed: " + error.message);
       } finally {
-        if (onOcrProcessing) onOcrProcessing(false);
-        if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
+        if (sessionId === documentSessionRef.current) {
+          if (onOcrProcessing) onOcrProcessing(false);
+          if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
+        }
       }
     }
   }));
 
-  const runTesseractOcr = async (sampleCanvas) => {
+  const runTesseractOcr = async (sampleCanvas, sessionId = documentSessionRef.current) => {
     const worker = tesseractWorker.current;
     if (!worker) throw new Error("OCR Engine is not initialized yet.");
 
@@ -2391,6 +2491,7 @@ const OcrCanvas = forwardRef(({
       prepareTesseractImage(preprocessCtx, preprocessCanvas.width, preprocessCanvas.height);
 
       const result = await worker.recognize(preprocessCanvas, {}, { blocks: true });
+      if (sessionId !== documentSessionRef.current) return [];
       const lines = getRecognizedLines(result.data);
       lines.forEach((line, lineIndex) => {
         const rawText = line.text.trim();
@@ -2432,9 +2533,9 @@ const OcrCanvas = forwardRef(({
   // Run full-image OCR with the currently selected engine, using the stored
   // original-resolution image. Shared by the initial image load and the
   // "Re-run OCR" button (so switching engines doesn't require re-uploading).
-  const runFullOcr = async () => {
+  const runFullOcr = async (sessionId = documentSessionRef.current) => {
     const sampleCanvas = sampleCanvasRef.current;
-    if (!sampleCanvas) throw new Error("No image loaded yet.");
+    if (!sampleCanvas || sessionId !== documentSessionRef.current) return;
 
     const data = sampleCanvas.toDataURL('image/png');
     const blocks = [];
@@ -2445,6 +2546,7 @@ const OcrCanvas = forwardRef(({
       }
 
       const geminiResult = await runGeminiOcrTiled(data, geminiApiKey, onWorkerStatusChange, 4, geminiModel, geminiApiUrl);
+      if (sessionId !== documentSessionRef.current) return;
       const layout = imageLayout.current;
 
       geminiResult.forEach((item, index) => {
@@ -2490,6 +2592,7 @@ const OcrCanvas = forwardRef(({
           }
           return response.json();
         })();
+      if (sessionId !== documentSessionRef.current) return;
       const layout = imageLayout.current;
 
       const nativeItems = normalizeCustomOcrItems(customResult);
@@ -2537,15 +2640,19 @@ const OcrCanvas = forwardRef(({
         });
       });
     } else {
-      blocks.push(...await runTesseractOcr(sampleCanvas));
+      blocks.push(...await runTesseractOcr(sampleCanvas, sessionId));
     }
 
-    await renderOcrResults(blocks);
+    if (sessionId !== documentSessionRef.current) return;
+    await renderOcrResults(blocks, sessionId);
   };
 
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file || !fabricCanvas.current || !containerRef.current) return;
+    const sessionId = documentSessionRef.current + 1;
+    documentSessionRef.current = sessionId;
+    activeFileReaderRef.current?.abort();
 
     sourceFileNameRef.current = file.name || null;
     saveFileHandleRef.current = null;
@@ -2553,7 +2660,9 @@ const OcrCanvas = forwardRef(({
     if (onSourceFileNameChange) onSourceFileNameChange(sourceFileNameRef.current);
 
     const reader = new FileReader();
+    activeFileReaderRef.current = reader;
     reader.onload = async (f) => {
+      if (sessionId !== documentSessionRef.current) return;
       const rawData = f.target.result;
       try {
         // Composite the uploaded image onto a white background first: transparent
@@ -2564,6 +2673,7 @@ const OcrCanvas = forwardRef(({
           el.onerror = reject;
           el.src = rawData;
         });
+        if (sessionId !== documentSessionRef.current) return;
         const origWidth = rawImgEl.naturalWidth;
         const origHeight = rawImgEl.naturalHeight;
 
@@ -2579,6 +2689,7 @@ const OcrCanvas = forwardRef(({
 
         const img = await fabric.FabricImage.fromURL(data);
         const canvas = fabricCanvas.current;
+        if (sessionId !== documentSessionRef.current || !canvas || !containerRef.current) return;
 
         // The canvas always spans the visible workspace; the image is fit-scaled
         // and centered inside it.
@@ -2597,6 +2708,7 @@ const OcrCanvas = forwardRef(({
           height: containerHeight
         });
 
+        isHistoryDisabled.current = true;
         canvas.clear();
         img.scale(scale);
 
@@ -2624,22 +2736,31 @@ const OcrCanvas = forwardRef(({
         historyIndex.current = -1;
 
         canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        isHistoryDisabled.current = false;
         saveHistory();
         setImageLoaded(true);
-        if (onImageLoaded) onImageLoaded(true);
+        if (onImageLoaded) onImageLoaded(true, { ocrSkipped: !autoRunOcr });
 
-        if (onOcrProcessing) onOcrProcessing(true);
-
-        await runFullOcr();
+        if (autoRunOcr) {
+          if (onOcrProcessing) onOcrProcessing(true);
+          await runFullOcr(sessionId);
+        } else if (onWorkerStatusChange) {
+          onWorkerStatusChange(t('ocrSkippedStatus'));
+        }
       } catch (error) {
+        if (sessionId !== documentSessionRef.current) return;
         console.error("Error loading image / running OCR:", error);
         alert("OCR Failed: " + error.message);
       } finally {
-        if (onOcrProcessing) onOcrProcessing(false);
-        if (onWorkerStatusChange) onWorkerStatusChange("OCR Engine Ready");
+        if (activeFileReaderRef.current === reader) activeFileReaderRef.current = null;
+        if (sessionId === documentSessionRef.current) {
+          if (onOcrProcessing) onOcrProcessing(false);
+          if (onWorkerStatusChange && autoRunOcr) onWorkerStatusChange("OCR Engine Ready");
+        }
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   return (

@@ -151,6 +151,8 @@ function App() {
   });
   const [workerStatus, setWorkerStatus] = useState('Initializing...');
   const [aiStatus, setAiStatus] = useState(null);
+  const [autoRunOcr, setAutoRunOcr] = useState(() => localStorage.getItem('auto_run_ocr') !== 'false');
+  const [imageOcrSkipped, setImageOcrSkipped] = useState(false);
   const [enableAiInpaint, setEnableAiInpaint] = useState(() => localStorage.getItem('enable_ai_inpaint') === 'true');
   const [aiModelStorage, setAiModelStorage] = useState('checking');
   const [isPreparingAiModel, setIsPreparingAiModel] = useState(false);
@@ -984,7 +986,9 @@ function App() {
                  <div style={{ fontSize: '11px', opacity: 0.8, color: '#60CDFF' }}>{workerStatus}</div>
               </div>
             ) : imageLoaded ? (
-              <span style={{ color: '#4ADE80', fontWeight: 'bold' }}>{t('loaded')}</span>
+              <span style={{ color: '#4ADE80', fontWeight: 'bold' }}>
+                {t(imageOcrSkipped ? 'loadedWithoutOcr' : 'loaded')}
+              </span>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
                  <span style={{ opacity: 0.5 }}>{t('noImage')}</span>
@@ -1026,18 +1030,23 @@ function App() {
             onWorkerStatusChange={setWorkerStatus}
             onAiStatusChange={setAiStatus}
             enableAiInpaint={enableAiInpaint}
+            autoRunOcr={autoRunOcr}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
             onRegionSelect={setSelectedRegion}
             onLayersUpdate={setLayers}
             onSourceFileNameChange={setSourceFileName}
-            onImageLoaded={(loaded) => {
+            onImageLoaded={(loaded, details = {}) => {
               setImageLoaded(loaded);
+              setImageOcrSkipped(Boolean(loaded && details.ocrSkipped));
               setHasCopiedRegion(false);
               setIsPasteModeActive(false);
               setSaveStatus(null);
               if (loaded) setZoom(1);
             }}
-            onOcrProcessing={setIsOcrProcessing}
+            onOcrProcessing={(processing) => {
+              setIsOcrProcessing(processing);
+              if (processing) setImageOcrSkipped(false);
+            }}
             onHistoryStatusChange={handleHistoryStatusChange}
             onRegionClipboardChange={setHasCopiedRegion}
             onPasteModeChange={setIsPasteModeActive}
@@ -1573,6 +1582,22 @@ function App() {
                 </div>
               </details>
             </div>
+
+            <label className="ai-inpaint-option">
+              <input
+                type="checkbox"
+                checked={autoRunOcr}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setAutoRunOcr(enabled);
+                  localStorage.setItem('auto_run_ocr', String(enabled));
+                }}
+              />
+              <span>
+                <strong>{t('autoRunOcr')}</strong>
+                <small>{t('autoRunOcrHelp')}</small>
+              </span>
+            </label>
 
             <label className="ai-inpaint-option">
               <input
