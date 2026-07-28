@@ -966,8 +966,8 @@ const OcrCanvas = forwardRef(({
     // Pick a real, jointly occurring RGB cluster instead of taking independent
     // channel medians. Independent medians can synthesize a grey that never
     // existed in the source (especially around icons and coloured cards).
-    const dominantColor = (indices) => {
-      if (!indices.length) return null;
+    const buildColorBuckets = (indices) => {
+      if (!indices.length) return [];
       const buckets = new Map();
       for (const index of indices) {
         // 16-level buckets absorb JPEG/anti-alias noise without merging visibly
@@ -981,13 +981,36 @@ const OcrCanvas = forwardRef(({
         bucket.b += source[index + 2];
         buckets.set(key, bucket);
       }
+      return [...buckets.values()].map((bucket) => ({
+        count: bucket.count,
+        color: [bucket.r / bucket.count, bucket.g / bucket.count, bucket.b / bucket.count]
+      }));
+    };
+
+    const dominantColor = (indices) => {
+      const buckets = buildColorBuckets(indices);
+      if (!buckets.length) return null;
       let winner = null;
-      for (const bucket of buckets.values()) {
+      for (const bucket of buckets) {
         if (!winner || bucket.count > winner.count) winner = bucket;
       }
-      return winner
-        ? [winner.r / winner.count, winner.g / winner.count, winner.b / winner.count]
-        : null;
+      return winner?.color || null;
+    };
+
+    const distanceFromColor = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+    const contrastDominantColor = (indices, substrateColor, minContrast = 12) => {
+      const buckets = buildColorBuckets(indices);
+      if (!buckets.length) return null;
+      const minimumBucketSize = Math.max(2, Math.ceil(indices.length / 40));
+      let winner = null;
+      for (const bucket of buckets) {
+        const contrast = distanceFromColor(bucket.color, substrateColor);
+        if (contrast < minContrast || bucket.count < minimumBucketSize) continue;
+        const score = contrast * Math.sqrt(bucket.count);
+        if (!winner || score > winner.score) winner = { color: bucket.color, score };
+      }
+      return winner?.color || dominantColor(indices);
     };
 
     // Collect robust bands outside the destructive target. Earlier code built
@@ -1059,7 +1082,7 @@ const OcrCanvas = forwardRef(({
         if (mask[pixelIndex]) glyphIndices.push(pixelIndex * 4);
       }
     }
-    const glyphColor = dominantColor(glyphIndices);
+    const glyphColor = contrastDominantColor(glyphIndices, substrateColor);
 
     // Dilate so anti-aliased edges and glyph strokes that poke slightly past
     // a tight OCR bounding box are rebuilt as well.
