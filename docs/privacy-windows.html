@@ -65,34 +65,44 @@
     </header>
     <main class="container">
         <h1 data-i18n="privacy_h1">隱私權與資料保護政策</h1>
-        <div class="platform-tag" data-i18n="privacy_tag_win"><div class="platform-tag">適用於 Windows (WPF/DirectML) 平台</div></div>
-        
-        <p data-i18n="privacy_intro">本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 Windows 平台環境下，如何處理及保護您的資料。我們深知商業機密與個人隱私的重要性，因此本軟體的核心架構即是以「<strong>100% 本地端離線處理</strong>」為最高原則設計。</p>
+        <div class="platform-tag" data-i18n="privacy_tag_win">適用於 Windows 平台</div>
+        <p data-i18n="privacy_intro_win">本頁說明 OCREditor 在 Windows 桌面環境中的資料流。預設模式以本機處理為主，但若您主動切換到 Gemini 雲端 OCR，所選圖片區域會送往 Google 的 Gemini API。</p>
 
-        <h2 data-i18n="privacy_h2_1">1. 資料的收集與處理</h2>
+        <h2 data-i18n="privacy_h2_modes">1. 處理模式與資料流</h2>
         <ul>
-            <li data-i18n="privacy_li_1_1"><strong>完全離線執行：</strong> 本軟體在 Windows 10/11 上運作時，所有核心功能（包含 OCR 文字辨識、LaMa 背景抹除、圖片裁切與文字渲染）均利用 Windows AI Platform 與 DirectML 技術，完全在您的本機顯示卡與 CPU 上進行。</li>
-            <li data-i18n="privacy_li_1_2"><strong>零伺服器傳輸：</strong> 我們「不會」將您載入的任何圖片、解析出的文字、或編輯後的成品上傳至任何雲端伺服器。</li>
-            <li data-i18n="privacy_li_1_3"><strong>無追蹤程式碼：</strong> 本軟體未內嵌任何廣告 SDK 或背景數據收集（Telemetry）工具，我們不會追蹤您的使用習慣或收集您的硬體識別碼。</li>
-                    <li data-i18n="privacy_li_1_4"><strong>設定與偏好紀錄：</strong> 所有應用程式設定（包含字型偏好設定與 OCR 語言配置）均僅儲存於您的本地裝置中，絕不會傳送至任何外部伺服器。</li>
+            <li data-i18n="privacy_mode_default"><strong>預設為本地處理：</strong> 原生 OCR、瀏覽器 Tesseract OCR、背景修補、文字編輯、格式套用、區域刪除、區域複製/貼上與匯出都在您的裝置上完成。</li>
+            <li data-i18n="privacy_mode_cloud"><strong>雲端 OCR 為選用功能：</strong> 只有在您主動選擇 Gemini OCR、輸入 API Key，並執行重新辨識或區域 OCR 時，圖片資料才會傳送到 Gemini API。其處理受 Google 的服務條款與隱私政策約束。</li>
+            <li data-i18n="privacy_mode_tracking"><strong>無廣告追蹤：</strong> 文件頁與編輯器不內建廣告 SDK，也不將編輯內容主動回傳到我們的伺服器。</li>
+            <li data-i18n="privacy_mode_platform_win"><strong>Windows 原生 OCR 透過 localhost：</strong> 桌面版可連到您本機的 OCR 伺服器（預設 127.0.0.1:5001）。它只在本機回應，不是公開雲端服務。</li>
         </ul>
 
-        <h2 data-i18n="privacy_h2_2">2. 暫存檔案管理</h2>
-        <p data-i18n="privacy_p2">當您在 Windows 上使用本軟體時，為維持軟體的正常運作，系統可能會在您的使用者暫存資料夾（例如 <code>%TEMP%</code> 或 <code>AppData\Local\OCREditor</code>）內產生暫時性的快取檔案：</p>
+        <h2 data-i18n="privacy_h2_storage">2. 本機儲存、快取與暫存資料</h2>
+        <p data-i18n="privacy_storage_intro">為了讓編輯器正常運作，系統可能會在瀏覽器或本機建立下列資料：</p>
         <ul>
-            <li data-i18n="privacy_li_2_1"><strong>記憶體層級處理：</strong> 大多數的圖片資料皆於隨機存取記憶體 (RAM) 中即時運算，並未寫入硬碟。</li>
-            <li data-i18n="privacy_li_2_2"><strong>歷史紀錄：</strong> 為了提供「復原 (Undo)」功能，軟體會暫時在記憶體中存放操作紀錄，當您關閉軟體時，這些紀錄會自動銷毀。</li>
+            <li data-i18n="privacy_storage_settings"><strong>設定與偏好：</strong> UI 語言、OCR 引擎、字型偏好、單字微調模式、是否自動 OCR 等設定會保存在本機瀏覽器儲存空間。</li>
+            <li data-i18n="privacy_storage_history"><strong>編輯歷史：</strong> 復原/重做歷史主要保存在目前工作階段的記憶體中，用來維持畫布操作。</li>
+            <li data-i18n="privacy_storage_models"><strong>模型與快取：</strong> 若您下載 AI 背景修補模型，模型檔會快取在本機瀏覽器或應用程式儲存空間，供後續重複使用。</li>
+            <li data-i18n="privacy_storage_files"><strong>匯出與檔案控制：</strong> 使用「儲存圖片」或「另存新檔」時，檔案只會寫到您選擇的位置或觸發瀏覽器下載。</li>
         </ul>
 
-        <h2 data-i18n="privacy_h2_3">3. 權限需求說明</h2>
-        <p data-i18n="privacy_p3">在 Windows 平台上，本軟體僅需極基本的使用者權限即可運行，主要包含：</p>
+        <h2 data-i18n="privacy_h2_permissions">3. 權限與平台行為</h2>
+        <p data-i18n="privacy_permissions_intro">Windows 版常見權限與行為如下：</p>
         <ul>
-            <li data-i18n="privacy_li_3_1"><strong>本地檔案存取：</strong> 僅用於讀取您選擇載入的圖片，以及儲存您匯出的編輯完成檔案。</li>
-            <li data-i18n="privacy_li_3_2"><strong>GPU 加速權限：</strong> 為了呼叫 DirectML 進行高效能的 AI 運算，軟體會存取您顯示卡的運算資源，但不會讀取與軟體無關的顯示記憶體內容。</li>
+            <li data-i18n="privacy_permissions_files"><strong>本地檔案存取：</strong> 用於讀取您選取的圖片，以及儲存匯出檔案。</li>
+            <li data-i18n="privacy_permissions_fonts"><strong>本機字型權限：</strong> 若您手動載入裝置字型，支援的瀏覽器可能要求 local-fonts 權限。列出的字型名稱只在本機使用，不會自動上傳。</li>
+            <li data-i18n="privacy_permissions_gpu"><strong>硬體加速：</strong> OCR、背景修補與畫布渲染可能使用 GPU 或系統 AI 加速框架，但不會讀取與本軟體無關的檔案內容。</li>
+            <li data-i18n="privacy_permissions_windows_service"><strong>localhost OCR 服務：</strong> 若您啟用 Windows 原生 OCR，瀏覽器會連到同一台機器上的本地服務，而不是外部網站。</li>
         </ul>
 
-        <h2 data-i18n="privacy_h2_4">4. 隱私權政策的修訂</h2>
-        <p data-i18n="privacy_p4">本隱私權政策將隨軟體版本更新而可能進行微調，所有修改將即時發布於本頁面。我們承諾「完全不將使用者資料外洩至網際網路」的原則絕不改變。</p>
+        <h2 data-i18n="privacy_h2_controls">4. 您可自行控制的網路行為</h2>
+        <ul>
+            <li data-i18n="privacy_controls_cloud"><strong>若不想使用任何外部服務：</strong> 保持使用原生 OCR 或瀏覽器 Tesseract，並不要輸入 Gemini API Key。</li>
+            <li data-i18n="privacy_controls_network"><strong>關閉自動 OCR 也可行：</strong> 您可先只載入原圖，確認後再手動執行辨識。</li>
+            <li data-i18n="privacy_controls_export"><strong>匯出仍在本地完成：</strong> 就算您先前使用過雲端 OCR，最終的畫布編修與匯出檔案仍只在您的裝置上產生。</li>
+        </ul>
+
+        <h2 data-i18n="privacy_h2_updates">5. 政策更新</h2>
+        <p data-i18n="privacy_updates">若文件、功能或資料流有重大調整，我們會更新本頁內容。是否使用雲端 OCR 仍由您自行決定與啟用。</p>
         <p data-i18n="privacy_date">最後更新日期：2026年7月</p>
     </main>
     <footer><p data-i18n="footer_copy">© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>

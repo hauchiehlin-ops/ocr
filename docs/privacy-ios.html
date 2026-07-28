@@ -65,32 +65,44 @@
     </header>
     <main class="container">
         <h1 data-i18n="privacy_h1">隱私權與資料保護政策</h1>
-        <div class="platform-tag" data-i18n="privacy_tag_ios"><div class="platform-tag">適用於 iOS / iPadOS 平台</div></div>
-        
-        <p data-i18n="privacy_intro">本隱私權政策旨在說明 OCREditor（以下簡稱「本軟體」）在 iOS 與 iPadOS 行動裝置上，如何處理及保護您的隱私。我們深刻理解行動裝置承載了高度私密的個人與企業資訊，因此本 App 從底層設計即落實了「在地端運算」的安全理念。</p>
+        <div class="platform-tag" data-i18n="privacy_tag_ios">適用於 iOS / iPadOS 平台</div>
+        <p data-i18n="privacy_intro_ios">本頁說明 OCREditor 在 iPhone 與 iPad 上的資料流。打包後的 App 以裝置端 OCR 為主；若您主動切換到 Gemini 雲端 OCR，所選圖片區域會送往 Google 的 Gemini API。</p>
 
-        <h2>1. 照片與相機權限</h2>
+        <h2 data-i18n="privacy_h2_modes">1. 處理模式與資料流</h2>
         <ul>
-            <li><strong>相簿存取 (Photos)：</strong> 當您使用本軟體匯入圖片時，系統會請求相簿權限。我們只會讀取您明確選取的那一張圖片，以進行後續的編輯，<strong>絕不會掃描您的相片圖庫</strong>或上傳任何相片。</li>
-            <li><strong>相機使用 (Camera)：</strong> 若您選擇直接拍攝文件，本軟體會請求相機權限。所拍攝的畫面僅存在於您設備的暫存記憶體中，一旦您選擇捨棄或完成編輯匯出，原圖將自動銷毀，絕不會備份至我們的伺服器。</li>
+            <li data-i18n="privacy_mode_default"><strong>預設為本地處理：</strong> 原生 OCR、瀏覽器 Tesseract OCR、背景修補、文字編輯、格式套用、區域刪除、區域複製/貼上與匯出都在您的裝置上完成。</li>
+            <li data-i18n="privacy_mode_cloud"><strong>雲端 OCR 為選用功能：</strong> 只有在您主動選擇 Gemini OCR、輸入 API Key，並執行重新辨識或區域 OCR 時，圖片資料才會傳送到 Gemini API。其處理受 Google 的服務條款與隱私政策約束。</li>
+            <li data-i18n="privacy_mode_tracking"><strong>無廣告追蹤：</strong> 文件頁與編輯器不內建廣告 SDK，也不將編輯內容主動回傳到我們的伺服器。</li>
+            <li data-i18n="privacy_mode_platform_ios"><strong>iOS / iPadOS App 使用裝置端 OCR：</strong> 打包後的 App 可直接呼叫 Apple Vision，不需要連到 localhost 伺服器。</li>
         </ul>
 
-        <h2>2. 邊緣運算 (Edge AI) 保證</h2>
-        <p>為了徹底杜絕資料外洩風險，本軟體內建了專為行動裝置壓縮的最佳化 CoreML 模型：</p>
+        <h2 data-i18n="privacy_h2_storage">2. 本機儲存、快取與暫存資料</h2>
+        <p data-i18n="privacy_storage_intro">為了讓編輯器正常運作，系統可能會在瀏覽器或本機建立下列資料：</p>
         <ul>
-            <li>無論是文字掃描 (OCR) 還是背景抹除修復，所有 AI 運算皆藉由您 iPhone/iPad 內的 Apple Neural Engine (ANE) 在本地端即時完成。</li>
-            <li><strong>這意味著本軟體在「完全開啟飛航模式、沒有網路連線」的情況下依然能夠 100% 正常運作。</strong> 您可以絕對放心地處理包含合約、財報或個資在內的機密截圖。</li>
+            <li data-i18n="privacy_storage_settings"><strong>設定與偏好：</strong> UI 語言、OCR 引擎、字型偏好、單字微調模式、是否自動 OCR 等設定會保存在本機瀏覽器儲存空間。</li>
+            <li data-i18n="privacy_storage_history"><strong>編輯歷史：</strong> 復原/重做歷史主要保存在目前工作階段的記憶體中，用來維持畫布操作。</li>
+            <li data-i18n="privacy_storage_models"><strong>模型與快取：</strong> 若您下載 AI 背景修補模型，模型檔會快取在本機瀏覽器或應用程式儲存空間，供後續重複使用。</li>
+            <li data-i18n="privacy_storage_files"><strong>匯出與檔案控制：</strong> 使用「儲存圖片」或「另存新檔」時，檔案只會寫到您選擇的位置或觸發瀏覽器下載。</li>
         </ul>
 
-        <h2>3. 零第三方追蹤</h2>
-        <p>根據 App Store 的隱私權標籤規範，我們在此嚴格聲明：</p>
+        <h2 data-i18n="privacy_h2_permissions">3. 權限與平台行為</h2>
+        <p data-i18n="privacy_permissions_intro_ios">iPhone / iPad 版常見權限與行為如下：</p>
         <ul>
-            <li>本 App <strong>無包含</strong> Google Analytics、Facebook Pixel、Crashlytics 等任何第三方追蹤分析工具。</li>
-            <li>我們不會蒐集您的裝置識別碼 (IDFA)、定位資料或使用時長。我們只專注於提供純粹、強大且安全的文件編輯體驗。</li>
+            <li data-i18n="privacy_permissions_files_mobile"><strong>照片或檔案存取：</strong> 只用於讀取您挑選的圖片，與儲存匯出結果。</li>
+            <li data-i18n="privacy_permissions_camera_mobile"><strong>相機權限：</strong> 若您使用拍照匯入，影像只在本機處理，不會自動上傳給我們。</li>
+            <li data-i18n="privacy_permissions_fonts_mobile"><strong>字型與系統資源：</strong> App 會使用裝置可用字型來呈現文字，不會上傳字型清單。</li>
+            <li data-i18n="privacy_permissions_gpu"><strong>硬體加速：</strong> OCR、背景修補與畫布渲染可能使用 GPU 或系統 AI 加速框架，但不會讀取與本軟體無關的檔案內容。</li>
         </ul>
 
-        <h2>4. 隱私權政策變更</h2>
-        <p>若我們的隱私作業實務有所變更（例如未來加入需要網路功能的可選附加服務），我們將會更新本政策並在 App 內提前通知您，且任何網路功能皆會以「預設關閉且需您主動同意開啟」的方式進行。</p>
+        <h2 data-i18n="privacy_h2_controls">4. 您可自行控制的網路行為</h2>
+        <ul>
+            <li data-i18n="privacy_controls_cloud"><strong>若不想使用任何外部服務：</strong> 保持使用原生 OCR 或瀏覽器 Tesseract，並不要輸入 Gemini API Key。</li>
+            <li data-i18n="privacy_controls_network"><strong>關閉自動 OCR 也可行：</strong> 您可先只載入原圖，確認後再手動執行辨識。</li>
+            <li data-i18n="privacy_controls_export"><strong>匯出仍在本地完成：</strong> 就算您先前使用過雲端 OCR，最終的畫布編修與匯出檔案仍只在您的裝置上產生。</li>
+        </ul>
+
+        <h2 data-i18n="privacy_h2_updates">5. 政策更新</h2>
+        <p data-i18n="privacy_updates">若文件、功能或資料流有重大調整，我們會更新本頁內容。是否使用雲端 OCR 仍由您自行決定與啟用。</p>
         <p data-i18n="privacy_date">最後更新日期：2026年7月</p>
     </main>
     <footer><p data-i18n="footer_copy">© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p></footer>

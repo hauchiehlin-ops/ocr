@@ -272,6 +272,7 @@
         <ul class="flow-list">
             <li><span class="tool-icon">📁</span><span data-i18n="manual_start_file">從上方 <span class="button-token">檔案</span> 選單選擇 <span class="button-token">載入圖片...</span>，或在尚未載入圖片時點擊畫布中的 Open Image 按鈕。載入後會顯示 <span class="button-token success">✓ 圖片已載入並處理完成</span>。</span></li>
             <li><span class="tool-icon">OCR</span><span data-i18n="manual_start_engine">預設主線是 <span class="button-token primary">主線引擎：原生 OCR</span>。桌面瀏覽器可透過本地伺服器使用 Apple Vision / Windows OCR；iOS/Android App 可直接走手機端原生 OCR。</span></li>
+            <li><span class="tool-icon">⏯</span><span data-i18n="manual_start_auto">右側 OCR 區可切換 <span class="button-token">載入圖片後自動執行 OCR</span>。關閉時只載入原圖，等你按 <span class="button-token primary">🔄 重新辨識</span> 才建立文字圖層。</span></li>
             <li><span class="tool-icon">🔄</span><span data-i18n="manual_start_rerun">切換 OCR 設定或調整圖片後，按 <span class="button-token primary">🔄 重新辨識</span> 會套用目前引擎重新產生文字圖層。</span></li>
             <li><span class="tool-icon">▸</span><span data-i18n="manual_start_details">右側 <span class="button-token">本地伺服器的用途</span> 是可收合面板；點擊 <span class="button-token">▸/▾</span> 可展開或收起，節省版面空間。</span></li>
         </ul>
@@ -312,6 +313,7 @@
         <ul class="flow-list">
             <li><span class="tool-icon">📄</span><span data-i18n="manual_edit_select">點擊畫布上的文字框，或點擊左側 <span class="button-token">📄 互動圖層</span> 中的段落。被選取的文字會同步出現在右側 <span class="button-token">編輯內容</span> 欄位。</span></li>
             <li><span class="tool-icon">✎</span><span data-i18n="manual_edit_inline">可直接在畫布內雙擊文字框編輯。進入編輯時，控制點會暫時隱藏，避免遮住文字內容；離開編輯後控制點會恢復。</span></li>
+            <li><span class="tool-icon">1字</span><span data-i18n="manual_edit_micro">開啟 <span class="button-token">單字微調模式</span> 後，先點一下選取文字框，再點同一個文字框就會進入原地編修，適合只修改一兩個字而不改動版位。</span></li>
             <li><span class="tool-icon">↶</span><span data-i18n="manual_edit_history">上方工具列的 <span class="button-token">復原</span> 與 <span class="button-token">重做</span> 會記錄文字、樣式、刪除與背景遮罩操作。</span></li>
             <li><span class="tool-icon">🧩</span><span data-i18n="manual_edit_masking">自動 OCR 遮罩只會處理像文字筆畫的像素；若系統判斷區塊過大或像背景標籤，會放棄自動遮罩以避免產生深色區塊。</span></li>
         </ul>
@@ -320,6 +322,7 @@
         <ul class="flow-list">
             <li><span class="tool-icon">▣</span><span data-i18n="manual_common_region">按 <span class="button-token">區域 OCR</span> 後會進入 <span class="button-token">框選繪圖模式</span>。在未辨識文字上拖曳框選，系統會只辨識該區域；若沒有辨識結果，會建立可手動輸入的文字框。</span></li>
             <li><span class="tool-icon">⌫</span><span data-i18n="manual_common_erase">按 <span class="button-token">框選刪除</span> 後會進入 <span class="button-token">框選刪除模式</span>。框住要移除的原圖內容後，系統會以周邊背景補洞，並刪除框內文字圖層。</span></li>
+            <li><span class="tool-icon">⧉</span><span data-i18n="manual_common_copy">按 <span class="button-token">框選複製</span> 可複製原圖局部區域，之後按 <span class="button-token">貼上區域</span> 再點一下畫布，就能把複製內容貼到新的位置。</span></li>
             <li><span class="tool-icon">✚</span><span data-i18n="manual_common_insert">從 <span class="button-token">編輯</span> 選單點 <span class="button-token">插入文字</span> 後，文字框不會立刻出現；請在畫布需要新增文字的位置點一下，文字框才會放在該位置。</span></li>
             <li><span class="tool-icon">×</span><span data-i18n="manual_common_remove">選取文字框後按 <span class="button-token">移除文字</span>，會移除目前文字圖層及其關聯遮罩。</span></li>
         </ul>
@@ -327,7 +330,9 @@
         <h2 data-i18n="manual_h2_format">5. 文字格式與本機字型</h2>
         <ul class="flow-list">
             <li><span class="tool-icon">B</span><span data-i18n="manual_format_style">右側 <span class="button-token">粗體</span>、<span class="button-token">斜體</span>、色彩預設 <span class="button-token">■ □ ■ ■ ■ 🌈</span> 可即時套用到選取文字。</span></li>
-            <li><span class="tool-icon">Aa</span><span data-i18n="manual_format_fonts">在 <span class="button-token">預設字型設定</span> 可分別選擇 <span class="button-token">英文/數字字型</span> 與 <span class="button-token">中文/系統字型</span>。按 <span class="button-token">載入本機字型</span> 後，支援的瀏覽器會列出裝置可存取字型。</span></li>
+            <li><span class="tool-icon">Aa</span><span data-i18n="manual_format_fonts">在 <span class="button-token">預設字型設定</span> 可分別選擇 <span class="button-token">英文/數字字型</span> 與 <span class="button-token">中文/系統字型</span>。按 <span class="button-token">載入本機字型</span> 後，支援的瀏覽器會列出裝置可存取字型；Windows 與 macOS 都會依字元腳本分別套用英數與中文字型。</span></li>
+            <li><span class="tool-icon">☑</span><span data-i18n="manual_format_apply">現在可分別勾選 <span class="button-token">套用字型</span> 與 <span class="button-token">套用字級與粗斜體</span>，再決定是套到目前文字區塊還是整份文件。</span></li>
+            <li><span class="tool-icon">⧉</span><span data-i18n="manual_format_copy">按 <span class="button-token">複製目前格式</span> 可把顏色、字型、字級與粗斜體存成樣板，再對另一個文字框按 <span class="button-token">套用複製格式</span>。</span></li>
             <li><span class="tool-icon">☑</span><span data-i18n="manual_format_force">目前 <span class="button-token">圖片載入/OCR 後強制套用</span> 預設關閉。需要統一所有 OCR 文字外觀時再手動啟用，或按 <span class="button-token">套用字型至全檔</span> 一次套用。</span></li>
         </ul>
 
@@ -335,11 +340,12 @@
         <ul class="flow-list">
             <li><span class="tool-icon">ⓘ</span><span data-i18n="manual_ai_proof">選取文字後按 <span class="button-token">智能校對</span>，用於修正 OCR 錯字、空格與語句不順。旁邊的 <span class="button-token">ⓘ</span> 可查看該功能用途。</span></li>
             <li><span class="tool-icon">ⓘ</span><span data-i18n="manual_ai_extract">按 <span class="button-token">擷取實體</span> 可從選取文字中整理人名、組織、指標、日期與核心概念；結果會附加到目前文字圖層。</span></li>
+            <li><span class="tool-icon">AI</span><span data-i18n="manual_ai_repair">若啟用 <span class="button-token">高品質 AI 背景修補</span>，系統會先檢查或下載模型，之後在本機重複使用；失敗時會自動回退到原生背景修補流程。</span></li>
         </ul>
 
         <h2 data-i18n="manual_h2_export">7. 匯出與保存</h2>
         <ul class="flow-list">
-            <li><span class="tool-icon">⬇</span><span data-i18n="manual_export_image">從 <span class="button-token">檔案</span> 選單點選 <span class="button-token primary">儲存圖片</span>，會輸出已套用文字、遮罩與背景修補後的完整圖片。</span></li>
+            <li><span class="tool-icon">⬇</span><span data-i18n="manual_export_image">從 <span class="button-token">檔案</span> 選單點選 <span class="button-token primary">儲存圖片</span> 或 <span class="button-token">另存新檔</span>，會輸出已套用文字、遮罩與背景修補後的完整圖片；選單會自動關閉並顯示儲存結果。</span></li>
             <li><span class="tool-icon">CSV</span><span data-i18n="manual_export_data">從 <span class="button-token">檔案</span> 選單可匯出 CSV 或可搜尋 PDF；CSV 保存文字圖層內容，PDF 會把文字層加到圖片上方以利搜尋。</span></li>
         </ul>
 

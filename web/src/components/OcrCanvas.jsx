@@ -487,6 +487,7 @@ const OcrCanvas = forwardRef(({
   const documentSessionRef = useRef(0);
   const activeFileReaderRef = useRef(null);
   const eventHandlersRef = useRef({});
+  const singleWordClickStateRef = useRef({ id: null, wasActive: false });
   const onZoomChangeRef = useRef(onZoomChange);
   useEffect(() => { onZoomChangeRef.current = onZoomChange; }, [onZoomChange]);
   // File selection and OCR contain long asynchronous stages. Always read the
@@ -669,6 +670,12 @@ const OcrCanvas = forwardRef(({
 
     // Viewport drag-to-pan support
     canvas.on('mouse:down', (opt) => {
+      const target = opt.target;
+      singleWordClickStateRef.current = {
+        id: target?.type === 'textbox' ? target.id : null,
+        wasActive: Boolean(target && canvas.getActiveObject() === target)
+      };
+
       if (pendingInsertText.current) {
         const pointer = typeof canvas.getScenePoint === 'function'
           ? canvas.getScenePoint(opt.e)
@@ -712,7 +719,6 @@ const OcrCanvas = forwardRef(({
       }
 
       const evt = opt.e;
-      const target = opt.target;
       if (!isRegionalOcrActiveRef.current && (!target || target === bgImage.current)) {
         canvas.isDragging = true;
         canvas.selection = false;
@@ -735,11 +741,30 @@ const OcrCanvas = forwardRef(({
       }
     });
 
-    canvas.on('mouse:up', () => {
+    canvas.on('mouse:up', (opt) => {
       if (canvas.isDragging) {
         canvas.setViewportTransform(canvas.viewportTransform);
         canvas.isDragging = false;
         canvas.selection = true;
+        singleWordClickStateRef.current = { id: null, wasActive: false };
+        return;
+      }
+
+      if (
+        singleWordAdjustMode &&
+        opt?.target?.type === 'textbox' &&
+        !opt.target.isEditing &&
+        singleWordClickStateRef.current.id === opt.target.id &&
+        singleWordClickStateRef.current.wasActive &&
+        canvas.getActiveObject() === opt.target
+      ) {
+        requestAnimationFrame(() => {
+          if (!fabricCanvas.current || fabricCanvas.current.getActiveObject() !== opt.target || opt.target.isEditing) return;
+          opt.target.enterEditing?.();
+          opt.target.hiddenTextarea?.focus?.();
+          fabricCanvas.current.renderAll();
+          onWorkerStatusChange?.(t('singleWordAdjustHint'));
+        });
       }
     });
 
@@ -1992,13 +2017,7 @@ const OcrCanvas = forwardRef(({
     const activeObject = e.selected?.[0];
     onRegionSelect?.(describeTextbox(activeObject));
     if (singleWordAdjustMode && activeObject?.type === 'textbox' && !activeObject.isEditing) {
-      requestAnimationFrame(() => {
-        if (!fabricCanvas.current || fabricCanvas.current.getActiveObject() !== activeObject) return;
-        activeObject.enterEditing?.();
-        activeObject.hiddenTextarea?.focus?.();
-        fabricCanvas.current.renderAll();
-        onWorkerStatusChange?.(t('singleWordAdjustHint'));
-      });
+      onWorkerStatusChange?.(t('singleWordAdjustHint'));
     }
   };
 
