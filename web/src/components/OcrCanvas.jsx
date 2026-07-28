@@ -414,6 +414,8 @@ const OcrCanvas = forwardRef(({
   presetFontSize = 16,
   presetBold = false,
   presetItalic = false,
+  applyPresetFontFamily = true,
+  applyPresetTypography = true,
   forcePresetFont = false,
   ocrEngine = 'local',
   geminiApiKey = '',
@@ -428,6 +430,8 @@ const OcrCanvas = forwardRef(({
   const containerRef = useRef(null);
   const canvasEl = useRef(null);
   const fabricCanvas = useRef(null);
+  const shouldUsePresetFontFamily = forcePresetFont && applyPresetFontFamily;
+  const shouldUsePresetTypography = forcePresetFont && applyPresetTypography;
   const bgImage = useRef(null);
   const sampleCanvasRef = useRef(null);
   const batchInpaintCanvasRef = useRef(null);
@@ -1523,7 +1527,7 @@ const OcrCanvas = forwardRef(({
 
       const canvas = fabricCanvas.current;
       isHistoryDisabled.current = true;
-      const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
+      const fontToUse = shouldUsePresetFontFamily ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
       const blocks = [];
 
       if (ocrEngine === 'cloud') {
@@ -1670,7 +1674,7 @@ const OcrCanvas = forwardRef(({
           sharedInkRatios,
           fontToUse
         );
-        const effectiveFontSize = forcePresetFont ? presetFontSize : regionalFontSize;
+        const effectiveFontSize = shouldUsePresetTypography ? presetFontSize : regionalFontSize;
         const fittedWidth = keepTextBoxInsideOcrBox(block.width);
         const text = new fabric.Textbox(block.text, {
           ...normalizeTextboxStyle(),
@@ -1678,8 +1682,8 @@ const OcrCanvas = forwardRef(({
           top: sourceInkBounds?.top || block.top,
           width: fittedWidth,
           fontSize: effectiveFontSize,
-          fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
-          fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
+          fontWeight: shouldUsePresetTypography && presetBold ? 'bold' : 'normal',
+          fontStyle: shouldUsePresetTypography && presetItalic ? 'italic' : 'normal',
           fill: block.manual ? '#000000' : 'rgba(0,0,0,0.78)',
           backgroundColor: 'transparent',
           id: block.id,
@@ -1780,7 +1784,7 @@ const OcrCanvas = forwardRef(({
       }
     });
 
-    const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
+    const fontToUse = shouldUsePresetFontFamily ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
     const sanitizedBlocks = sanitizeOcrBlocks(blocks, imageLayout.current);
     const reviewBlocks = dedupeOcrBlocks(sanitizedBlocks);
     // One shared ratio for the whole batch: every block's font size then
@@ -1826,7 +1830,7 @@ const OcrCanvas = forwardRef(({
         sharedInkRatios,
         fontToUse
       );
-      const effectiveFontSize = forcePresetFont ? presetFontSize : calculatedFontSize;
+      const effectiveFontSize = shouldUsePresetTypography ? presetFontSize : calculatedFontSize;
       const fittedWidth = keepTextBoxInsideOcrBox(block.bbox.w);
       const detectedColor = textColorById.get(block.id) || null;
 
@@ -1836,8 +1840,8 @@ const OcrCanvas = forwardRef(({
         top: sourceInkBounds?.top || block.bbox.y,
         width: fittedWidth,
         fontSize: effectiveFontSize,
-        fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
-        fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
+        fontWeight: shouldUsePresetTypography && presetBold ? 'bold' : 'normal',
+        fontStyle: shouldUsePresetTypography && presetItalic ? 'italic' : 'normal',
         // OCR output is a review/replacement layer. The patch removes only the
         // recognized glyph pixels; surrounding diagram content remains intact.
         // A slight transparency (tinted with the detected source colour) makes
@@ -2049,16 +2053,16 @@ const OcrCanvas = forwardRef(({
     const canvas = fabricCanvas.current;
     if (!canvas) return null;
 
-    const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
+    const fontToUse = shouldUsePresetFontFamily ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
     isHistoryDisabled.current = true;
     const text = new fabric.Textbox(initialText, {
       ...normalizeTextboxStyle(),
       left,
       top,
       width,
-      fontSize: forcePresetFont ? presetFontSize : 16,
-      fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
-      fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
+      fontSize: shouldUsePresetTypography ? presetFontSize : 16,
+      fontWeight: shouldUsePresetTypography && presetBold ? 'bold' : 'normal',
+      fontStyle: shouldUsePresetTypography && presetItalic ? 'italic' : 'normal',
       fill: '#000000',
       backgroundColor: 'transparent',
       id: `layer_${Date.now()}`,
@@ -2156,7 +2160,12 @@ const OcrCanvas = forwardRef(({
       if (!canvas) return false;
       const obj = canvas.getObjects().find(o => o.id === id);
       if (obj) {
-        obj.set(normalizeTextboxStyle(styleObject));
+        const normalizedStyle = normalizeTextboxStyle(styleObject);
+        if (obj.isOcrReview && normalizedStyle.fill) {
+          obj.originalTextColor = normalizedStyle.fill;
+          normalizedStyle.fill = withReviewTint(normalizedStyle.fill);
+        }
+        obj.set(normalizedStyle);
         refreshTextboxMetrics(obj);
         if (obj.isOcrReview) {
           void materializeReviewLayer(obj).then(() => {
@@ -2207,7 +2216,12 @@ const OcrCanvas = forwardRef(({
       isHistoryDisabled.current = true;
       canvas.getObjects().forEach(obj => {
         if (obj.type === 'textbox') {
-          obj.set(normalizeTextboxStyle(styleObject));
+          const normalizedStyle = normalizeTextboxStyle(styleObject);
+          if (obj.isOcrReview && normalizedStyle.fill) {
+            obj.originalTextColor = normalizedStyle.fill;
+            normalizedStyle.fill = withReviewTint(normalizedStyle.fill);
+          }
+          obj.set(normalizedStyle);
           refreshTextboxMetrics(obj);
           if (obj.isOcrReview) {
             void materializeReviewLayer(obj).then(() => {

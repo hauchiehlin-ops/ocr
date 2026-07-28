@@ -400,6 +400,8 @@ function App() {
   // Preset Fonts
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
   const [englishFont, setEnglishFont] = useState('Century Gothic');
+  const [applyPresetFontFamily, setApplyPresetFontFamily] = useState(() => localStorage.getItem('apply_preset_font_family') !== 'false');
+  const [applyPresetTypography, setApplyPresetTypography] = useState(() => localStorage.getItem('apply_preset_typography') !== 'false');
   const [presetFontSize, setPresetFontSize] = useState(() => {
     const saved = Number(localStorage.getItem('preset_font_size'));
     return Number.isFinite(saved) && saved >= 6 && saved <= 200 ? saved : 16;
@@ -410,6 +412,7 @@ function App() {
   const [availableFontFamilies, setAvailableFontFamilies] = useState(FALLBACK_FONT_FAMILIES);
   const [fontLoadStatus, setFontLoadStatus] = useState('');
   const [fontApplyStatus, setFontApplyStatus] = useState('');
+  const [copiedTextFormat, setCopiedTextFormat] = useState(null);
   const [saveStatus, setSaveStatus] = useState(null);
 
   useEffect(() => {
@@ -520,6 +523,46 @@ function App() {
   // so a bare name silently falls back and font switching looks broken.
   const quoteFontFamily = (family) => `'${String(family).replace(/'/g, "\\'")}'`;
   const presetFontFamily = `${EN_FONT_STACKS[englishFont] || quoteFontFamily(englishFont)}, ${CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont)}, sans-serif`;
+  const hasPresetApplySelection = applyPresetFontFamily || applyPresetTypography;
+
+  const buildPresetTextStyle = () => {
+    const style = {
+      lineHeight: 1,
+      charSpacing: 0
+    };
+    if (applyPresetFontFamily) style.fontFamily = presetFontFamily;
+    if (applyPresetTypography) {
+      style.fontSize = presetFontSize;
+      style.fontWeight = presetBold ? 'bold' : 'normal';
+      style.fontStyle = presetItalic ? 'italic' : 'normal';
+    }
+    return style;
+  };
+
+  const buildSelectedRegionPresetPatch = () => {
+    const patch = { lineHeight: 1 };
+    if (applyPresetFontFamily) patch.fontFamily = presetFontFamily;
+    if (applyPresetTypography) {
+      patch.fontSize = presetFontSize;
+      patch.isBold = presetBold;
+      patch.isItalic = presetItalic;
+    }
+    return patch;
+  };
+
+  const buildCopiedTextFormat = (region) => {
+    if (!region) return null;
+    return {
+      fill: region.fill || '#000000',
+      fontFamily: region.fontFamily,
+      fontSize: region.fontSize,
+      fontWeight: region.isBold ? 'bold' : 'normal',
+      fontStyle: region.isItalic ? 'italic' : 'normal',
+      lineHeight: region.lineHeight ?? 1,
+      charSpacing: region.charSpacing ?? 0,
+      sourceText: region.text || ''
+    };
+  };
 
   // Local Font Access already returns installed family names. Pixel-probing a
   // CJK glyph is not a reliable coverage test: font aliases and OS fallback on
@@ -606,25 +649,18 @@ function App() {
 
   const handleApplyDefaultFontAll = async () => {
      if (canvasRef.current) {
-        await ensurePresetFontsReady();
-        const style = {
-          fontFamily: presetFontFamily,
-          fontSize: presetFontSize,
-          fontWeight: presetBold ? 'bold' : 'normal',
-          fontStyle: presetItalic ? 'italic' : 'normal',
-          lineHeight: 1,
-          charSpacing: 0
-        };
+        if (!hasPresetApplySelection) {
+          setFontApplyStatus('fontApplyOptionsRequired');
+          return;
+        }
+        if (applyPresetFontFamily) await ensurePresetFontsReady();
+        const style = buildPresetTextStyle();
         const appliedCount = canvasRef.current.applyTextStyleToAll(style);
         setFontApplyStatus(appliedCount > 0 ? 'fontAppliedAll' : 'fontApplyNoSelection');
         if (selectedRegion && appliedCount > 0) {
           setSelectedRegion(prev => ({
             ...prev,
-            fontFamily: presetFontFamily,
-            fontSize: presetFontSize,
-            isBold: presetBold,
-            isItalic: presetItalic,
-            lineHeight: 1
+            ...buildSelectedRegionPresetPatch()
           }));
         }
      }
@@ -632,30 +668,65 @@ function App() {
 
   const handleApplyPresetFontSelected = async () => {
      if (canvasRef.current && selectedRegion) {
-        await ensurePresetFontsReady();
-        const style = {
-          fontFamily: presetFontFamily,
-          fontSize: presetFontSize,
-          fontWeight: presetBold ? 'bold' : 'normal',
-          fontStyle: presetItalic ? 'italic' : 'normal',
-          lineHeight: 1,
-          charSpacing: 0
-        };
+        if (!hasPresetApplySelection) {
+          setFontApplyStatus('fontApplyOptionsRequired');
+          return;
+        }
+        if (applyPresetFontFamily) await ensurePresetFontsReady();
+        const style = buildPresetTextStyle();
         const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, style);
         if (applied) {
           setSelectedRegion(prev => ({
             ...prev,
-            fontFamily: presetFontFamily,
-            fontSize: presetFontSize,
-            isBold: presetBold,
-            isItalic: presetItalic,
-            lineHeight: 1
+            ...buildSelectedRegionPresetPatch()
           }));
           setFontApplyStatus('fontAppliedSelected');
         } else {
           setFontApplyStatus('fontApplyNoSelection');
         }
      }
+  };
+
+  const handleCopySelectedTextFormat = () => {
+    if (!selectedRegion) {
+      setFontApplyStatus('fontApplyNoSelection');
+      return;
+    }
+    const nextFormat = buildCopiedTextFormat(selectedRegion);
+    if (!nextFormat) {
+      setFontApplyStatus('fontApplyNoSelection');
+      return;
+    }
+    setCopiedTextFormat(nextFormat);
+    setFontApplyStatus('copiedFormatReady');
+  };
+
+  const handleApplyCopiedTextFormatToSelected = () => {
+    if (!copiedTextFormat) {
+      setFontApplyStatus('copiedFormatMissing');
+      return;
+    }
+    if (!canvasRef.current || !selectedRegion) {
+      setFontApplyStatus('fontApplyNoSelection');
+      return;
+    }
+    const { sourceText: _sourceText, ...style } = copiedTextFormat;
+    const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, style);
+    if (!applied) {
+      setFontApplyStatus('fontApplyNoSelection');
+      return;
+    }
+    setSelectedRegion(prev => prev ? ({
+      ...prev,
+      fill: style.fill,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      isBold: style.fontWeight === 'bold',
+      isItalic: style.fontStyle === 'italic',
+      lineHeight: style.lineHeight,
+      charSpacing: style.charSpacing
+    }) : prev);
+    setFontApplyStatus('copiedFormatApplied');
   };
 
   const waitForNextPaint = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
@@ -1054,6 +1125,8 @@ function App() {
             presetFontSize={presetFontSize}
             presetBold={presetBold}
             presetItalic={presetItalic}
+            applyPresetFontFamily={applyPresetFontFamily}
+            applyPresetTypography={applyPresetTypography}
             forcePresetFont={forcePresetFont}
             ocrEngine={ocrEngine}
             geminiApiKey={geminiApiKey}
@@ -1173,6 +1246,40 @@ function App() {
             </label>
           </div>
 
+          <div className="font-format-clipboard">
+            <div className="font-format-clipboard-header">
+              <strong>{t('copiedFormatSection')}</strong>
+              {copiedTextFormat ? (
+                <span>{t('copiedFormatLoaded')}</span>
+              ) : (
+                <span>{t('copiedFormatEmpty')}</span>
+              )}
+            </div>
+            <div className="font-format-clipboard-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!selectedRegion}
+                onClick={handleCopySelectedTextFormat}
+              >
+                {t('copySelectedFormat')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={!selectedRegion || !copiedTextFormat}
+                onClick={handleApplyCopiedTextFormatToSelected}
+              >
+                {t('applyCopiedFormatSelected')}
+              </button>
+            </div>
+            {copiedTextFormat?.sourceText && (
+              <div className="font-format-clipboard-preview">
+                {copiedTextFormat.sourceText}
+              </div>
+            )}
+          </div>
+
           <div className="panel-subtitle">{t('presetFonts')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
@@ -1221,6 +1328,39 @@ function App() {
                   <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="font-apply-options">
+              <label className="font-apply-option">
+                <input
+                  type="checkbox"
+                  checked={applyPresetFontFamily}
+                  onChange={(e) => {
+                    setApplyPresetFontFamily(e.target.checked);
+                    localStorage.setItem('apply_preset_font_family', String(e.target.checked));
+                    setFontApplyStatus('');
+                  }}
+                />
+                <span>
+                  <strong>{t('applyPresetFontFamily')}</strong>
+                  <small>{t('applyPresetFontFamilyHelp')}</small>
+                </span>
+              </label>
+              <label className="font-apply-option">
+                <input
+                  type="checkbox"
+                  checked={applyPresetTypography}
+                  onChange={(e) => {
+                    setApplyPresetTypography(e.target.checked);
+                    localStorage.setItem('apply_preset_typography', String(e.target.checked));
+                    setFontApplyStatus('');
+                  }}
+                />
+                <span>
+                  <strong>{t('applyPresetTypography')}</strong>
+                  <small>{t('applyPresetTypographyHelp')}</small>
+                </span>
+              </label>
             </div>
 
             <div className="font-style-editor">
@@ -1277,7 +1417,7 @@ function App() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                disabled={!selectedRegion}
+                disabled={!selectedRegion || !hasPresetApplySelection}
                 onClick={handleApplyPresetFontSelected}
               >
                 {t('applyStyleSelected')}
@@ -1285,7 +1425,7 @@ function App() {
               <button
                 type="button"
                 className="btn btn-secondary"
-                disabled={!imageLoaded}
+                disabled={!imageLoaded || !hasPresetApplySelection}
                 onClick={handleApplyDefaultFontAll}
               >
                 {t('applyStyleAll')}

@@ -368,6 +368,95 @@ body {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.font-apply-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.font-apply-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.font-apply-option input {
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.font-apply-option span,
+.font-apply-option small {
+  display: block;
+}
+
+.font-apply-option strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.font-apply-option small {
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.font-format-clipboard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.font-format-clipboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.font-format-clipboard-header strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+
+.font-format-clipboard-header span {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.font-format-clipboard-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.font-format-clipboard-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 5px;
+  font-size: 11px;
+}
+
+.font-format-clipboard-preview {
+  padding: 7px 8px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.16);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .font-size-control {
   display: flex;
   align-items: center;
