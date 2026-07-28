@@ -745,12 +745,29 @@ function App() {
     };
 
     const handleKeyDown = (event) => {
-      if (!imageLoaded || event.repeat) return;
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (!imageLoaded || event.altKey) return;
       if (isEditableTarget(event.target)) return;
-      if (canvasRef.current?.getActiveObject?.()?.isEditing) return;
 
       const key = event.key.toLowerCase();
+      const activeObject = canvasRef.current?.getActiveObject?.();
+
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        if (activeObject?.type !== 'textbox' || activeObject.isEditing) return;
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        const delta = {
+          arrowup: [0, -step],
+          arrowdown: [0, step],
+          arrowleft: [-step, 0],
+          arrowright: [step, 0]
+        }[key];
+        canvasRef.current?.nudgeSelectedTextbox?.(delta[0], delta[1]);
+        return;
+      }
+
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (activeObject?.isEditing) return;
+
       if (key === 'c') {
         event.preventDefault();
         setIsPasteModeActive(false);

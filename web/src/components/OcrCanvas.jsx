@@ -1886,6 +1886,21 @@ const OcrCanvas = forwardRef(({
     textbox.setCoords();
   };
 
+  const nudgeActiveTextbox = (deltaX, deltaY) => {
+    const canvas = fabricCanvas.current;
+    const activeObject = canvas?.getActiveObject?.();
+    if (!canvas || !activeObject || activeObject.type !== 'textbox' || activeObject.isEditing) return false;
+
+    activeObject.set({
+      left: (activeObject.left || 0) + deltaX,
+      top: (activeObject.top || 0) + deltaY
+    });
+    activeObject.setCoords();
+    canvas.requestRenderAll();
+    saveHistory();
+    return true;
+  };
+
   const withIdentityViewport = (canvas, callback) => {
     const previousViewport = canvas.viewportTransform ? [...canvas.viewportTransform] : [1, 0, 0, 1, 0, 0];
     const activeObject = canvas.getActiveObject();
@@ -2054,6 +2069,7 @@ const OcrCanvas = forwardRef(({
         canvas.renderAll();
       }
     },
+    nudgeSelectedTextbox: (deltaX, deltaY) => nudgeActiveTextbox(deltaX, deltaY),
     removeActiveObject: () => {
       const canvas = fabricCanvas.current;
       if (!canvas) return;
