@@ -474,7 +474,7 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return;
 
     const json = JSON.stringify(canvas.toJSON([
-      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'cleanupExpandX', 'cleanupExpandY', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'confidence', 'originalTextColor',
+      'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'cleanupExpandX', 'cleanupExpandY', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'isPastedRegion', 'confidence', 'originalTextColor',
       'selectable', 'evented'
     ]));
 
@@ -1291,6 +1291,9 @@ const OcrCanvas = forwardRef(({
         cornerSize: 8,
         touchCornerSize: 18,
         transparentCorners: true,
+        lockRotation: false,
+        centeredRotation: false,
+        rotatingPointOffset: 40,
         isPastedRegion: true
       });
 
@@ -1833,6 +1836,8 @@ const OcrCanvas = forwardRef(({
         fontFamily: activeObject.fontFamily,
         fontSize: activeObject.fontSize
       });
+    } else {
+      onRegionSelect(null);
     }
   };
 
@@ -1873,8 +1878,16 @@ const OcrCanvas = forwardRef(({
     canvas.getObjects().forEach(obj => {
       if (obj.isPatch) {
         obj.set({ selectable: false, evented: false });
-      } else if (obj.type === 'textbox') {
-        obj.set({ selectable: true, evented: true, hasControls: true, hasBorders: true });
+      } else if (obj.type === 'textbox' || obj.isPastedRegion) {
+        obj.set({
+          selectable: true,
+          evented: true,
+          hasControls: true,
+          hasBorders: true,
+          lockRotation: false,
+          centeredRotation: false,
+          rotatingPointOffset: 40
+        });
       }
     });
   };
@@ -1889,7 +1902,8 @@ const OcrCanvas = forwardRef(({
   const nudgeActiveTextbox = (deltaX, deltaY) => {
     const canvas = fabricCanvas.current;
     const activeObject = canvas?.getActiveObject?.();
-    if (!canvas || !activeObject || activeObject.type !== 'textbox' || activeObject.isEditing) return false;
+    if (!canvas || !activeObject || activeObject.isEditing) return false;
+    if (activeObject.isPatch || activeObject.isSelectionRect) return false;
 
     activeObject.set({
       left: (activeObject.left || 0) + deltaX,
@@ -2069,6 +2083,7 @@ const OcrCanvas = forwardRef(({
         canvas.renderAll();
       }
     },
+    getActiveObject: () => fabricCanvas.current?.getActiveObject?.() || null,
     nudgeSelectedTextbox: (deltaX, deltaY) => nudgeActiveTextbox(deltaX, deltaY),
     removeActiveObject: () => {
       const canvas = fabricCanvas.current;

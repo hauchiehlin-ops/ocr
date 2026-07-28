@@ -752,7 +752,7 @@ function App() {
       const activeObject = canvasRef.current?.getActiveObject?.();
 
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-        if (activeObject?.type !== 'textbox' || activeObject.isEditing) return;
+        if (!activeObject || activeObject.isEditing || activeObject.isPatch || activeObject.isSelectionRect) return;
         event.preventDefault();
         const step = event.shiftKey ? 10 : 1;
         const delta = {
