@@ -132,12 +132,41 @@ function createUpscaledCanvas(sourceCanvas, scale = 2) {
 // wording difference shrink the entire replacement, even when the source font
 // size had not changed. Fabric may wrap genuinely longer text inside the same
 // box, but its font size now remains anchored to the detected line height.
-function calcOcrFontSize(text, _boxW, boxH, maxSize = 96) {
+//
+// The OCR box height is a tight ink bounding box around the *specific*
+// recognized characters, not a fixed font-metric line height. "RED TEXT" (no
+// descenders) and "Apply" (has one) produce different box heights at the
+// identical font size, so dividing by one constant (≈1.18) systematically
+// under- or over-estimates the size depending on which glyphs happen to be
+// present. Instead, measure how tall that exact string actually renders at a
+// reference size in the target font, then scale the box height against that
+// measured ink ratio.
+let ocrFontMeasureCtx = null;
+function measureInkHeightRatio(text, fontFamily) {
+  const referenceSize = 100;
+  try {
+    if (!ocrFontMeasureCtx) ocrFontMeasureCtx = document.createElement('canvas').getContext('2d');
+    ocrFontMeasureCtx.font = `${referenceSize}px ${fontFamily}`;
+    const metrics = ocrFontMeasureCtx.measureText(text || 'M');
+    const inkHeight = (metrics.actualBoundingBoxAscent || 0) + (metrics.actualBoundingBoxDescent || 0);
+    if (inkHeight > 0) return inkHeight / referenceSize;
+  } catch {
+    // Fall through to the fixed-ratio fallback below.
+  }
+  return null;
+}
+
+function calcOcrFontSize(text, _boxW, boxH, fontFamily = DEFAULT_OCR_FONT_FAMILY, maxSize = 96) {
   const lines = String(text).split('\n').filter(l => l.trim() !== '');
   const linesCount = lines.length || 1;
+  const singleLineHeight = (boxH - 2) / linesCount;
+  const longestLine = lines.reduce((a, b) => (b.length > a.length ? b : a), lines[0] || String(text));
+
+  const inkRatio = measureInkHeightRatio(longestLine, fontFamily);
+  if (inkRatio) return Math.max(3, Math.min(maxSize, singleLineHeight / inkRatio));
+
   // Fabric's default line box is approximately 1.18 × fontSize.
-  const byHeight = (boxH - 2) / (linesCount * 1.18);
-  return Math.max(3, Math.min(maxSize, byHeight));
+  return Math.max(3, Math.min(maxSize, singleLineHeight / 1.18));
 }
 
 function normalizedText(text) {
@@ -1248,7 +1277,7 @@ const OcrCanvas = forwardRef(({
       await prepareBatchInpaint(blocks);
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
-        const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height);
+        const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height, fontToUse);
         const text = new fabric.Textbox(block.text, {
           left: block.left,
           top: block.top,
@@ -1379,7 +1408,7 @@ const OcrCanvas = forwardRef(({
 
     for (let i = 0; i < reviewBlocks.length; i++) {
       const block = reviewBlocks[i];
-      const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h);
+      const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h, fontToUse);
       const detectedColor = textColorById.get(block.id) || null;
 
       const text = new fabric.Textbox(block.text, {

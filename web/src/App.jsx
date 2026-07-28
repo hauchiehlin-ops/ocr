@@ -1166,6 +1166,38 @@ function App() {
             )}
           </div>
 
+          <h2 className="panel-title" style={{marginTop: '24px'}}>{t('ops')}</h2>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'ocr' ? 'active' : ''}`}
+              style={{flex: 1}}
+              disabled={!imageLoaded || ocrActionsBlocked}
+              title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
+              onClick={() => handleRegionTool('ocr')}
+            >
+              {isRegionalOcrActive && regionalAction === 'ocr' ? t('drawingMode') : t('regionalOcr')}
+            </button>
+            <button
+              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'erase' ? 'active' : ''}`}
+              style={{flex: 1}}
+              disabled={!imageLoaded}
+              onClick={() => handleRegionTool('erase')}
+            >
+              {isRegionalOcrActive && regionalAction === 'erase' ? t('eraseDrawingMode') : t('eraseRegion')}
+            </button>
+            <button
+              className="btn btn-secondary"
+              style={{flex: 1}}
+              disabled={!selectedRegion}
+              onClick={handleRemoveText}
+            >
+              {t('removeText')}
+            </button>
+            {ocrEngineBlockReason && (
+              <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
+            )}
+          </div>
+
           <div className="panel-subtitle">{t('ocrEngine')}</div>
           <div className="ocr-engine-panel">
             {ocrEngine !== 'custom' && (
@@ -1578,37 +1610,6 @@ function App() {
             </div>
           )}
 
-          <h2 className="panel-title" style={{marginTop: '24px'}}>{t('ops')}</h2>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'ocr' ? 'active' : ''}`}
-              style={{flex: 1}}
-              disabled={!imageLoaded || ocrActionsBlocked}
-              title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
-              onClick={() => handleRegionTool('ocr')}
-            >
-              {isRegionalOcrActive && regionalAction === 'ocr' ? t('drawingMode') : t('regionalOcr')}
-            </button>
-            <button
-              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'erase' ? 'active' : ''}`}
-              style={{flex: 1}}
-              disabled={!imageLoaded}
-              onClick={() => handleRegionTool('erase')}
-            >
-              {isRegionalOcrActive && regionalAction === 'erase' ? t('eraseDrawingMode') : t('eraseRegion')}
-            </button>
-            <button
-              className="btn btn-secondary"
-              style={{flex: 1}}
-              disabled={!selectedRegion}
-              onClick={handleRemoveText}
-            >
-              {t('removeText')}
-            </button>
-            {ocrEngineBlockReason && (
-              <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
-            )}
-          </div>
         </aside>
 
       </div>
