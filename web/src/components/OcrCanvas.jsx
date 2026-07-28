@@ -235,6 +235,30 @@ function calcOcrFontSize(text, _boxW, boxH, inkRatios, maxSize = 96) {
   return Math.max(3, Math.min(maxSize, singleLineHeight / ratio));
 }
 
+// The OCR box width was measured for the *original* font size. Any residual
+// overshoot in the estimated font size (calcOcrFontSize is a best-effort
+// reconstruction, not exact) makes that same text wider at the new size, so
+// it silently wraps onto an extra line inside the unchanged box width. Since
+// every text object is top-anchored, a wrapped line makes the box grow
+// downward — and this app frequently stacks a label, a heading, and a
+// paragraph within a few pixels of each other, so even one extra wrapped
+// line is enough to visually collide with whatever sits right below it.
+// Widening the box to fit each of its own lines at the *computed* font size
+// keeps the OCR's own line breaks intact while preventing unintended
+// re-wrapping from silently inflating the box height.
+function fitBoxWidthToFontSize(text, fontSize, fontFamily, currentWidth, padding = 8) {
+  try {
+    if (!ocrFontMeasureCtx) ocrFontMeasureCtx = document.createElement('canvas').getContext('2d');
+    ocrFontMeasureCtx.font = `${fontSize}px ${fontFamily}`;
+    const lines = String(text).split('\n').filter(l => l.trim() !== '');
+    const widest = (lines.length ? lines : [String(text)])
+      .reduce((max, line) => Math.max(max, ocrFontMeasureCtx.measureText(line).width), 0);
+    return Math.max(currentWidth, widest + padding);
+  } catch {
+    return currentWidth;
+  }
+}
+
 function normalizedText(text) {
   return String(text).replace(/[\s\p{P}\p{S}]+/gu, '').toLowerCase();
 }
@@ -1345,11 +1369,13 @@ const OcrCanvas = forwardRef(({
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
         const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height, sharedInkRatios);
+        const effectiveFontSize = forcePresetFont ? presetFontSize : regionalFontSize;
+        const fittedWidth = fitBoxWidthToFontSize(block.text, effectiveFontSize, fontToUse, block.width);
         const text = new fabric.Textbox(block.text, {
           left: block.left,
           top: block.top,
-          width: block.width,
-          fontSize: forcePresetFont ? presetFontSize : regionalFontSize,
+          width: fittedWidth,
+          fontSize: effectiveFontSize,
           fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
           fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
           fill: block.manual ? '#000000' : 'rgba(0,0,0,0.78)',
@@ -1479,13 +1505,15 @@ const OcrCanvas = forwardRef(({
     for (let i = 0; i < reviewBlocks.length; i++) {
       const block = reviewBlocks[i];
       const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h, sharedInkRatios);
+      const effectiveFontSize = forcePresetFont ? presetFontSize : calculatedFontSize;
+      const fittedWidth = fitBoxWidthToFontSize(block.text, effectiveFontSize, fontToUse, block.bbox.w);
       const detectedColor = textColorById.get(block.id) || null;
 
       const text = new fabric.Textbox(block.text, {
         left: block.bbox.x,
         top: block.bbox.y,
-        width: block.bbox.w,
-        fontSize: forcePresetFont ? presetFontSize : calculatedFontSize,
+        width: fittedWidth,
+        fontSize: effectiveFontSize,
         fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
         fontStyle: forcePresetFont && presetItalic ? 'italic' : 'normal',
         // OCR output is a review/replacement layer. The patch removes only the
