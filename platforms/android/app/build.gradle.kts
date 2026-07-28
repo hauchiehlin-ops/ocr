@@ -107,4 +107,5 @@ dependencies {
 
   // ML Kit Document Scanner for CameraScannerScreen
   implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
+  implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 }

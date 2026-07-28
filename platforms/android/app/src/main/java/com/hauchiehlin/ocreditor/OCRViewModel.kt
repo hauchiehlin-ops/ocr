@@ -13,6 +13,9 @@ import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Canvas
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 
 data class BoundingBox(val x: Int, val y: Int, val width: Int, val height: Int)
 data class FontEstimate(
@@ -152,49 +155,27 @@ class OCRViewModel : ViewModel() {
 
             // 3. 都沒有則視為失敗 (不再強制跳出下載提示，預設打包的情境下應該至少有輕量模型)
             engineInitialized = false
+            // ML Kit is the working on-device fallback and requires no model button.
+            _isUsingLightweightModel.value = false
         }
     }
 
     fun downloadModels() {
-        if (_isDownloadingModels.value) return
-        _isDownloadingModels.value = true
-        _downloadProgress.value = 0.0
-
-        viewModelScope.launch(Dispatchers.IO) {
-            val dir = java.io.File(currentModelPath)
-            if (!dir.exists()) {
-                dir.mkdirs()
-            }
-
-            // Simulate downloading
-            for (i in 1..100) {
-                kotlinx.coroutines.delay(20) // Simulate download time
-                _downloadProgress.value = i / 100.0
-            }
-
-            // Create a dummy file to pass the check
-            java.io.File(dir, "ppocr_det_v5.onnx").writeText("dummy")
-
-            _isDownloadingModels.value = false
-            _showModelDownloadPrompt.value = false
-            
-            // Re-initialize
-            engineInitialized = OCREngineBridge.initEngine(currentModelPath)
-        }
+        _ocrState.value = OCRState.Error("目前版本使用裝置端 ML Kit OCR，無須下載額外模型。")
     }
 
     fun recognizeText(bitmap: Bitmap) {
-        if (!engineInitialized) {
-            _ocrState.value = OCRState.Error("OCR Engine not initialized")
-            return
-        }
-
         _ocrState.value = OCRState.Loading
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val processedBitmap = preprocessBitmap(bitmap)
-                val jsonString = OCREngineBridge.recognizeText(processedBitmap)
+                val jsonString = if (engineInitialized) OCREngineBridge.recognizeText(processedBitmap) else "{}"
                 val layers = parseToLayers(jsonString)
+
+                if (layers.isEmpty()) {
+                    recognizeWithMlKit(bitmap)
+                    return@launch
+                }
                 
                 undoStack.clear()
                 redoStack.clear()
@@ -209,34 +190,85 @@ class OCRViewModel : ViewModel() {
         }
     }
 
+    private fun recognizeWithMlKit(bitmap: Bitmap) {
+        val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+        recognizer.process(InputImage.fromBitmap(bitmap, 0))
+            .addOnSuccessListener { result ->
+                val layers = result.textBlocks.flatMap { block ->
+                    block.lines.mapNotNull { line ->
+                        val rect = line.boundingBox ?: return@mapNotNull null
+                        OCRLayer(
+                            originalText = line.text,
+                            currentText = line.text,
+                            boundingBox = BoundingBox(rect.left, rect.top, rect.width(), rect.height()),
+                            fontSize = (rect.height() * 0.8f).coerceAtLeast(12f),
+                            fontFamily = if (forceComputerFontAfterOCR.value) {
+                                if (line.text.matches(Regex("^[a-zA-Z0-9\\s\\p{Punct}]+$"))) secondaryOCRFont.value else primaryOCRFont.value
+                            } else "Noto Sans CJK"
+                        )
+                    }
+                }
+                if (layers.isEmpty()) {
+                    _ocrState.value = OCRState.Error("圖片已開啟，但沒有辨識到任何文字。請確認圖片清晰度、方向與語言。")
+                } else {
+                    undoStack.clear()
+                    redoStack.clear()
+                    undoStack.add(layers)
+                    updateUndoRedoStates()
+                    _selectedLayerId.value = null
+                    _ocrState.value = OCRState.Success(layers, layersToJson(layers, bitmap.width, bitmap.height))
+                }
+                recognizer.close()
+            }
+            .addOnFailureListener { error ->
+                _ocrState.value = OCRState.Error("文字辨識失敗：${error.localizedMessage ?: "未知錯誤"}")
+                recognizer.close()
+            }
+    }
+
     fun recognizeRegion(bitmap: Bitmap, x: Int, y: Int, w: Int, h: Int) {
-        if (!engineInitialized) {
-            _ocrState.value = OCRState.Error("OCR Engine not initialized")
+        if (w <= 0 || h <= 0) {
+            _ocrState.value = OCRState.Error("請選取有效的辨識區域")
             return
         }
-
+        val previousState = _ocrState.value as? OCRState.Success
         _ocrState.value = OCRState.Loading
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val processedBitmap = preprocessBitmap(bitmap)
-                val jsonString = OCREngineBridge.recognizeRegion(processedBitmap, x, y, w, h)
-                val newLayers = parseToLayers(jsonString)
-                
-                // Usually we'd append or merge, but for now we'll just append and save state
-                val currentState = _ocrState.value
-                val updatedLayers = if (currentState is OCRState.Success) {
-                    currentState.layers + newLayers
-                } else {
-                    newLayers
-                }
-
-                undoStack.add(updatedLayers)
-                redoStack.clear()
-                updateUndoRedoStates()
-
-                _ocrState.value = OCRState.Success(updatedLayers, jsonString)
+                val safeX = x.coerceIn(0, bitmap.width - 1)
+                val safeY = y.coerceIn(0, bitmap.height - 1)
+                val safeW = w.coerceAtMost(bitmap.width - safeX)
+                val safeH = h.coerceAtMost(bitmap.height - safeY)
+                val crop = Bitmap.createBitmap(bitmap, safeX, safeY, safeW, safeH)
+                val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
+                recognizer.process(InputImage.fromBitmap(crop, 0))
+                    .addOnSuccessListener { result ->
+                        val newLayers = result.textBlocks.flatMap { block -> block.lines.mapNotNull { line ->
+                            val rect = line.boundingBox ?: return@mapNotNull null
+                            OCRLayer(originalText = line.text, currentText = line.text,
+                                boundingBox = BoundingBox(rect.left + safeX, rect.top + safeY, rect.width(), rect.height()),
+                                fontSize = (rect.height() * 0.8f).coerceAtLeast(12f), fontFamily = "Noto Sans CJK")
+                        }}
+                        val updatedLayers = (previousState?.layers ?: emptyList()) + newLayers
+                        if (newLayers.isEmpty()) {
+                            _ocrState.value = previousState ?: OCRState.Error("選取區域內沒有辨識到文字")
+                        } else {
+                            undoStack.add(updatedLayers)
+                            redoStack.clear()
+                            updateUndoRedoStates()
+                            _ocrState.value = OCRState.Success(updatedLayers, layersToJson(updatedLayers, bitmap.width, bitmap.height))
+                        }
+                        crop.recycle()
+                        recognizer.close()
+                    }
+                    .addOnFailureListener { error ->
+                        crop.recycle()
+                        recognizer.close()
+                        _ocrState.value = previousState ?: OCRState.Error("區域辨識失敗：${error.localizedMessage}")
+                    }
+                return@launch
             } catch (e: Exception) {
-                _ocrState.value = OCRState.Error(e.message ?: "Unknown error occurred")
+                _ocrState.value = previousState ?: OCRState.Error(e.message ?: "區域辨識失敗")
             }
         }
     }
@@ -416,38 +448,46 @@ class OCRViewModel : ViewModel() {
         val layers = mutableListOf<OCRLayer>()
         try {
             val root = JSONObject(jsonString)
-            if (!root.has("blocks")) return layers
-            val blocksArray = root.getJSONArray("blocks")
+            val blocksArray = root.optJSONArray("text_blocks") ?: root.optJSONArray("blocks") ?: return layers
             for (i in 0 until blocksArray.length()) {
                 val blockObj = blocksArray.getJSONObject(i)
-                val boxObj = blockObj.getJSONObject("boundingBox")
-                val boundingBox = BoundingBox(
-                    x = boxObj.getInt("x"),
-                    y = boxObj.getInt("y"),
-                    width = boxObj.getInt("width"),
-                    height = boxObj.getInt("height")
-                )
-                
-                val text = if (blockObj.has("text")) blockObj.getString("text") else ""
-                
-                var fontName = "Noto Sans CJK"
-                if (forceComputerFontAfterOCR.value) {
-                    val isEnglishOrNumber = text.matches(Regex("^[a-zA-Z0-9\\s\\p{Punct}]+$"))
-                    fontName = if (isEnglishOrNumber) secondaryOCRFont.value else primaryOCRFont.value
+                val lines = blockObj.optJSONArray("lines")
+                if (lines != null) for (j in 0 until lines.length()) {
+                    val line = lines.getJSONObject(j)
+                    parseCoreBox(line.optJSONObject("bounding_box"))?.let { box ->
+                        val text = line.optString("text")
+                        if (text.isNotBlank()) layers.add(OCRLayer(originalText = text, currentText = text, boundingBox = box,
+                            fontSize = (box.height * 0.8f).coerceAtLeast(12f), fontFamily = "Noto Sans CJK"))
+                    }
                 }
-                
-                layers.add(OCRLayer(
-                    originalText = text,
-                    currentText = text,
-                    boundingBox = boundingBox,
-                    fontSize = boundingBox.height.toFloat() * 0.8f,
-                    fontFamily = fontName
-                ))
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
         return layers
+    }
+
+    private fun parseCoreBox(box: JSONObject?): BoundingBox? {
+        box ?: return null
+        val tl = box.optJSONArray("top_left") ?: return null
+        val br = box.optJSONArray("bottom_right") ?: return null
+        val x = tl.optInt(0); val y = tl.optInt(1)
+        return BoundingBox(x, y, (br.optInt(0) - x).coerceAtLeast(1), (br.optInt(1) - y).coerceAtLeast(1))
+    }
+
+    private fun layersToJson(layers: List<OCRLayer>, width: Int, height: Int): String {
+        val root = JSONObject().put("dimensions", JSONObject().put("width", width).put("height", height))
+        val blocks = org.json.JSONArray()
+        layers.filterNot { it.isRemoved }.forEach { layer ->
+            val b = layer.boundingBox
+            val box = JSONObject()
+                .put("top_left", org.json.JSONArray(listOf(b.x, b.y)))
+                .put("top_right", org.json.JSONArray(listOf(b.x + b.width, b.y)))
+                .put("bottom_right", org.json.JSONArray(listOf(b.x + b.width, b.y + b.height)))
+                .put("bottom_left", org.json.JSONArray(listOf(b.x, b.y + b.height)))
+            blocks.put(JSONObject().put("lines", org.json.JSONArray().put(JSONObject().put("text", layer.currentText).put("bounding_box", box))))
+        }
+        return root.put("text_blocks", blocks).toString()
     }
 
     fun applyDefaultFontToAllRegions() {

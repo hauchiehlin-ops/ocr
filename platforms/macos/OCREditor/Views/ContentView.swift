@@ -36,6 +36,7 @@ struct ContentView: View {
     @State private var inspectorWidth: CGFloat = 320
     @State private var canvasZoom: CGFloat = 1.0
     @State private var currentZoom: CGFloat = 0.0
+    @State private var fitsCanvasToWindow = true
 
     @State private var draggingLayerId: UUID? = nil
     @State private var dragOffset: CGSize = .zero
@@ -54,6 +55,9 @@ struct ContentView: View {
             NavigationStack {
                 canvasArea
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .safeAreaInset(edge: .bottom) {
+                        mobileActionBar
+                    }
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button {
@@ -87,6 +91,10 @@ struct ContentView: View {
                 HStack(spacing: 0) {
                     canvasArea
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    Divider()
+                    inspectorArea
+                        .frame(minWidth: 280, idealWidth: inspectorWidth, maxWidth: 360)
+                        .background(Color(platformColor: PlatformColor.themeWindowBackground))
                 }
             }
             .toolbar {
@@ -157,7 +165,9 @@ struct ContentView: View {
             }
         }
         #endif
+        #if os(macOS)
         .frame(minWidth: 1100, minHeight: 750)
+        #endif
         .alert("錯誤", isPresented: showingError) {
             Button("確定", role: .cancel) {
                 viewModel.errorMessage = nil
@@ -234,6 +244,37 @@ struct ContentView: View {
 // MARK: - 左側圖層面板 (Sidebar)
 
 extension ContentView {
+    #if os(iOS)
+    private var mobileActionBar: some View {
+        HStack(spacing: 10) {
+            Button { isFileImporterPresented = true } label: {
+                Label("開啟", systemImage: "folder")
+            }
+            Button {
+                Task { await viewModel.rerunOCR() }
+            } label: {
+                Label("重新辨識", systemImage: "text.viewfinder")
+            }
+            .disabled(viewModel.canvasDocument == nil || viewModel.state.isProcessing)
+            Button {
+                fitsCanvasToWindow = true
+                canvasZoom = 1
+            } label: {
+                Label("適合畫面", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            Spacer(minLength: 0)
+            Button { isSidebarPresented = true } label: {
+                Label("圖層", systemImage: "square.3.layers.3d")
+            }
+        }
+        .labelStyle(.iconOnly)
+        .font(.title3)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+    #endif
+
     @ViewBuilder
     private var sidebarContent: some View {
         VStack(spacing: 0) {
@@ -358,6 +399,12 @@ extension ContentView {
     private var canvasArea: some View {
         if let doc = viewModel.canvasDocument {
             GeometryReader { geometry in
+                let availableWidth = max(1, geometry.size.width - 32)
+                let availableHeight = max(1, geometry.size.height - 32)
+                let fitZoom = min(availableWidth / doc.dimensions.width,
+                                  availableHeight / doc.dimensions.height,
+                                  1.0)
+                let effectiveZoom = fitsCanvasToWindow ? fitZoom : max(0.1, canvasZoom + currentZoom)
                 ScrollView([.horizontal, .vertical]) {
                     ZStack(alignment: .topLeading) {
                         // 畫布底層框架
@@ -400,15 +447,22 @@ extension ContentView {
                                 .position(x: rect.midX, y: rect.midY)
                         }
                     }
-                    .padding(40)
-                    .scaleEffect(canvasZoom + currentZoom)
+                    .scaleEffect(effectiveZoom, anchor: .topLeading)
+                    .frame(width: doc.dimensions.width * effectiveZoom,
+                           height: doc.dimensions.height * effectiveZoom,
+                           alignment: .topLeading)
+                    .padding(16)
                     .gesture(
                         MagnificationGesture()
                             .onChanged { value in
+                                if fitsCanvasToWindow {
+                                    canvasZoom = fitZoom
+                                    fitsCanvasToWindow = false
+                                }
                                 currentZoom = value - 1
                             }
                             .onEnded { value in
-                                canvasZoom = max(0.2, min(5.0, canvasZoom + currentZoom))
+                                canvasZoom = max(0.1, min(5.0, canvasZoom + currentZoom))
                                 currentZoom = 0
                             }
                     )
@@ -973,6 +1027,7 @@ extension ContentView {
             // 關閉檔案
             Button {
                 viewModel.closeDocument()
+                fitsCanvasToWindow = true
             } label: {
                 Label("關閉檔案", systemImage: "xmark.circle")
             }
@@ -1050,6 +1105,13 @@ extension ContentView {
             }
             .help("新增文字區塊 (⌘T)")
             .keyboardShortcut("t", modifiers: .command)
+
+            Button {
+                Task { await viewModel.rerunOCR() }
+            } label: {
+                Label("重新辨識", systemImage: "text.viewfinder")
+            }
+            .disabled(viewModel.canvasDocument == nil || viewModel.state.isProcessing)
             
             // 刪除選取元件
             Button {

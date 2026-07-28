@@ -1289,7 +1289,24 @@ final class OCRViewModel: ObservableObject {
 
         progress = 0.8
         
-        handleOCRResult(result: result, image: image)
+        if let result, !result.textBlocks.isEmpty {
+            handleOCRResult(result: result, image: image)
+        } else {
+            print("[OCRViewModel] ⚠️ C++ OCR 未辨識到文字，改用 Apple Vision...")
+            await performNativeOCR(on: image)
+        }
+    }
+
+    /// 對目前文件的原始底圖重新執行完整 OCR。
+    func rerunOCR() async {
+        guard let image = canvasDocument?.layers.first(where: { $0.type == .image })?.image else {
+            state = .error("找不到可重新辨識的原始影像")
+            errorMessage = "目前文件沒有可供 OCR 使用的原始影像。"
+            return
+        }
+        state = .recognizing
+        progress = 0.05
+        await performOCR(on: image)
     }
     
     /// 執行局部 OCR 辨識 (Regional Re-OCR)
@@ -1507,6 +1524,13 @@ final class OCRViewModel: ObservableObject {
                 } catch {
                     continuation.resume(throwing: error)
                 }
+            }
+
+            guard !observations.isEmpty else {
+                state = .error("未辨識到任何文字")
+                errorMessage = "圖片已開啟，但沒有辨識到文字。你可以調整圖片清晰度、方向或辨識語系後重新辨識。"
+                progress = 0
+                return
             }
             
             // 將 Vision 結果轉換為我們的資料結構

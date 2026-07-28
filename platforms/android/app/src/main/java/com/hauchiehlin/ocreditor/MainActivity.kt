@@ -55,11 +55,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Simulate extracting lightweight models from assets to filesDir
+        // The native engine may use models installed in this directory. Do not create
+        // placeholder model files: a fake model previously made initialization appear
+        // successful while every recognition returned an empty result.
         val lightweightModelPath = File(filesDir, "models_lightweight").absolutePath
         File(lightweightModelPath).mkdirs()
-        // Simulate extracting dummy file so it exists
-        File(lightweightModelPath, "ppocr_det_v5.onnx").writeText("dummy")
 
         // Downloaded models path
         val downloadedModelPath = File(filesDir, "models_pro").absolutePath
@@ -107,6 +107,7 @@ fun MainScreen(viewModel: OCRViewModel) {
             val bitmap = BitmapFactory.decodeStream(inputStream)
             val argbBitmap = bitmap.copy(Bitmap.Config.ARGB_8888, true)
             selectedBitmap = argbBitmap
+            viewModel.recognizeText(argbBitmap)
         }
     }
 
@@ -177,6 +178,20 @@ fun MainScreen(viewModel: OCRViewModel) {
             
             if (ocrState is OCRState.Loading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            }
+
+            if (ocrState is OCRState.Error) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        text = (ocrState as OCRState.Error).message,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
             }
             
             val selectedId by viewModel.selectedLayerId.collectAsState()
