@@ -151,16 +151,13 @@ function createUpscaledCanvas(sourceCanvas, scale = 2) {
 // 1. Calibrate ink ratio from the batch's own reliable (multi-character)
 //    text instead of trusting a single hardcoded constant, so it adapts to
 //    whatever this image's text actually looks like.
-// 2. Calibrate CJK and Latin/other text *separately*. CJK glyphs are
-//    genuinely taller relative to their nominal font size than Latin ones
-//    (full-width ink vs. x-height/ascender/descender) — that's a real
-//    difference between scripts, not noise. A single shared ratio across
-//    both just traded "different characters get different sizes" for
-//    "different scripts get different sizes" (CJK rendered ~40% larger than
-//    Latin text at the same source size in testing). Two calibrated ratios,
-//    chosen per block by its own script, keep every block consistent with
-//    same-script neighbors while still respecting the real size difference
-//    between scripts.
+// 2. Keep one visual ratio for the document. CJK glyphs are usually taller
+//    relative to their nominal font size than Latin ones, but that is a
+//    property of the replacement font, not evidence that the source image
+//    used different font sizes. Choosing a ratio by each block's script made
+//    labels such as "96%" and "70%" visibly larger than their neighbouring
+//    CJK labels. The document ratio keeps one source line height mapped to one
+//    replacement line height across scripts.
 //
 // Short blocks (bullets, dashes, single CJK strokes like "一", punctuation)
 // are excluded from calibration — their own ink ratio can be a tiny fraction
@@ -220,9 +217,16 @@ function computeDocumentInkRatios(texts, fontFamily) {
     (isCjkDominant(line) ? cjkRatios : latinRatios).push(ratio);
   });
   const clamp = (value) => Math.min(MAX_INK_RATIO, Math.max(MIN_INK_RATIO, value));
+  const cjk = clamp(medianOf(cjkRatios) ?? DEFAULT_CJK_INK_RATIO);
+  const latin = clamp(medianOf(latinRatios) ?? DEFAULT_LATIN_INK_RATIO);
   return {
-    cjk: clamp(medianOf(cjkRatios) ?? DEFAULT_CJK_INK_RATIO),
-    latin: clamp(medianOf(latinRatios) ?? DEFAULT_LATIN_INK_RATIO)
+    cjk,
+    latin,
+    // Prefer the CJK baseline when the document contains CJK text. This is
+    // the stable visual-height anchor for mixed-script infographics and
+    // prevents isolated number/Latin boxes from being inflated by the
+    // smaller x-height of the replacement font.
+    visual: cjkRatios.length > 0 ? cjk : latin
   };
 }
 
@@ -230,8 +234,14 @@ function calcOcrFontSize(text, _boxW, boxH, inkRatios, maxSize = 96) {
   const lines = String(text).split('\n').filter(l => l.trim() !== '');
   const linesCount = lines.length || 1;
   const singleLineHeight = (boxH - 2) / linesCount;
-  const ratios = inkRatios || { cjk: DEFAULT_CJK_INK_RATIO, latin: DEFAULT_LATIN_INK_RATIO };
-  const ratio = isCjkDominant(String(text)) ? ratios.cjk : ratios.latin;
+  const ratios = inkRatios || {
+    cjk: DEFAULT_CJK_INK_RATIO,
+    latin: DEFAULT_LATIN_INK_RATIO,
+    visual: DEFAULT_CJK_INK_RATIO
+  };
+  const ratio = Number.isFinite(ratios.visual)
+    ? ratios.visual
+    : (isCjkDominant(String(text)) ? ratios.cjk : ratios.latin);
   return Math.max(3, Math.min(maxSize, singleLineHeight / ratio));
 }
 
