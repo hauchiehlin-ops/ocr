@@ -170,6 +170,8 @@ const MIN_INK_RATIO = 0.55;
 const MAX_INK_RATIO = 0.95;
 const DEFAULT_CJK_INK_RATIO = 0.9;
 const DEFAULT_LATIN_INK_RATIO = 0.75;
+const DEFAULT_TEXTBOX_LINE_HEIGHT = 1;
+const DEFAULT_TEXTBOX_CHAR_SPACING = 0;
 let ocrFontMeasureCtx = null;
 function measureRawInkHeightRatio(text, fontFamily) {
   const referenceSize = 100;
@@ -241,6 +243,14 @@ function measureTextWidthAtFontSize(text, fontFamily, fontSize, fontWeight = 'no
   } catch {
     return null;
   }
+}
+
+function normalizeTextboxStyle(style = {}) {
+  return {
+    lineHeight: DEFAULT_TEXTBOX_LINE_HEIGHT,
+    charSpacing: DEFAULT_TEXTBOX_CHAR_SPACING,
+    ...style
+  };
 }
 
 function calcOcrFontSize(
@@ -496,7 +506,29 @@ const OcrCanvas = forwardRef(({
     syncLayers();
   };
 
+  const describeTextbox = (textbox) => {
+    if (!textbox || textbox.type !== 'textbox') return null;
+    return {
+      id: textbox.id,
+      text: textbox.text,
+      isBold: textbox.fontWeight === 'bold',
+      isItalic: textbox.fontStyle === 'italic',
+      fill: textbox.isOcrReview ? (textbox.originalTextColor || '#000000') : textbox.fill,
+      fontFamily: textbox.fontFamily,
+      fontSize: textbox.fontSize,
+      lineHeight: textbox.lineHeight,
+      charSpacing: textbox.charSpacing
+    };
+  };
+
+  const syncSelectedTextbox = () => {
+    const canvas = fabricCanvas.current;
+    const activeObject = canvas?.getActiveObject?.();
+    onRegionSelect?.(describeTextbox(activeObject));
+  };
+
   // Persistent Tesseract Worker initialization linked to OCR language settings
+  /* oxlint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     let active = true;
     const initTesseract = async () => {
@@ -563,7 +595,14 @@ const OcrCanvas = forwardRef(({
 
     canvas.on('selection:created', handleSelection);
     canvas.on('selection:updated', handleSelection);
-    canvas.on('selection:cleared', () => onRegionSelect(null));
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- Fabric listeners
+    // are attached once; the handlers read the latest live state from refs.
+    canvas.on('selection:cleared', () => {
+      // Text editing can briefly clear the selection before Fabric settles
+      // back onto the same textbox. Re-sync on the next frame so the sidebar
+      // doesn't drop its selection state spuriously.
+      requestAnimationFrame(syncSelectedTextbox);
+    });
 
     canvas.on('text:changed', handleTextChanged);
     canvas.on('text:editing:entered', handleEditingEntered);
@@ -687,8 +726,10 @@ const OcrCanvas = forwardRef(({
       }
     };
   }, []);
+  /* oxlint-enable react-hooks/exhaustive-deps */
 
   // Sync Regional OCR drawing modes
+  /* oxlint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     const canvas = fabricCanvas.current;
     if (!canvas) return;
@@ -736,6 +777,7 @@ const OcrCanvas = forwardRef(({
       canvas.off('mouse:up', handleMouseUp);
     };
   }, [isRegionalOcrActive, regionalAction]);
+  /* oxlint-enable react-hooks/exhaustive-deps */
 
   const resolveImagePatchGeometry = (left, top, width, height, paddingX, paddingY) => {
     const layout = imageLayout.current;
@@ -1591,6 +1633,7 @@ const OcrCanvas = forwardRef(({
         const effectiveFontSize = forcePresetFont ? presetFontSize : regionalFontSize;
         const fittedWidth = keepTextBoxInsideOcrBox(block.width);
         const text = new fabric.Textbox(block.text, {
+          ...normalizeTextboxStyle(),
           left: block.left,
           top: sourceInkBounds?.top || block.top,
           width: fittedWidth,
@@ -1742,6 +1785,7 @@ const OcrCanvas = forwardRef(({
       const detectedColor = textColorById.get(block.id) || null;
 
       const text = new fabric.Textbox(block.text, {
+        ...normalizeTextboxStyle(),
         left: block.bbox.x,
         top: sourceInkBounds?.top || block.bbox.y,
         width: fittedWidth,
@@ -1786,15 +1830,7 @@ const OcrCanvas = forwardRef(({
   const handleTextChanged = (e) => {
     const activeObject = e.target;
     if (activeObject && activeObject.type === 'textbox') {
-      onRegionSelect({
-        id: activeObject.id,
-        text: activeObject.text,
-        isBold: activeObject.fontWeight === 'bold',
-        isItalic: activeObject.fontStyle === 'italic',
-        fill: activeObject.isOcrReview ? (activeObject.originalTextColor || '#000000') : activeObject.fill,
-        fontFamily: activeObject.fontFamily,
-        fontSize: activeObject.fontSize
-      });
+      onRegionSelect?.(describeTextbox(activeObject));
       syncLayers();
     }
   };
@@ -1822,23 +1858,12 @@ const OcrCanvas = forwardRef(({
       void materializeReviewLayer(activeObject).then(() => fabricCanvas.current?.renderAll());
     }
     saveHistory();
+    requestAnimationFrame(syncSelectedTextbox);
   };
 
   const handleSelection = (e) => {
     const activeObject = e.selected?.[0];
-    if (activeObject && activeObject.type === 'textbox') {
-      onRegionSelect({
-        id: activeObject.id,
-        text: activeObject.text,
-        isBold: activeObject.fontWeight === 'bold',
-        isItalic: activeObject.fontStyle === 'italic',
-        fill: activeObject.isOcrReview ? (activeObject.originalTextColor || '#000000') : activeObject.fill,
-        fontFamily: activeObject.fontFamily,
-        fontSize: activeObject.fontSize
-      });
-    } else {
-      onRegionSelect(null);
-    }
+    onRegionSelect?.(describeTextbox(activeObject));
   };
 
   const materializeReviewLayer = async (textbox) => {
@@ -1980,6 +2005,7 @@ const OcrCanvas = forwardRef(({
     const fontToUse = forcePresetFont ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
     isHistoryDisabled.current = true;
     const text = new fabric.Textbox(initialText, {
+      ...normalizeTextboxStyle(),
       left,
       top,
       width,
@@ -2040,6 +2066,7 @@ const OcrCanvas = forwardRef(({
         canvas.renderAll();
         saveHistory();
         syncLayers();
+        syncSelectedTextbox();
         return true;
       }
       return false;
@@ -2049,7 +2076,7 @@ const OcrCanvas = forwardRef(({
       if (!canvas) return false;
       const obj = canvas.getObjects().find(o => o.id === id);
       if (obj) {
-        obj.set(styleObject);
+        obj.set(normalizeTextboxStyle(styleObject));
         refreshTextboxMetrics(obj);
         if (obj.isOcrReview) {
           void materializeReviewLayer(obj).then(() => {
@@ -2060,6 +2087,7 @@ const OcrCanvas = forwardRef(({
         canvas.renderAll();
         saveHistory();
         syncLayers();
+        syncSelectedTextbox();
         return true;
       }
       return false;
@@ -2071,15 +2099,7 @@ const OcrCanvas = forwardRef(({
       if (obj) {
         canvas.setActiveObject(obj);
         centerCanvasOnObject(obj);
-        onRegionSelect({
-          id: obj.id,
-          text: obj.text,
-          isBold: obj.fontWeight === 'bold',
-          isItalic: obj.fontStyle === 'italic',
-          fill: obj.isOcrReview ? (obj.originalTextColor || '#000000') : obj.fill,
-          fontFamily: obj.fontFamily,
-          fontSize: obj.fontSize
-        });
+        onRegionSelect?.(describeTextbox(obj));
         canvas.renderAll();
       }
     },
@@ -2107,7 +2127,7 @@ const OcrCanvas = forwardRef(({
       isHistoryDisabled.current = true;
       canvas.getObjects().forEach(obj => {
         if (obj.type === 'textbox') {
-          obj.set(styleObject);
+          obj.set(normalizeTextboxStyle(styleObject));
           refreshTextboxMetrics(obj);
           if (obj.isOcrReview) {
             void materializeReviewLayer(obj).then(() => {
@@ -2143,6 +2163,7 @@ const OcrCanvas = forwardRef(({
           });
         }
         syncLayers();
+        syncSelectedTextbox();
       });
     },
     redo: () => {
@@ -2164,6 +2185,7 @@ const OcrCanvas = forwardRef(({
           });
         }
         syncLayers();
+        syncSelectedTextbox();
       });
     },
     triggerUpload: () => {
@@ -2221,7 +2243,9 @@ const OcrCanvas = forwardRef(({
     // browsers fall back to a normal download each time.
     saveImage: async () => {
       const canvas = fabricCanvas.current;
-      if (!canvas || !originalDimensions.current.width) return;
+      if (!canvas || !originalDimensions.current.width) {
+        return { status: 'error', reason: 'no-canvas' };
+      }
 
       if (typeof window.showSaveFilePicker === 'function') {
         try {
@@ -2233,21 +2257,24 @@ const OcrCanvas = forwardRef(({
             });
           }
           await writeDataUrlToHandle(saveFileHandleRef.current, buildExportDataUrl());
+          return { status: 'saved', mode: 'file-picker', revision: saveRevisionRef.current || 1 };
         } catch (error) {
-          if (error?.name === 'AbortError') return;
+          if (error?.name === 'AbortError') return { status: 'cancelled' };
           console.error('Save Image failed:', error);
-          alert('Save Image failed: ' + error.message);
+          return { status: 'error', error };
         }
-        return;
+      } else {
+        downloadDataUrl(buildExportDataUrl(), buildSaveSuggestedName(saveRevisionRef.current || 1));
+        return { status: 'downloaded', mode: 'download', revision: saveRevisionRef.current || 1 };
       }
-
-      downloadDataUrl(buildExportDataUrl(), buildSaveSuggestedName(saveRevisionRef.current || 1));
     },
     // "Save As": always prompts for a new file and, on success, makes that
     // new file the target of subsequent plain "Save Image" calls.
     saveImageAs: async () => {
       const canvas = fabricCanvas.current;
-      if (!canvas || !originalDimensions.current.width) return;
+      if (!canvas || !originalDimensions.current.width) {
+        return { status: 'error', reason: 'no-canvas' };
+      }
 
       const nextRevision = (saveRevisionRef.current || 0) + 1;
 
@@ -2260,16 +2287,17 @@ const OcrCanvas = forwardRef(({
           saveFileHandleRef.current = handle;
           saveRevisionRef.current = nextRevision;
           await writeDataUrlToHandle(handle, buildExportDataUrl());
+          return { status: 'saved', mode: 'file-picker', revision: nextRevision };
         } catch (error) {
-          if (error?.name === 'AbortError') return;
+          if (error?.name === 'AbortError') return { status: 'cancelled' };
           console.error('Save Image As failed:', error);
-          alert('Save Image As failed: ' + error.message);
+          return { status: 'error', error };
         }
-        return;
+      } else {
+        saveRevisionRef.current = nextRevision;
+        downloadDataUrl(buildExportDataUrl(), buildSaveSuggestedName(nextRevision));
+        return { status: 'downloaded', mode: 'download', revision: nextRevision };
       }
-
-      saveRevisionRef.current = nextRevision;
-      downloadDataUrl(buildExportDataUrl(), buildSaveSuggestedName(nextRevision));
     },
     exportPDF: () => {
       const canvas = fabricCanvas.current;

@@ -353,7 +353,7 @@ function App() {
   const isMacDesktopBrowser = typeof navigator !== 'undefined' && /Macintosh|Mac OS X/i.test(navigator.userAgent) && !isIOSLikeBrowser;
   const isMobileWebBrowser = (isIOSLikeBrowser || isAndroidBrowser) && !mobileNativeOcrAvailable;
 
-  const testLocalServerConnection = async () => {
+  const testLocalServerConnection = useCallback(async () => {
     if (mobileNativeOcrAvailable) {
       setLocalServerStatus('connected');
       setLocalServerEngine(getNativeOcrEngineLabel());
@@ -383,13 +383,13 @@ function App() {
     } catch {
       setLocalServerStatus('disconnected');
     }
-  };
+  }, [localServerUrl, mobileNativeOcrAvailable]);
 
   useEffect(() => {
     if (ocrEngine === 'custom') {
-      testLocalServerConnection();
+      void testLocalServerConnection();
     }
-  }, [ocrEngine, localServerUrl, mobileNativeOcrAvailable]);
+  }, [ocrEngine, testLocalServerConnection]);
 
   // The default is now deliberately simple: native OCR is the primary workflow.
   // Tesseract/Gemini are kept as opt-in fallback engines when localhost native
@@ -408,6 +408,13 @@ function App() {
   const [availableFontFamilies, setAvailableFontFamilies] = useState(FALLBACK_FONT_FAMILIES);
   const [fontLoadStatus, setFontLoadStatus] = useState('');
   const [fontApplyStatus, setFontApplyStatus] = useState('');
+  const [saveStatus, setSaveStatus] = useState(null);
+
+  useEffect(() => {
+    if (!saveStatus) return undefined;
+    const timer = window.setTimeout(() => setSaveStatus(null), 2600);
+    return () => window.clearTimeout(timer);
+  }, [saveStatus]);
 
   const mergeFontFamilies = useCallback((fonts = []) => {
     const families = new Set(FALLBACK_FONT_FAMILIES);
@@ -602,7 +609,9 @@ function App() {
           fontFamily: presetFontFamily,
           fontSize: presetFontSize,
           fontWeight: presetBold ? 'bold' : 'normal',
-          fontStyle: presetItalic ? 'italic' : 'normal'
+          fontStyle: presetItalic ? 'italic' : 'normal',
+          lineHeight: 1,
+          charSpacing: 0
         };
         const appliedCount = canvasRef.current.applyTextStyleToAll(style);
         setFontApplyStatus(appliedCount > 0 ? 'fontAppliedAll' : 'fontApplyNoSelection');
@@ -612,7 +621,8 @@ function App() {
             fontFamily: presetFontFamily,
             fontSize: presetFontSize,
             isBold: presetBold,
-            isItalic: presetItalic
+            isItalic: presetItalic,
+            lineHeight: 1
           }));
         }
      }
@@ -625,7 +635,9 @@ function App() {
           fontFamily: presetFontFamily,
           fontSize: presetFontSize,
           fontWeight: presetBold ? 'bold' : 'normal',
-          fontStyle: presetItalic ? 'italic' : 'normal'
+          fontStyle: presetItalic ? 'italic' : 'normal',
+          lineHeight: 1,
+          charSpacing: 0
         };
         const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, style);
         if (applied) {
@@ -634,7 +646,8 @@ function App() {
             fontFamily: presetFontFamily,
             fontSize: presetFontSize,
             isBold: presetBold,
-            isItalic: presetItalic
+            isItalic: presetItalic,
+            lineHeight: 1
           }));
           setFontApplyStatus('fontAppliedSelected');
         } else {
@@ -643,16 +656,56 @@ function App() {
      }
   };
 
-  const handleExport = () => {
-    if (canvasRef.current) {
-      canvasRef.current.saveImage();
+  const waitForNextPaint = () => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+
+  const applySaveStatus = (result, isSaveAs = false) => {
+    if (!result) {
+      setSaveStatus({ kind: 'error', message: t('saveImageFailed') });
+      return;
     }
+    if (result.status === 'saved') {
+      setSaveStatus({
+        kind: 'success',
+        message: t('saveImageDone')
+      });
+      return;
+    }
+    if (result.status === 'downloaded') {
+      setSaveStatus({
+        kind: 'info',
+        message: t('saveImageDownloadStarted')
+      });
+      return;
+    }
+    if (result.status === 'cancelled') {
+      setSaveStatus({
+        kind: 'neutral',
+        message: t('saveImageCancelled')
+      });
+      return;
+    }
+    setSaveStatus({
+      kind: 'error',
+      message: result.error?.message || (isSaveAs ? t('saveImageFailed') : t('saveImageFailed'))
+    });
   };
 
-  const handleExportAs = () => {
-    if (canvasRef.current) {
-      canvasRef.current.saveImageAs();
-    }
+  const handleExport = async () => {
+    if (!canvasRef.current) return;
+    setOpenMenu(null);
+    await waitForNextPaint();
+    setSaveStatus({ kind: 'info', message: t('savingImage') });
+    const result = await canvasRef.current.saveImage();
+    applySaveStatus(result);
+  };
+
+  const handleExportAs = async () => {
+    if (!canvasRef.current) return;
+    setOpenMenu(null);
+    await waitForNextPaint();
+    setSaveStatus({ kind: 'info', message: t('savingImage') });
+    const result = await canvasRef.current.saveImageAs();
+    applySaveStatus(result, true);
   };
 
   const handleExportPDF = () => {
@@ -881,9 +934,16 @@ function App() {
             </a>
           </div>
           {sourceFileName && (
-            <span className="loaded-file-name" title={`${t('loadedFileNameHint')} ${sourceFileName}`}>
-              📄 {sourceFileName}
-            </span>
+            <div className="loaded-file-name-group">
+              <span className="loaded-file-name" title={`${t('loadedFileNameHint')} ${sourceFileName}`}>
+                📄 {sourceFileName}
+              </span>
+              {saveStatus?.message && (
+                <span className={`save-status ${saveStatus.kind || 'info'}`}>
+                  {saveStatus.message}
+                </span>
+              )}
+            </div>
           )}
         </div>
 
@@ -974,6 +1034,7 @@ function App() {
               setImageLoaded(loaded);
               setHasCopiedRegion(false);
               setIsPasteModeActive(false);
+              setSaveStatus(null);
               if (loaded) setZoom(1);
             }}
             onOcrProcessing={setIsOcrProcessing}
