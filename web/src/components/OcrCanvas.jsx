@@ -196,6 +196,7 @@ function getObjectBounds(obj) {
     height
   };
 }
+
 function measureRawInkHeightRatio(text, fontFamily) {
   const referenceSize = 100;
   try {
@@ -815,6 +816,8 @@ const OcrCanvas = forwardRef(({
       selection: true,
     });
     fabricCanvas.current = canvas;
+    canvas.defaultCursor = 'default';
+    canvas.hoverCursor = 'default';
     if (import.meta.env.DEV) window.__fabricCanvas = canvas;
 
     canvas.on('selection:created', (event) => eventHandlersRef.current.handleSelection?.(event));
@@ -850,7 +853,7 @@ const OcrCanvas = forwardRef(({
           : canvas.getPointer(opt.e);
         pendingInsertText.current = false;
         canvas.defaultCursor = 'default';
-        canvas.hoverCursor = 'move';
+        canvas.hoverCursor = 'default';
         if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'default';
         eventHandlersRef.current.addManualTextBox?.(
           pointer.x,
@@ -1015,7 +1018,7 @@ const OcrCanvas = forwardRef(({
       canvas.selection = true;
       canvas.skipTargetFind = false;
       canvas.defaultCursor = 'default';
-      canvas.hoverCursor = 'move';
+      canvas.hoverCursor = 'default';
       if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'default';
       canvas.renderAll();
     }
@@ -1616,6 +1619,8 @@ const OcrCanvas = forwardRef(({
         cornerSize: 8,
         touchCornerSize: 18,
         transparentCorners: true,
+        hoverCursor: 'grab',
+        moveCursor: 'move',
         lockRotation: false,
         centeredRotation: false,
         rotatingPointOffset: 40,
@@ -2217,6 +2222,8 @@ const OcrCanvas = forwardRef(({
           evented: true,
           hasControls: true,
           hasBorders: true,
+          hoverCursor: obj.isPastedRegion ? 'grab' : 'text',
+          moveCursor: 'move',
           lockRotation: false,
           centeredRotation: false,
           rotatingPointOffset: 40
@@ -2332,6 +2339,8 @@ const OcrCanvas = forwardRef(({
       cornerSize: 8,
       touchCornerSize: 18,
       transparentCorners: true,
+      hoverCursor: 'text',
+      moveCursor: 'move',
       isManualText: true,
       isOcrReview: false,
       latinFontFamily,
@@ -2594,7 +2603,7 @@ const OcrCanvas = forwardRef(({
       canvas.selection = true;
       canvas.skipTargetFind = false;
       canvas.defaultCursor = 'default';
-      canvas.hoverCursor = 'move';
+      canvas.hoverCursor = 'default';
       if (canvas.upperCanvasEl) canvas.upperCanvasEl.style.cursor = 'default';
       const fileInput = containerRef.current?.querySelector('input[type="file"]');
       if (fileInput) fileInput.value = '';

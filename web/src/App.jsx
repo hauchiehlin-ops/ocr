@@ -527,6 +527,11 @@ function App() {
   const presetCjkFontFamily = CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont);
   const presetFontFamily = `${presetLatinFontFamily}, ${presetCjkFontFamily}, sans-serif`;
   const hasPresetApplySelection = applyPresetFontFamily || applyPresetTypography;
+  const selectedRegionMeta = selectedRegion
+    ? [selectedRegion.fontFamily, Number.isFinite(selectedRegion.fontSize) ? `${Math.round(selectedRegion.fontSize)}px` : null]
+        .filter(Boolean)
+        .join(' · ')
+    : '';
 
   const buildPresetTextStyle = () => {
     const style = {
@@ -658,6 +663,14 @@ function App() {
         canvasRef.current.removeActiveObject();
         setSelectedRegion(null);
      }
+  };
+
+  const handleSelectedRegionTextChange = (event) => {
+    const nextText = event.target.value;
+    setSelectedRegion((prev) => prev ? { ...prev, text: nextText } : prev);
+    if (canvasRef.current && selectedRegion) {
+      canvasRef.current.updateRegionText(selectedRegion.id, nextText);
+    }
   };
 
   const handleApplyDefaultFontAll = async () => {
@@ -1220,168 +1233,134 @@ function App() {
         </main>
 
         {/* Right Inspector */}
-        <aside className="sidebar right-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
-          <h2 className="panel-title">{t('formatting')}</h2>
-
-          <div className="panel-subtitle">{t('color')}</div>
-          <div className="color-presets">
-            {['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'].map(color => (
-              <button
-                key={color}
-                className="color-btn"
-                style={{ backgroundColor: color, border: selectedRegion?.fill === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)' }}
-                disabled={!selectedRegion}
-                onClick={() => {
-                  setSelectedRegion(prev => ({...prev, fill: color}));
-                  canvasRef.current?.updateRegionStyle(selectedRegion.id, { fill: color });
-                }}
-              />
-            ))}
-
-            {/* Custom Color Palette Picker */}
-            <label
-              className="color-btn"
-              style={{
-                background: 'linear-gradient(45deg, red, orange, yellow, green, blue, purple)',
-                display: 'inline-block',
-                cursor: selectedRegion ? 'pointer' : 'not-allowed',
-                position: 'relative',
-                opacity: selectedRegion ? 1 : 0.5
-              }}
-              title={t('customColor')}
-            >
-              <input
-                type="color"
-                style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegion ? 'pointer' : 'not-allowed' }}
-                disabled={!selectedRegion}
-                value={selectedRegion?.fill || '#000000'}
-                onChange={(e) => {
-                  const color = e.target.value;
-                  setSelectedRegion(prev => ({...prev, fill: color}));
-                  canvasRef.current?.updateRegionStyle(selectedRegion.id, { fill: color });
-                }}
-              />
-            </label>
-          </div>
-
-          <div className="font-format-clipboard">
-            <div className="font-format-clipboard-header">
-              <strong>{t('copiedFormatSection')}</strong>
-              {copiedTextFormat ? (
-                <span>{t('copiedFormatLoaded')}</span>
-              ) : (
-                <span>{t('copiedFormatEmpty')}</span>
-              )}
+        <aside className="sidebar right-sidebar inspector-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
+          <div className="inspector-header">
+            <div>
+              <h2 className="panel-title">{t('formatting')}</h2>
+              <p className="inspector-header-copy">
+                {selectedRegion
+                  ? (selectedRegion.text?.trim() || t('emptyLayer'))
+                  : t('placeholder')}
+              </p>
             </div>
-            <div className="font-format-clipboard-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!selectedRegion}
-                onClick={handleCopySelectedTextFormat}
-              >
-                {t('copySelectedFormat')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!selectedRegion || !copiedTextFormat}
-                onClick={handleApplyCopiedTextFormatToSelected}
-              >
-                {t('applyCopiedFormatSelected')}
-              </button>
-            </div>
-            {copiedTextFormat?.sourceText && (
-              <div className="font-format-clipboard-preview">
-                {copiedTextFormat.sourceText}
+            {selectedRegionMeta && (
+              <div className="inspector-meta-pill">
+                {selectedRegionMeta}
               </div>
             )}
           </div>
 
-          <div className="panel-subtitle">{t('presetFonts')}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('engFont')}:</span>
-              <select
-                value={englishFont}
-                onChange={(e) => {
-                  setEnglishFont(e.target.value);
-                  setFontApplyStatus('');
-                }}
-                style={{
-                  background: '#2D2D2D',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  width: '180px'
-                }}
-              >
-                {availableFontFamilies.map((family) => (
-                  <option value={family} key={`english-${family}`}>{family}</option>
-                ))}
-              </select>
+          <section className={`inspector-card ${selectedRegion ? 'is-active' : 'is-idle'}`}>
+            <div className="inspector-card-header">
+              <div>
+                <h3 className="inspector-card-title">{t('editContent')}</h3>
+                <p className="inspector-card-description">
+                  {selectedRegion ? (selectedRegionMeta || t('placeholderActive')) : t('placeholder')}
+                </p>
+              </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <span style={{ fontSize: '12px', opacity: 0.8 }}>{t('zhFont')}:</span>
-              <select
-                value={chineseFont}
-                onChange={(e) => {
-                  setChineseFont(e.target.value);
-                  setFontApplyStatus('');
-                }}
-                style={{
-                  background: '#2D2D2D',
-                  color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '4px',
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  width: '180px'
-                }}
-              >
-                {sortedChineseFontOptions.map((family) => (
-                  <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
-                ))}
-              </select>
+            <textarea
+              className="inspector-textarea"
+              value={selectedRegion?.text || ''}
+              placeholder={selectedRegion ? t('placeholderActive') : t('placeholder')}
+              disabled={!selectedRegion}
+              onChange={handleSelectedRegionTextChange}
+            />
+
+            <div className="ai-operation-row">
+              <div className="ai-operation-item">
+                <button
+                  className="btn btn-secondary"
+                  disabled={!selectedRegion || isLoadingLLM}
+                  onClick={handleFixText}
+                >
+                  {t('fixText')}
+                </button>
+                <button
+                  type="button"
+                  className="ai-help-icon"
+                  aria-label={t('fixTextHelp')}
+                  title={t('fixTextHelp')}
+                  data-tooltip={t('fixTextHelp')}
+                >
+                  ⓘ
+                </button>
+              </div>
+              <div className="ai-operation-item">
+                <button
+                  className="btn btn-secondary"
+                  disabled={!selectedRegion || isLoadingLLM}
+                  onClick={handleExtractEntities}
+                >
+                  {t('extract')}
+                </button>
+                <button
+                  type="button"
+                  className="ai-help-icon"
+                  aria-label={t('extractHelp')}
+                  title={t('extractHelp')}
+                  data-tooltip={t('extractHelp')}
+                >
+                  ⓘ
+                </button>
+              </div>
+            </div>
+            {llmProgress && (
+              <div className="inspector-inline-status">
+                💡 {llmProgress}
+              </div>
+            )}
+          </section>
+
+          <section className="inspector-card">
+            <div className="inspector-card-header">
+              <div>
+                <h3 className="inspector-card-title">{t('formatting')}</h3>
+                <p className="inspector-card-description">{t('color')}</p>
+              </div>
             </div>
 
-            <div className="font-apply-options">
-              <label className="font-apply-option">
-                <input
-                  type="checkbox"
-                  checked={applyPresetFontFamily}
-                  onChange={(e) => {
-                    setApplyPresetFontFamily(e.target.checked);
-                    localStorage.setItem('apply_preset_font_family', String(e.target.checked));
-                    setFontApplyStatus('');
+            <div className="color-presets">
+              {['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'].map(color => (
+                <button
+                  key={color}
+                  className="color-btn"
+                  style={{ backgroundColor: color, border: selectedRegion?.fill === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)' }}
+                  disabled={!selectedRegion}
+                  onClick={() => {
+                    setSelectedRegion(prev => ({...prev, fill: color}));
+                    canvasRef.current?.updateRegionStyle(selectedRegion.id, { fill: color });
                   }}
                 />
-                <span>
-                  <strong>{t('applyPresetFontFamily')}</strong>
-                  <small>{t('applyPresetFontFamilyHelp')}</small>
-                </span>
-              </label>
-              <label className="font-apply-option">
+              ))}
+
+              <label
+                className="color-btn"
+                style={{
+                  background: 'linear-gradient(45deg, red, orange, yellow, green, blue, purple)',
+                  display: 'inline-block',
+                  cursor: selectedRegion ? 'pointer' : 'not-allowed',
+                  position: 'relative',
+                  opacity: selectedRegion ? 1 : 0.5
+                }}
+                title={t('customColor')}
+              >
                 <input
-                  type="checkbox"
-                  checked={applyPresetTypography}
+                  type="color"
+                  style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegion ? 'pointer' : 'not-allowed' }}
+                  disabled={!selectedRegion}
+                  value={selectedRegion?.fill || '#000000'}
                   onChange={(e) => {
-                    setApplyPresetTypography(e.target.checked);
-                    localStorage.setItem('apply_preset_typography', String(e.target.checked));
-                    setFontApplyStatus('');
+                    const color = e.target.value;
+                    setSelectedRegion(prev => ({...prev, fill: color}));
+                    canvasRef.current?.updateRegionStyle(selectedRegion.id, { fill: color });
                   }}
                 />
-                <span>
-                  <strong>{t('applyPresetTypography')}</strong>
-                  <small>{t('applyPresetTypographyHelp')}</small>
-                </span>
               </label>
             </div>
 
-            <div className="font-style-editor">
+            <div className="font-style-editor compact">
               <label className="font-size-control">
                 <span>{t('fontSize')}:</span>
                 <input
@@ -1431,6 +1410,116 @@ function App() {
               </div>
             </div>
 
+            <div className="font-format-clipboard">
+              <div className="font-format-clipboard-header">
+                <strong>{t('copiedFormatSection')}</strong>
+                {copiedTextFormat ? (
+                  <span>{t('copiedFormatLoaded')}</span>
+                ) : (
+                  <span>{t('copiedFormatEmpty')}</span>
+                )}
+              </div>
+              <div className="font-format-clipboard-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!selectedRegion}
+                  onClick={handleCopySelectedTextFormat}
+                >
+                  {t('copySelectedFormat')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!selectedRegion || !copiedTextFormat}
+                  onClick={handleApplyCopiedTextFormatToSelected}
+                >
+                  {t('applyCopiedFormatSelected')}
+                </button>
+              </div>
+              {copiedTextFormat?.sourceText && (
+                <div className="font-format-clipboard-preview">
+                  {copiedTextFormat.sourceText}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="inspector-card">
+            <div className="inspector-card-header">
+              <div>
+                <h3 className="inspector-card-title">{t('presetFonts')}</h3>
+                <p className="inspector-card-description">{t('applyPresetFontFamilyHelp')}</p>
+              </div>
+            </div>
+
+            <div className="inspector-field-grid">
+              <label className="inspector-field">
+                <span>{t('engFont')}</span>
+                <select
+                  value={englishFont}
+                  onChange={(e) => {
+                    setEnglishFont(e.target.value);
+                    setFontApplyStatus('');
+                  }}
+                  className="inspector-select"
+                >
+                  {availableFontFamilies.map((family) => (
+                    <option value={family} key={`english-${family}`}>{family}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="inspector-field">
+                <span>{t('zhFont')}</span>
+                <select
+                  value={chineseFont}
+                  onChange={(e) => {
+                    setChineseFont(e.target.value);
+                    setFontApplyStatus('');
+                  }}
+                  className="inspector-select"
+                >
+                  {sortedChineseFontOptions.map((family) => (
+                    <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="font-apply-options">
+              <label className="font-apply-option">
+                <input
+                  type="checkbox"
+                  checked={applyPresetFontFamily}
+                  onChange={(e) => {
+                    setApplyPresetFontFamily(e.target.checked);
+                    localStorage.setItem('apply_preset_font_family', String(e.target.checked));
+                    setFontApplyStatus('');
+                  }}
+                />
+                <span>
+                  <strong>{t('applyPresetFontFamily')}</strong>
+                  <small>{t('applyPresetFontFamilyHelp')}</small>
+                </span>
+              </label>
+              <label className="font-apply-option">
+                <input
+                  type="checkbox"
+                  checked={applyPresetTypography}
+                  onChange={(e) => {
+                    setApplyPresetTypography(e.target.checked);
+                    localStorage.setItem('apply_preset_typography', String(e.target.checked));
+                    setFontApplyStatus('');
+                  }}
+                />
+                <span>
+                  <strong>{t('applyPresetTypography')}</strong>
+                  <small>{t('applyPresetTypographyHelp')}</small>
+                </span>
+              </label>
+            </div>
+
             <div className="font-apply-actions">
               <button
                 type="button"
@@ -1450,67 +1539,55 @@ function App() {
               </button>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-              <input
-                type="checkbox"
-                id="forcePresetFontCheckbox"
-                checked={forcePresetFont}
-                onChange={(e) => {
-                  setForcePresetFont(e.target.checked);
-                  localStorage.setItem('force_preset_font', String(e.target.checked));
-                }}
-                style={{ cursor: 'pointer' }}
-              />
-              <label
-                htmlFor="forcePresetFontCheckbox"
-                style={{ fontSize: '11px', opacity: 0.8, cursor: 'pointer', userSelect: 'none' }}
-              >
-                {t('forceFont')}
+            <div className="inspector-toggle-list">
+              <label className="inspector-inline-toggle">
+                <input
+                  type="checkbox"
+                  id="forcePresetFontCheckbox"
+                  checked={forcePresetFont}
+                  onChange={(e) => {
+                    setForcePresetFont(e.target.checked);
+                    localStorage.setItem('force_preset_font', String(e.target.checked));
+                  }}
+                />
+                <span>{t('forceFont')}</span>
+              </label>
+
+              <label className="inspector-inline-toggle">
+                <input
+                  type="checkbox"
+                  id="snapAlignmentEnabledCheckbox"
+                  checked={snapAlignmentEnabled}
+                  onChange={(e) => {
+                    setSnapAlignmentEnabled(e.target.checked);
+                    localStorage.setItem('snap_alignment_enabled', String(e.target.checked));
+                  }}
+                />
+                <span>{t('snapAlignmentEnabled')}</span>
               </label>
             </div>
+            <div className="inspector-help-text">{t('snapAlignmentHelp')}</div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-              <input
-                type="checkbox"
-                id="snapAlignmentEnabledCheckbox"
-                checked={snapAlignmentEnabled}
-                onChange={(e) => {
-                  setSnapAlignmentEnabled(e.target.checked);
-                  localStorage.setItem('snap_alignment_enabled', String(e.target.checked));
-                }}
-                style={{ cursor: 'pointer' }}
-              />
-              <label
-                htmlFor="snapAlignmentEnabledCheckbox"
-                style={{ fontSize: '11px', opacity: 0.8, cursor: 'pointer', userSelect: 'none' }}
-              >
-                {t('snapAlignmentEnabled')}
-              </label>
-            </div>
-            <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
-              {t('snapAlignmentHelp')}
-            </div>
-
-            <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
-              {t('localFontsHint')}
-            </div>
-            <details className="font-workflow-panel">
+            <details className="inspector-collapsible">
               <summary>{t('presetFontWorkflowTitle')}</summary>
-              <ol>
-                <li>{t('presetFontWorkflowStep1')}</li>
-                <li>{t('presetFontWorkflowStep2')}</li>
-                <li>{t('presetFontWorkflowStep3')}</li>
-                <li>{t('presetFontWorkflowStep4')}</li>
-              </ol>
+              <div className="inspector-collapsible-body">
+                <div className="inspector-help-text">{t('localFontsHint')}</div>
+                <ol>
+                  <li>{t('presetFontWorkflowStep1')}</li>
+                  <li>{t('presetFontWorkflowStep2')}</li>
+                  <li>{t('presetFontWorkflowStep3')}</li>
+                  <li>{t('presetFontWorkflowStep4')}</li>
+                </ol>
+                <button
+                  type="button"
+                  className="btn btn-secondary inspector-full-button"
+                  onClick={handleLoadLocalFonts}
+                >
+                  {t('loadDeviceFonts')} ({availableFontFamilies.length})
+                </button>
+              </div>
             </details>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{ width: '100%', padding: '6px', fontSize: '11px' }}
-              onClick={handleLoadLocalFonts}
-            >
-              {t('loadDeviceFonts')} ({availableFontFamilies.length})
-            </button>
+
             {fontLoadStatus && (
               <div className="font-load-status">
                 {t(fontLoadStatus)}
@@ -1521,13 +1598,19 @@ function App() {
                 {t(fontApplyStatus)}
               </div>
             )}
-          </div>
+          </section>
 
-          <h2 className="panel-title" style={{marginTop: '24px'}}>{t('ops')}</h2>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <section className="inspector-card">
+            <div className="inspector-card-header">
+              <div>
+                <h3 className="inspector-card-title">{t('ops')}</h3>
+                <p className="inspector-card-description">{t('regionalOcr')}</p>
+              </div>
+            </div>
+
+            <div className="inspector-action-grid">
             <button
               className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'ocr' ? 'active' : ''}`}
-              style={{flex: 1}}
               disabled={!imageLoaded || ocrActionsBlocked}
               title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
               onClick={() => handleRegionTool('ocr')}
@@ -1536,7 +1619,6 @@ function App() {
             </button>
             <button
               className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'erase' ? 'active' : ''}`}
-              style={{flex: 1}}
               disabled={!imageLoaded}
               onClick={() => handleRegionTool('erase')}
             >
@@ -1544,7 +1626,6 @@ function App() {
             </button>
             <button
               className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'copy' ? 'active' : ''}`}
-              style={{flex: 1}}
               disabled={!imageLoaded}
               title="Ctrl/Cmd+C"
               onClick={() => handleRegionTool('copy')}
@@ -1553,7 +1634,6 @@ function App() {
             </button>
             <button
               className={`btn btn-secondary ${isPasteModeActive ? 'active' : ''}`}
-              style={{flex: 1}}
               disabled={!imageLoaded || !hasCopiedRegion}
               title="Ctrl/Cmd+V"
               onClick={handlePasteRegion}
@@ -1562,19 +1642,25 @@ function App() {
             </button>
             <button
               className="btn btn-secondary"
-              style={{flex: 1}}
               disabled={!selectedRegion}
               onClick={handleRemoveText}
             >
               {t('removeText')}
             </button>
+            </div>
             {ocrEngineBlockReason && (
               <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
             )}
-          </div>
+          </section>
 
-          <div className="panel-subtitle">{t('ocrEngine')}</div>
-          <div className="ocr-engine-panel">
+          <section className="inspector-card">
+            <div className="inspector-card-header">
+              <div>
+                <h3 className="inspector-card-title">{t('ocrEngine')}</h3>
+                <p className="inspector-card-description">{t('nativeOcrPrimary')}</p>
+              </div>
+            </div>
+            <div className="ocr-engine-panel">
             {ocrEngine !== 'custom' && (
               <div className="fallback-active-notice">
                 <span>{t('fallbackEngineActive')}</span>
@@ -1943,63 +2029,8 @@ function App() {
                 </div>
               )}
             </details>
-          </div>
-
-          <h2 className="panel-title" style={{marginTop: '24px'}}>{t('aiOps')}</h2>
-          <div className="ai-operation-row">
-            <div className="ai-operation-item">
-              <button
-                className="btn btn-secondary"
-                disabled={!selectedRegion || isLoadingLLM}
-                onClick={handleFixText}
-              >
-                {t('fixText')}
-              </button>
-              <button
-                type="button"
-                className="ai-help-icon"
-                aria-label={t('fixTextHelp')}
-                title={t('fixTextHelp')}
-                data-tooltip={t('fixTextHelp')}
-              >
-                ⓘ
-              </button>
             </div>
-            <div className="ai-operation-item">
-              <button
-                className="btn btn-secondary"
-                disabled={!selectedRegion || isLoadingLLM}
-                onClick={handleExtractEntities}
-              >
-                {t('extract')}
-              </button>
-              <button
-                type="button"
-                className="ai-help-icon"
-                aria-label={t('extractHelp')}
-                title={t('extractHelp')}
-                data-tooltip={t('extractHelp')}
-              >
-                ⓘ
-              </button>
-            </div>
-          </div>
-          {/* WebLLM Load Progress Output */}
-          {llmProgress && (
-            <div style={{
-              padding: '10px',
-              background: 'rgba(96, 205, 255, 0.1)',
-              border: '1px solid rgba(96, 205, 255, 0.3)',
-              borderRadius: '4px',
-              fontSize: '11px',
-              color: '#60CDFF',
-              wordBreak: 'break-all',
-              marginTop: '4px',
-              lineHeight: '1.4'
-            }}>
-              💡 {llmProgress}
-            </div>
-          )}
+          </section>
 
         </aside>
 
