@@ -402,6 +402,7 @@ function App() {
   const [englishFont, setEnglishFont] = useState('Century Gothic');
   const [applyPresetFontFamily, setApplyPresetFontFamily] = useState(() => localStorage.getItem('apply_preset_font_family') !== 'false');
   const [applyPresetTypography, setApplyPresetTypography] = useState(() => localStorage.getItem('apply_preset_typography') !== 'false');
+  const [singleWordAdjustMode, setSingleWordAdjustMode] = useState(() => localStorage.getItem('single_word_adjust_mode') === 'true');
   const [presetFontSize, setPresetFontSize] = useState(() => {
     const saved = Number(localStorage.getItem('preset_font_size'));
     return Number.isFinite(saved) && saved >= 6 && saved <= 200 ? saved : 16;
@@ -522,7 +523,9 @@ function App() {
   // (JhengHei/DFKai-SB/PMingLiU) don't exist on macOS and vice versa,
   // so a bare name silently falls back and font switching looks broken.
   const quoteFontFamily = (family) => `'${String(family).replace(/'/g, "\\'")}'`;
-  const presetFontFamily = `${EN_FONT_STACKS[englishFont] || quoteFontFamily(englishFont)}, ${CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont)}, sans-serif`;
+  const presetLatinFontFamily = EN_FONT_STACKS[englishFont] || quoteFontFamily(englishFont);
+  const presetCjkFontFamily = CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont);
+  const presetFontFamily = `${presetLatinFontFamily}, ${presetCjkFontFamily}, sans-serif`;
   const hasPresetApplySelection = applyPresetFontFamily || applyPresetTypography;
 
   const buildPresetTextStyle = () => {
@@ -530,7 +533,11 @@ function App() {
       lineHeight: 1,
       charSpacing: 0
     };
-    if (applyPresetFontFamily) style.fontFamily = presetFontFamily;
+    if (applyPresetFontFamily) {
+      style.fontFamily = presetFontFamily;
+      style.latinFontFamily = presetLatinFontFamily;
+      style.cjkFontFamily = presetCjkFontFamily;
+    }
     if (applyPresetTypography) {
       style.fontSize = presetFontSize;
       style.fontWeight = presetBold ? 'bold' : 'normal';
@@ -541,7 +548,11 @@ function App() {
 
   const buildSelectedRegionPresetPatch = () => {
     const patch = { lineHeight: 1 };
-    if (applyPresetFontFamily) patch.fontFamily = presetFontFamily;
+    if (applyPresetFontFamily) {
+      patch.fontFamily = presetFontFamily;
+      patch.latinFontFamily = presetLatinFontFamily;
+      patch.cjkFontFamily = presetCjkFontFamily;
+    }
     if (applyPresetTypography) {
       patch.fontSize = presetFontSize;
       patch.isBold = presetBold;
@@ -555,6 +566,8 @@ function App() {
     return {
       fill: region.fill || '#000000',
       fontFamily: region.fontFamily,
+      latinFontFamily: region.latinFontFamily,
+      cjkFontFamily: region.cjkFontFamily,
       fontSize: region.fontSize,
       fontWeight: region.isBold ? 'bold' : 'normal',
       fontStyle: region.isItalic ? 'italic' : 'normal',
@@ -720,6 +733,8 @@ function App() {
       ...prev,
       fill: style.fill,
       fontFamily: style.fontFamily,
+      latinFontFamily: style.latinFontFamily,
+      cjkFontFamily: style.cjkFontFamily,
       fontSize: style.fontSize,
       isBold: style.fontWeight === 'bold',
       isItalic: style.fontStyle === 'italic',
@@ -1122,12 +1137,15 @@ function App() {
             onRegionClipboardChange={setHasCopiedRegion}
             onPasteModeChange={setIsPasteModeActive}
             presetFontFamily={presetFontFamily}
+            presetLatinFontFamily={presetLatinFontFamily}
+            presetCjkFontFamily={presetCjkFontFamily}
             presetFontSize={presetFontSize}
             presetBold={presetBold}
             presetItalic={presetItalic}
             applyPresetFontFamily={applyPresetFontFamily}
             applyPresetTypography={applyPresetTypography}
             forcePresetFont={forcePresetFont}
+            singleWordAdjustMode={singleWordAdjustMode}
             ocrEngine={ocrEngine}
             geminiApiKey={geminiApiKey}
             geminiModel={geminiModel}
@@ -1279,6 +1297,21 @@ function App() {
               </div>
             )}
           </div>
+
+          <label className="font-apply-option">
+            <input
+              type="checkbox"
+              checked={singleWordAdjustMode}
+              onChange={(e) => {
+                setSingleWordAdjustMode(e.target.checked);
+                localStorage.setItem('single_word_adjust_mode', String(e.target.checked));
+              }}
+            />
+            <span>
+              <strong>{t('singleWordAdjustMode')}</strong>
+              <small>{t('singleWordAdjustHelp')}</small>
+            </span>
+          </label>
 
           <div className="panel-subtitle">{t('presetFonts')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>

@@ -254,6 +254,42 @@ function normalizeTextboxStyle(style = {}) {
   };
 }
 
+function isCjkGlyph(char) {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(char);
+}
+
+function buildScriptAwareFontStyles(text, latinFontFamily, cjkFontFamily) {
+  const styles = {};
+  let lineIndex = 0;
+  let charIndex = 0;
+
+  for (const char of String(text || '')) {
+    if (char === '\n') {
+      lineIndex += 1;
+      charIndex = 0;
+      continue;
+    }
+    const fontFamily = isCjkGlyph(char) ? (cjkFontFamily || latinFontFamily) : (latinFontFamily || cjkFontFamily);
+    if (fontFamily) {
+      if (!styles[lineIndex]) styles[lineIndex] = {};
+      styles[lineIndex][charIndex] = { fontFamily };
+    }
+    charIndex += 1;
+  }
+
+  return styles;
+}
+
+function applyScriptAwareFontFamilies(textbox, fallbackFontFamily = DEFAULT_OCR_FONT_FAMILY) {
+  if (!textbox || textbox.type !== 'textbox') return;
+  const latinFontFamily = textbox.latinFontFamily || fallbackFontFamily || textbox.fontFamily || DEFAULT_OCR_FONT_FAMILY;
+  const cjkFontFamily = textbox.cjkFontFamily || latinFontFamily;
+  textbox.set({
+    fontFamily: latinFontFamily,
+    styles: buildScriptAwareFontStyles(textbox.text, latinFontFamily, cjkFontFamily)
+  });
+}
+
 function calcOcrFontSize(
   text,
   boxW,
@@ -411,12 +447,15 @@ const OcrCanvas = forwardRef(({
   enableAiInpaint = false,
   autoRunOcr = true,
   presetFontFamily = DEFAULT_OCR_FONT_FAMILY,
+  presetLatinFontFamily = DEFAULT_OCR_FONT_FAMILY,
+  presetCjkFontFamily = DEFAULT_OCR_FONT_FAMILY,
   presetFontSize = 16,
   presetBold = false,
   presetItalic = false,
   applyPresetFontFamily = true,
   applyPresetTypography = true,
   forcePresetFont = false,
+  singleWordAdjustMode = false,
   ocrEngine = 'local',
   geminiApiKey = '',
   geminiModel = 'gemini-3.5-flash',
@@ -494,6 +533,7 @@ const OcrCanvas = forwardRef(({
 
     const snapshot = canvas.toObject([
       'id', 'originalLeft', 'originalTop', 'originalWidth', 'originalHeight', 'cleanupExpandX', 'cleanupExpandY', 'isPatch', 'isErasePatch', 'sourceLayerId', 'isOcrReview', 'isManualText', 'isPastedRegion', 'confidence', 'originalTextColor',
+      'latinFontFamily', 'cjkFontFamily',
       'selectable', 'evented'
     ]);
     // The source image can be many megabytes. Keeping its data URL in every
@@ -534,6 +574,8 @@ const OcrCanvas = forwardRef(({
       isItalic: textbox.fontStyle === 'italic',
       fill: textbox.isOcrReview ? (textbox.originalTextColor || '#000000') : textbox.fill,
       fontFamily: textbox.fontFamily,
+      latinFontFamily: textbox.latinFontFamily,
+      cjkFontFamily: textbox.cjkFontFamily,
       fontSize: textbox.fontSize,
       lineHeight: textbox.lineHeight,
       charSpacing: textbox.charSpacing
@@ -1551,6 +1593,8 @@ const OcrCanvas = forwardRef(({
       const canvas = fabricCanvas.current;
       isHistoryDisabled.current = true;
       const fontToUse = shouldUsePresetFontFamily ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
+      const latinFontFamily = shouldUsePresetFontFamily ? presetLatinFontFamily : fontToUse;
+      const cjkFontFamily = shouldUsePresetFontFamily ? presetCjkFontFamily : fontToUse;
       const blocks = [];
 
       if (ocrEngine === 'cloud') {
@@ -1720,6 +1764,8 @@ const OcrCanvas = forwardRef(({
           isOcrReview: !block.manual,
           isManualText: Boolean(block.manual),
           confidence: block.confidence,
+          latinFontFamily,
+          cjkFontFamily,
 
           originalLeft: block.left,
           originalTop: block.top,
@@ -1728,6 +1774,7 @@ const OcrCanvas = forwardRef(({
           cleanupExpandX: block.cleanupExpandX || 0,
           cleanupExpandY: block.cleanupExpandY || 0
         });
+        applyScriptAwareFontFamilies(text, fontToUse);
 
         // Replace the source glyphs after the OCR box is accepted. The patch is
         // pixel-masked, so surrounding diagram lines and colours remain intact.
@@ -1808,6 +1855,8 @@ const OcrCanvas = forwardRef(({
     });
 
     const fontToUse = shouldUsePresetFontFamily ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
+    const latinFontFamily = shouldUsePresetFontFamily ? presetLatinFontFamily : fontToUse;
+    const cjkFontFamily = shouldUsePresetFontFamily ? presetCjkFontFamily : fontToUse;
     const sanitizedBlocks = sanitizeOcrBlocks(blocks, imageLayout.current);
     const reviewBlocks = dedupeOcrBlocks(sanitizedBlocks);
     // One shared ratio for the whole batch: every block's font size then
@@ -1882,6 +1931,8 @@ const OcrCanvas = forwardRef(({
         isOcrReview: true,
         confidence: block.confidence,
         originalTextColor: detectedColor,
+        latinFontFamily,
+        cjkFontFamily,
 
         originalLeft: block.bbox.x,
         originalTop: block.bbox.y,
@@ -1890,6 +1941,7 @@ const OcrCanvas = forwardRef(({
         cleanupExpandX: block.cleanupExpandX || 0,
         cleanupExpandY: block.cleanupExpandY || 0
       });
+      applyScriptAwareFontFamilies(text, fontToUse);
 
       canvas.add(text);
     }
@@ -1903,6 +1955,8 @@ const OcrCanvas = forwardRef(({
   const handleTextChanged = (e) => {
     const activeObject = e.target;
     if (activeObject && activeObject.type === 'textbox') {
+      applyScriptAwareFontFamilies(activeObject, activeObject.fontFamily);
+      refreshTextboxMetrics(activeObject);
       onRegionSelect?.(describeTextbox(activeObject));
       syncLayers();
     }
@@ -1937,6 +1991,15 @@ const OcrCanvas = forwardRef(({
   const handleSelection = (e) => {
     const activeObject = e.selected?.[0];
     onRegionSelect?.(describeTextbox(activeObject));
+    if (singleWordAdjustMode && activeObject?.type === 'textbox' && !activeObject.isEditing) {
+      requestAnimationFrame(() => {
+        if (!fabricCanvas.current || fabricCanvas.current.getActiveObject() !== activeObject) return;
+        activeObject.enterEditing?.();
+        activeObject.hiddenTextarea?.focus?.();
+        fabricCanvas.current.renderAll();
+        onWorkerStatusChange?.(t('singleWordAdjustHint'));
+      });
+    }
   };
 
   const materializeReviewLayer = async (textbox) => {
@@ -2077,6 +2140,8 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return null;
 
     const fontToUse = shouldUsePresetFontFamily ? presetFontFamily : DEFAULT_OCR_FONT_FAMILY;
+    const latinFontFamily = shouldUsePresetFontFamily ? presetLatinFontFamily : fontToUse;
+    const cjkFontFamily = shouldUsePresetFontFamily ? presetCjkFontFamily : fontToUse;
     isHistoryDisabled.current = true;
     const text = new fabric.Textbox(initialText, {
       ...normalizeTextboxStyle(),
@@ -2098,12 +2163,15 @@ const OcrCanvas = forwardRef(({
       transparentCorners: true,
       isManualText: true,
       isOcrReview: false,
+      latinFontFamily,
+      cjkFontFamily,
 
       originalLeft: left,
       originalTop: top,
       originalWidth: width,
       originalHeight: 24
     });
+    applyScriptAwareFontFamilies(text, fontToUse);
 
     canvas.add(text);
     canvas.setActiveObject(text);
@@ -2163,6 +2231,7 @@ const OcrCanvas = forwardRef(({
       if (obj) {
         const needsReplacement = obj.isOcrReview && obj.text !== newText;
         obj.set('text', newText);
+        applyScriptAwareFontFamilies(obj, obj.fontFamily);
         refreshTextboxMetrics(obj);
         if (needsReplacement) {
           void materializeReviewLayer(obj).then(() => {
@@ -2189,6 +2258,7 @@ const OcrCanvas = forwardRef(({
           normalizedStyle.fill = withReviewTint(normalizedStyle.fill);
         }
         obj.set(normalizedStyle);
+        applyScriptAwareFontFamilies(obj, normalizedStyle.fontFamily || obj.fontFamily);
         refreshTextboxMetrics(obj);
         if (obj.isOcrReview) {
           void materializeReviewLayer(obj).then(() => {
@@ -2245,6 +2315,7 @@ const OcrCanvas = forwardRef(({
             normalizedStyle.fill = withReviewTint(normalizedStyle.fill);
           }
           obj.set(normalizedStyle);
+          applyScriptAwareFontFamilies(obj, normalizedStyle.fontFamily || obj.fontFamily);
           refreshTextboxMetrics(obj);
           if (obj.isOcrReview) {
             void materializeReviewLayer(obj).then(() => {
