@@ -737,7 +737,43 @@ function App() {
     setIsPasteModeActive((current) => !current);
   };
 
-  const t = (key) => getTranslation(uiLanguage, key);
+  const t = useCallback((key) => getTranslation(uiLanguage, key), [uiLanguage]);
+  useEffect(() => {
+    const isEditableTarget = (target) => {
+      if (!target || !(target instanceof HTMLElement)) return false;
+      return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+    };
+
+    const handleKeyDown = (event) => {
+      if (!imageLoaded || event.repeat) return;
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      if (isEditableTarget(event.target)) return;
+      if (canvasRef.current?.getActiveObject?.()?.isEditing) return;
+
+      const key = event.key.toLowerCase();
+      if (key === 'c') {
+        event.preventDefault();
+        setIsPasteModeActive(false);
+        setRegionalAction('copy');
+        setIsRegionalOcrActive(true);
+        return;
+      }
+
+      if (key === 'v') {
+        if (!hasCopiedRegion) {
+          setWorkerStatus(t('pasteRegionMissing'));
+          return;
+        }
+        event.preventDefault();
+        setIsRegionalOcrActive(false);
+        setIsPasteModeActive(true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [hasCopiedRegion, imageLoaded, t]);
+
   const appBasePath = import.meta.env.BASE_URL || '/';
   const manualHref = `${appBasePath.endsWith('/') ? appBasePath : `${appBasePath}/`}docs/user-manual.html?lang=${DOCS_LANGUAGE_CODES[uiLanguage] || 'en'}`;
 
@@ -1260,6 +1296,7 @@ function App() {
               className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'copy' ? 'active' : ''}`}
               style={{flex: 1}}
               disabled={!imageLoaded}
+              title="Ctrl/Cmd+C"
               onClick={() => handleRegionTool('copy')}
             >
               {isRegionalOcrActive && regionalAction === 'copy' ? t('copyRegionMode') : t('copyRegion')}
@@ -1268,6 +1305,7 @@ function App() {
               className={`btn btn-secondary ${isPasteModeActive ? 'active' : ''}`}
               style={{flex: 1}}
               disabled={!imageLoaded || !hasCopiedRegion}
+              title="Ctrl/Cmd+V"
               onClick={handlePasteRegion}
             >
               {isPasteModeActive ? t('pasteRegionMode') : t('pasteRegion')}
