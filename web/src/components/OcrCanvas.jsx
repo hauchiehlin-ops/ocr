@@ -128,10 +128,11 @@ function createUpscaledCanvas(sourceCanvas, scale = 2) {
   return upscaledCanvas;
 }
 
-// Preserve the source text's visual height. Width-based fitting made every OCR
-// wording difference shrink the entire replacement, even when the source font
-// size had not changed. Fabric may wrap genuinely longer text inside the same
-// box, but its font size now remains anchored to the detected line height.
+// Rebuild OCR text inside the source box. The source OCR bbox is the safest
+// layout boundary: a replacement must not expand into a neighbouring card or
+// connector just because the OCR wording is longer in the chosen font.
+// Font size is therefore estimated from the detected line height and then
+// capped by the available line width.
 //
 // The OCR box height is a tight ink bounding box around the *specific*
 // recognized characters, not a fixed font-metric line height, so a single
@@ -230,7 +231,28 @@ function computeDocumentInkRatios(texts, fontFamily) {
   };
 }
 
-function calcOcrFontSize(text, _boxW, boxH, inkRatios, maxSize = 96) {
+function measureTextWidthAtFontSize(text, fontFamily, fontSize, fontWeight = 'normal', fontStyle = 'normal') {
+  try {
+    if (!ocrFontMeasureCtx) ocrFontMeasureCtx = document.createElement('canvas').getContext('2d');
+    ocrFontMeasureCtx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+    const lines = String(text).split('\n').filter(l => l.trim() !== '');
+    return (lines.length ? lines : [String(text)])
+      .reduce((max, line) => Math.max(max, ocrFontMeasureCtx.measureText(line).width), 0);
+  } catch {
+    return null;
+  }
+}
+
+function calcOcrFontSize(
+  text,
+  boxW,
+  boxH,
+  inkRatios,
+  fontFamily = DEFAULT_OCR_FONT_FAMILY,
+  fontWeight = 'normal',
+  fontStyle = 'normal',
+  maxSize = 96
+) {
   const lines = String(text).split('\n').filter(l => l.trim() !== '');
   const linesCount = lines.length || 1;
   const singleLineHeight = (boxH - 2) / linesCount;
@@ -242,31 +264,21 @@ function calcOcrFontSize(text, _boxW, boxH, inkRatios, maxSize = 96) {
   const ratio = Number.isFinite(ratios.visual)
     ? ratios.visual
     : (isCjkDominant(String(text)) ? ratios.cjk : ratios.latin);
-  return Math.max(3, Math.min(maxSize, singleLineHeight / ratio));
+  const byHeight = singleLineHeight / ratio;
+
+  // Fabric's padding is outside the editable text width. Keep the outer
+  // object inside the OCR box and use width as a hard upper bound. This is
+  // important when corrected OCR text is longer than the source wording: it
+  // must become smaller, never force the textbox across a diagram card.
+  const textWidth = measureTextWidthAtFontSize(text, fontFamily, 100, fontWeight, fontStyle);
+  const availableTextWidth = Math.max(2, boxW - 8);
+  const byWidth = textWidth > 0 ? (availableTextWidth / textWidth) * 100 : byHeight;
+
+  return Math.max(3, Math.min(maxSize, byHeight, byWidth));
 }
 
-// The OCR box width was measured for the *original* font size. Any residual
-// overshoot in the estimated font size (calcOcrFontSize is a best-effort
-// reconstruction, not exact) makes that same text wider at the new size, so
-// it silently wraps onto an extra line inside the unchanged box width. Since
-// every text object is top-anchored, a wrapped line makes the box grow
-// downward — and this app frequently stacks a label, a heading, and a
-// paragraph within a few pixels of each other, so even one extra wrapped
-// line is enough to visually collide with whatever sits right below it.
-// Widening the box to fit each of its own lines at the *computed* font size
-// keeps the OCR's own line breaks intact while preventing unintended
-// re-wrapping from silently inflating the box height.
-function fitBoxWidthToFontSize(text, fontSize, fontFamily, currentWidth, padding = 8) {
-  try {
-    if (!ocrFontMeasureCtx) ocrFontMeasureCtx = document.createElement('canvas').getContext('2d');
-    ocrFontMeasureCtx.font = `${fontSize}px ${fontFamily}`;
-    const lines = String(text).split('\n').filter(l => l.trim() !== '');
-    const widest = (lines.length ? lines : [String(text)])
-      .reduce((max, line) => Math.max(max, ocrFontMeasureCtx.measureText(line).width), 0);
-    return Math.max(currentWidth, widest + padding);
-  } catch {
-    return currentWidth;
-  }
+function keepTextBoxInsideOcrBox(width, padding = 4) {
+  return Math.max(2, width - padding * 2);
 }
 
 function normalizedText(text) {
@@ -1133,6 +1145,73 @@ const OcrCanvas = forwardRef(({
     syncLayers();
   };
 
+  // Native OCR boxes often include line padding, nearby underlines, or the
+  // descender allowance of the platform text engine. Measure the actual dark
+  // glyph rows from the source image before converting a box into a font size.
+  // This keeps the replacement tied to visible source pixels instead of a
+  // loose detector rectangle.
+  const measureSourceInkBounds = (left, top, width, height) => {
+    const sourceCanvas = sampleCanvasRef.current;
+    const layout = imageLayout.current;
+    if (!sourceCanvas || !layout.scale || width <= 1 || height <= 1) return null;
+
+    const rawLeft = Math.max(0, Math.floor((left - layout.left) / layout.scale));
+    const rawTop = Math.max(0, Math.floor((top - layout.top) / layout.scale));
+    const rawRight = Math.min(sourceCanvas.width, Math.ceil((left + width - layout.left) / layout.scale));
+    const rawBottom = Math.min(sourceCanvas.height, Math.ceil((top + height - layout.top) / layout.scale));
+    const cropWidth = rawRight - rawLeft;
+    const cropHeight = rawBottom - rawTop;
+    if (cropWidth <= 1 || cropHeight <= 1) return null;
+
+    try {
+      const ctx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+      const pixels = ctx.getImageData(rawLeft, rawTop, cropWidth, cropHeight).data;
+      const rowCounts = new Uint32Array(cropHeight);
+      const isTextPixel = (index) => {
+        const r = pixels[index];
+        const g = pixels[index + 1];
+        const b = pixels[index + 2];
+        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+        const channelSpread = Math.max(r, g, b) - Math.min(r, g, b);
+        // Most source text is black/grey. The second branch retains dark
+        // coloured text while rejecting bright orange/yellow decorations.
+        return luminance < 180 && (channelSpread < 45 || luminance < 95);
+      };
+
+      for (let y = 0; y < cropHeight; y += 1) {
+        let count = 0;
+        for (let x = 0; x < cropWidth; x += 1) {
+          if (isTextPixel((y * cropWidth + x) * 4)) count += 1;
+        }
+        rowCounts[y] = count;
+      }
+
+      const rowThreshold = Math.max(2, Math.floor(cropWidth * 0.004));
+      const runs = [];
+      let runStart = -1;
+      for (let y = 0; y <= cropHeight; y += 1) {
+        const active = y < cropHeight && rowCounts[y] >= rowThreshold;
+        if (active && runStart < 0) runStart = y;
+        if ((!active || y === cropHeight) && runStart >= 0) {
+          if (y - runStart >= 3) runs.push({ start: runStart, end: y });
+          runStart = -1;
+        }
+      }
+      if (!runs.length) return null;
+
+      // Keep all substantial text rows (including multiple OCR lines), while
+      // ignoring isolated one-pixel decoration strokes such as underlines.
+      const inkTop = runs[0].start;
+      const inkBottom = runs[runs.length - 1].end;
+      return {
+        top: layout.top + (rawTop + inkTop) * layout.scale,
+        height: (inkBottom - inkTop) * layout.scale
+      };
+    } catch {
+      return null;
+    }
+  };
+
   // Mouse Events for Drawing Area
   const handleMouseDown = (opt) => {
     const canvas = fabricCanvas.current;
@@ -1378,12 +1457,22 @@ const OcrCanvas = forwardRef(({
       await prepareBatchInpaint(blocks);
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
-        const regionalFontSize = calcOcrFontSize(block.text, block.width, block.height, sharedInkRatios);
+        const sourceInkBounds = block.manual
+          ? null
+          : measureSourceInkBounds(block.left, block.top, block.width, block.height);
+        const sourceTextHeight = sourceInkBounds?.height || block.height;
+        const regionalFontSize = calcOcrFontSize(
+          block.text,
+          block.width,
+          sourceTextHeight,
+          sharedInkRatios,
+          fontToUse
+        );
         const effectiveFontSize = forcePresetFont ? presetFontSize : regionalFontSize;
-        const fittedWidth = fitBoxWidthToFontSize(block.text, effectiveFontSize, fontToUse, block.width);
+        const fittedWidth = keepTextBoxInsideOcrBox(block.width);
         const text = new fabric.Textbox(block.text, {
           left: block.left,
-          top: block.top,
+          top: sourceInkBounds?.top || block.top,
           width: fittedWidth,
           fontSize: effectiveFontSize,
           fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
@@ -1514,14 +1603,27 @@ const OcrCanvas = forwardRef(({
 
     for (let i = 0; i < reviewBlocks.length; i++) {
       const block = reviewBlocks[i];
-      const calculatedFontSize = calcOcrFontSize(block.text, block.bbox.w, block.bbox.h, sharedInkRatios);
+      const sourceInkBounds = measureSourceInkBounds(
+        block.bbox.x,
+        block.bbox.y,
+        block.bbox.w,
+        block.bbox.h
+      );
+      const sourceTextHeight = sourceInkBounds?.height || block.bbox.h;
+      const calculatedFontSize = calcOcrFontSize(
+        block.text,
+        block.bbox.w,
+        sourceTextHeight,
+        sharedInkRatios,
+        fontToUse
+      );
       const effectiveFontSize = forcePresetFont ? presetFontSize : calculatedFontSize;
-      const fittedWidth = fitBoxWidthToFontSize(block.text, effectiveFontSize, fontToUse, block.bbox.w);
+      const fittedWidth = keepTextBoxInsideOcrBox(block.bbox.w);
       const detectedColor = textColorById.get(block.id) || null;
 
       const text = new fabric.Textbox(block.text, {
         left: block.bbox.x,
-        top: block.bbox.y,
+        top: sourceInkBounds?.top || block.bbox.y,
         width: fittedWidth,
         fontSize: effectiveFontSize,
         fontWeight: forcePresetFont && presetBold ? 'bold' : 'normal',
