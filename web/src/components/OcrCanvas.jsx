@@ -141,6 +141,17 @@ function createUpscaledCanvas(sourceCanvas, scale = 2) {
 // present. Instead, measure how tall that exact string actually renders at a
 // reference size in the target font, then scale the box height against that
 // measured ink ratio.
+//
+// That per-string ratio must be clamped. Short OCR blocks are common in
+// mind-maps/infographics (bullets, dashes, single CJK strokes like "一",
+// punctuation), and their ink height can be a tiny fraction of the em square
+// (measured as low as ~0.05–0.28 for ".", "-", "一", "。"). Dividing box
+// height by a near-zero ratio exploded the estimate up to the max font size,
+// which is exactly what made text sizes look wildly inconsistent after OCR.
+// Real words/phrases (Latin or CJK) measured 0.70–0.93 across many samples,
+// so anything far outside that band is clamped rather than trusted verbatim.
+const MIN_INK_RATIO = 0.55;
+const MAX_INK_RATIO = 0.95;
 let ocrFontMeasureCtx = null;
 function measureInkHeightRatio(text, fontFamily) {
   const referenceSize = 100;
@@ -149,7 +160,7 @@ function measureInkHeightRatio(text, fontFamily) {
     ocrFontMeasureCtx.font = `${referenceSize}px ${fontFamily}`;
     const metrics = ocrFontMeasureCtx.measureText(text || 'M');
     const inkHeight = (metrics.actualBoundingBoxAscent || 0) + (metrics.actualBoundingBoxDescent || 0);
-    if (inkHeight > 0) return inkHeight / referenceSize;
+    if (inkHeight > 0) return Math.min(MAX_INK_RATIO, Math.max(MIN_INK_RATIO, inkHeight / referenceSize));
   } catch {
     // Fall through to the fixed-ratio fallback below.
   }

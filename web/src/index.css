@@ -163,7 +163,8 @@ body {
 }
 
 .menu-container:hover .dropdown-menu,
-.menu-container:focus-within .dropdown-menu {
+.menu-container:focus-within .dropdown-menu,
+.menu-container.open .dropdown-menu {
   display: flex;
 }
 

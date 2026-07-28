@@ -112,6 +112,30 @@ function App() {
   const [llmProgress, setLlmProgress] = useState('');
   const [zoom, setZoom] = useState(1);
 
+  // Menu bar dropdowns open on click rather than relying on CSS :hover alone.
+  // Hover-only dropdowns proved unreliable on some Windows browser/hardware
+  // combinations (the menu never opened), while click-to-open works
+  // identically everywhere and is also touch-friendly.
+  const [openMenu, setOpenMenu] = useState(null);
+  const menuBarRef = useRef(null);
+  useEffect(() => {
+    if (!openMenu) return;
+    const handlePointerDown = (event) => {
+      if (menuBarRef.current && !menuBarRef.current.contains(event.target)) {
+        setOpenMenu(null);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') setOpenMenu(null);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenu]);
+
   // Panel visible states to align with View Menu in WPF
   const compactLayoutAtStartup = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 1024px)').matches;
   const [showLeftPanel, setShowLeftPanel] = useState(!compactLayoutAtStartup);
@@ -711,11 +735,19 @@ function App() {
             <img className="app-brand-icon" src={`${appBasePath}favicon-32.png`} alt="" width="28" height="28" />
             <h1>{t('title')}</h1>
           </div>
-          <div className="menu-bar">
+          <div className="menu-bar" ref={menuBarRef}>
             {/* File Menu */}
-            <div className="menu-container">
-              <div className="menu-item" tabIndex={0}>{t('file')}</div>
-              <div className="dropdown-menu">
+            <div className={`menu-container ${openMenu === 'file' ? 'open' : ''}`}>
+              <div
+                className="menu-item"
+                tabIndex={0}
+                role="button"
+                aria-expanded={openMenu === 'file'}
+                onClick={() => setOpenMenu(prev => (prev === 'file' ? null : 'file'))}
+              >
+                {t('file')}
+              </div>
+              <div className="dropdown-menu" onClick={() => setOpenMenu(null)}>
                 <div className={`dropdown-item ${isOcrProcessing ? 'disabled' : ''}`} onClick={!isOcrProcessing ? triggerImageUpload : null}>{t('loadImage')}</div>
                 <div className={`dropdown-item ${!imageLoaded || isOcrProcessing ? 'disabled' : ''}`} onClick={imageLoaded && !isOcrProcessing ? handleCloseImage : null}>{t('closeImage')}</div>
                 <div className="dropdown-separator"></div>
@@ -727,9 +759,17 @@ function App() {
             </div>
 
             {/* Edit Menu */}
-            <div className="menu-container">
-              <div className="menu-item" tabIndex={0}>{t('edit')}</div>
-              <div className="dropdown-menu">
+            <div className={`menu-container ${openMenu === 'edit' ? 'open' : ''}`}>
+              <div
+                className="menu-item"
+                tabIndex={0}
+                role="button"
+                aria-expanded={openMenu === 'edit'}
+                onClick={() => setOpenMenu(prev => (prev === 'edit' ? null : 'edit'))}
+              >
+                {t('edit')}
+              </div>
+              <div className="dropdown-menu" onClick={() => setOpenMenu(null)}>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={handleInsertText}>{t('insertText')}</div>
                 <div className="dropdown-separator"></div>
                 <div className={`dropdown-item ${!imageLoaded || !selectedRegion ? 'disabled' : ''}`} onClick={imageLoaded && selectedRegion ? handleApplyPresetFontSelected : null}>{t('applyFont')}</div>
@@ -740,9 +780,17 @@ function App() {
             </div>
 
             {/* View Menu */}
-            <div className="menu-container">
-              <div className="menu-item" tabIndex={0}>{t('view')}</div>
-              <div className="dropdown-menu">
+            <div className={`menu-container ${openMenu === 'view' ? 'open' : ''}`}>
+              <div
+                className="menu-item"
+                tabIndex={0}
+                role="button"
+                aria-expanded={openMenu === 'view'}
+                onClick={() => setOpenMenu(prev => (prev === 'view' ? null : 'view'))}
+              >
+                {t('view')}
+              </div>
+              <div className="dropdown-menu" onClick={() => setOpenMenu(null)}>
                 <div className="dropdown-item" onClick={() => {
                   setShowLeftPanel(!showLeftPanel);
                   if (!showLeftPanel && compactLayoutAtStartup) setShowRightPanel(false);
