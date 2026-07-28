@@ -402,6 +402,7 @@ function App() {
   const [englishFont, setEnglishFont] = useState('Century Gothic');
   const [applyPresetFontFamily, setApplyPresetFontFamily] = useState(() => localStorage.getItem('apply_preset_font_family') !== 'false');
   const [applyPresetTypography, setApplyPresetTypography] = useState(() => localStorage.getItem('apply_preset_typography') !== 'false');
+  const [snapAlignmentEnabled, setSnapAlignmentEnabled] = useState(() => localStorage.getItem('snap_alignment_enabled') !== 'false');
   const [presetFontSize, setPresetFontSize] = useState(() => {
     const saved = Number(localStorage.getItem('preset_font_size'));
     return Number.isFinite(saved) && saved >= 6 && saved <= 200 ? saved : 16;
@@ -1144,6 +1145,7 @@ function App() {
             applyPresetFontFamily={applyPresetFontFamily}
             applyPresetTypography={applyPresetTypography}
             forcePresetFont={forcePresetFont}
+            snapAlignmentEnabled={snapAlignmentEnabled}
             ocrEngine={ocrEngine}
             geminiApiKey={geminiApiKey}
             geminiModel={geminiModel}
@@ -1465,6 +1467,28 @@ function App() {
               >
                 {t('forceFont')}
               </label>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+              <input
+                type="checkbox"
+                id="snapAlignmentEnabledCheckbox"
+                checked={snapAlignmentEnabled}
+                onChange={(e) => {
+                  setSnapAlignmentEnabled(e.target.checked);
+                  localStorage.setItem('snap_alignment_enabled', String(e.target.checked));
+                }}
+                style={{ cursor: 'pointer' }}
+              />
+              <label
+                htmlFor="snapAlignmentEnabledCheckbox"
+                style={{ fontSize: '11px', opacity: 0.8, cursor: 'pointer', userSelect: 'none' }}
+              >
+                {t('snapAlignmentEnabled')}
+              </label>
+            </div>
+            <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>
+              {t('snapAlignmentHelp')}
             </div>
 
             <div style={{ fontSize: '10px', opacity: 0.65, lineHeight: '1.4' }}>

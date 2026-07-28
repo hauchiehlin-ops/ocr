@@ -173,7 +173,29 @@ const DEFAULT_LATIN_INK_RATIO = 0.75;
 const DEFAULT_TEXTBOX_LINE_HEIGHT = 1;
 const DEFAULT_TEXTBOX_CHAR_SPACING = 0;
 const HISTORY_LIMIT = 30;
+const ALIGNMENT_SNAP_SCREEN_PX = 8;
+const ALIGNMENT_GUIDE_COLOR = '#60CDFF';
 let ocrFontMeasureCtx = null;
+
+function getObjectBounds(obj) {
+  const left = obj.left || 0;
+  const top = obj.top || 0;
+  const width = typeof obj.getScaledWidth === 'function'
+    ? obj.getScaledWidth()
+    : (obj.width || 0) * (obj.scaleX || 1);
+  const height = typeof obj.getScaledHeight === 'function'
+    ? obj.getScaledHeight()
+    : (obj.height || 0) * (obj.scaleY || 1);
+
+  return {
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height
+  };
+}
 function measureRawInkHeightRatio(text, fontFamily) {
   const referenceSize = 100;
   try {
@@ -455,6 +477,7 @@ const OcrCanvas = forwardRef(({
   applyPresetFontFamily = true,
   applyPresetTypography = true,
   forcePresetFont = false,
+  snapAlignmentEnabled = true,
   ocrEngine = 'local',
   geminiApiKey = '',
   geminiModel = 'gemini-3.5-flash',
@@ -487,6 +510,7 @@ const OcrCanvas = forwardRef(({
   const activeFileReaderRef = useRef(null);
   const eventHandlersRef = useRef({});
   const onZoomChangeRef = useRef(onZoomChange);
+  const alignmentGuidesRef = useRef([]);
   useEffect(() => { onZoomChangeRef.current = onZoomChange; }, [onZoomChange]);
   // File selection and OCR contain long asynchronous stages. Always read the
   // latest switch value instead of the render-time closure that started them.
@@ -587,6 +611,146 @@ const OcrCanvas = forwardRef(({
     onRegionSelect?.(describeTextbox(activeObject));
   };
 
+  const clearAlignmentGuides = () => {
+    alignmentGuidesRef.current = [];
+  };
+
+  useEffect(() => {
+    if (snapAlignmentEnabled) return;
+    clearAlignmentGuides();
+    fabricCanvas.current?.requestRenderAll?.();
+  }, [snapAlignmentEnabled]);
+
+  const drawAlignmentGuides = (canvas) => {
+    const guides = alignmentGuidesRef.current;
+    if (!canvas || guides.length === 0) return;
+
+    const ctx = canvas.contextTop;
+    const vpt = canvas.viewportTransform || [1, 0, 0, 1, 0, 0];
+    ctx.save();
+    ctx.strokeStyle = ALIGNMENT_GUIDE_COLOR;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+
+    guides.forEach((guide) => {
+      const start = fabric.util.transformPoint(new fabric.Point(guide.x1, guide.y1), vpt);
+      const end = fabric.util.transformPoint(new fabric.Point(guide.x2, guide.y2), vpt);
+      ctx.beginPath();
+      ctx.moveTo(start.x, start.y);
+      ctx.lineTo(end.x, end.y);
+      ctx.stroke();
+    });
+
+    ctx.restore();
+  };
+
+  const updateObjectAlignment = (target) => {
+    const canvas = fabricCanvas.current;
+    if (!canvas || !target || isRegionalOcrActiveRef.current) return;
+    if (!snapAlignmentEnabled) {
+      clearAlignmentGuides();
+      return;
+    }
+    if (!(target.type === 'textbox' || target.isPastedRegion)) return;
+
+    const zoom = canvas.getZoom() || 1;
+    const threshold = ALIGNMENT_SNAP_SCREEN_PX / zoom;
+    const targetBounds = getObjectBounds(target);
+    const comparableObjects = canvas.getObjects().filter((obj) =>
+      obj !== target &&
+      !obj.isPatch &&
+      !obj.isSelectionRect &&
+      (obj.type === 'textbox' || obj.isPastedRegion)
+    );
+
+    let bestHorizontal = null;
+    let bestVertical = null;
+
+    comparableObjects.forEach((obj) => {
+      const otherBounds = getObjectBounds(obj);
+      const horizontalCandidates = [
+        { anchor: 'left', targetValue: otherBounds.left, delta: otherBounds.left - targetBounds.left },
+        { anchor: 'right', targetValue: otherBounds.right, delta: otherBounds.right - targetBounds.left },
+        { anchor: 'left', targetValue: otherBounds.left, delta: otherBounds.left - targetBounds.right },
+        { anchor: 'right', targetValue: otherBounds.right, delta: otherBounds.right - targetBounds.right },
+        {
+          anchor: 'center-x',
+          targetValue: otherBounds.left + otherBounds.width / 2,
+          delta: (otherBounds.left + otherBounds.width / 2) - (targetBounds.left + targetBounds.width / 2)
+        }
+      ];
+      const verticalCandidates = [
+        { anchor: 'top', targetValue: otherBounds.top, delta: otherBounds.top - targetBounds.top },
+        { anchor: 'bottom', targetValue: otherBounds.bottom, delta: otherBounds.bottom - targetBounds.top },
+        { anchor: 'top', targetValue: otherBounds.top, delta: otherBounds.top - targetBounds.bottom },
+        { anchor: 'bottom', targetValue: otherBounds.bottom, delta: otherBounds.bottom - targetBounds.bottom },
+        {
+          anchor: 'center-y',
+          targetValue: otherBounds.top + otherBounds.height / 2,
+          delta: (otherBounds.top + otherBounds.height / 2) - (targetBounds.top + targetBounds.height / 2)
+        }
+      ];
+
+      horizontalCandidates.forEach((candidate) => {
+        if (Math.abs(candidate.delta) > threshold) return;
+        if (!bestHorizontal || Math.abs(candidate.delta) < Math.abs(bestHorizontal.delta)) {
+          bestHorizontal = {
+            ...candidate,
+            y1: Math.min(targetBounds.top, otherBounds.top) - 8,
+            y2: Math.max(targetBounds.bottom, otherBounds.bottom) + 8
+          };
+        }
+      });
+
+      verticalCandidates.forEach((candidate) => {
+        if (Math.abs(candidate.delta) > threshold) return;
+        if (!bestVertical || Math.abs(candidate.delta) < Math.abs(bestVertical.delta)) {
+          bestVertical = {
+            ...candidate,
+            x1: Math.min(targetBounds.left, otherBounds.left) - 8,
+            x2: Math.max(targetBounds.right, otherBounds.right) + 8
+          };
+        }
+      });
+    });
+
+    clearAlignmentGuides();
+
+    if (bestHorizontal) {
+      target.set({ left: (target.left || 0) + bestHorizontal.delta });
+    }
+    if (bestVertical) {
+      target.set({ top: (target.top || 0) + bestVertical.delta });
+    }
+
+    if (bestHorizontal || bestVertical) {
+      target.setCoords();
+      const updatedBounds = getObjectBounds(target);
+      if (bestHorizontal) {
+        const horizontalX = bestHorizontal.anchor === 'center-x'
+          ? updatedBounds.left + updatedBounds.width / 2
+          : bestHorizontal.targetValue;
+        alignmentGuidesRef.current.push({
+          x1: horizontalX,
+          y1: Math.min(updatedBounds.top, bestHorizontal.y1 + 8) - 8,
+          x2: horizontalX,
+          y2: Math.max(updatedBounds.bottom, bestHorizontal.y2 - 8) + 8
+        });
+      }
+      if (bestVertical) {
+        const verticalY = bestVertical.anchor === 'center-y'
+          ? updatedBounds.top + updatedBounds.height / 2
+          : bestVertical.targetValue;
+        alignmentGuidesRef.current.push({
+          x1: Math.min(updatedBounds.left, bestVertical.x1 + 8) - 8,
+          y1: verticalY,
+          x2: Math.max(updatedBounds.right, bestVertical.x2 - 8) + 8,
+          y2: verticalY
+        });
+      }
+    }
+  };
+
   // Persistent Tesseract Worker initialization linked to OCR language settings
   /* oxlint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
@@ -665,9 +829,21 @@ const OcrCanvas = forwardRef(({
     canvas.on('text:changed', (event) => eventHandlersRef.current.handleTextChanged?.(event));
     canvas.on('text:editing:entered', (event) => eventHandlersRef.current.handleEditingEntered?.(event));
     canvas.on('text:editing:exited', (event) => eventHandlersRef.current.handleEditingExited?.(event));
+    canvas.on('object:moving', (event) => {
+      eventHandlersRef.current.updateObjectAlignment?.(event.target);
+    });
+    canvas.on('before:render', () => {
+      if (canvas.contextTop) {
+        canvas.clearContext(canvas.contextTop);
+      }
+    });
+    canvas.on('after:render', () => {
+      eventHandlersRef.current.drawAlignmentGuides?.(canvas);
+    });
 
     // Viewport drag-to-pan support
     canvas.on('mouse:down', (opt) => {
+      const target = opt.target;
       if (pendingInsertText.current) {
         const pointer = typeof canvas.getScenePoint === 'function'
           ? canvas.getScenePoint(opt.e)
@@ -738,8 +914,9 @@ const OcrCanvas = forwardRef(({
         canvas.setViewportTransform(canvas.viewportTransform);
         canvas.isDragging = false;
         canvas.selection = true;
-        return;
       }
+      eventHandlersRef.current.clearAlignmentGuides?.();
+      canvas.requestRenderAll();
     });
 
     // Mouse-wheel zoom over the editing area. Zoom is a controlled prop owned
@@ -753,7 +930,11 @@ const OcrCanvas = forwardRef(({
       onZoomChangeRef.current((prev) => Math.min(5, Math.max(0.1, Math.round((prev + step) * 100) / 100)));
     });
 
-    canvas.on('object:modified', () => eventHandlersRef.current.saveHistory?.());
+    canvas.on('object:modified', () => {
+      eventHandlersRef.current.clearAlignmentGuides?.();
+      eventHandlersRef.current.saveHistory?.();
+      canvas.requestRenderAll();
+    });
     canvas.on('object:added', (e) => {
       if (e.target && e.target !== bgImage.current && !e.target.isPatch && !e.target.isSelectionRect) {
         eventHandlersRef.current.saveHistory?.();
@@ -2202,6 +2383,8 @@ const OcrCanvas = forwardRef(({
   // or helper implementations after React has rendered newer ones.
   eventHandlersRef.current = {
     addManualTextBox,
+    clearAlignmentGuides,
+    drawAlignmentGuides,
     handleEditingEntered,
     handleEditingExited,
     handleSelection,
@@ -2210,7 +2393,8 @@ const OcrCanvas = forwardRef(({
     pasteCopiedRegion,
     saveHistory,
     syncSelectedTextbox,
-    translate: t
+    translate: t,
+    updateObjectAlignment
   };
 
   useImperativeHandle(ref, () => ({
