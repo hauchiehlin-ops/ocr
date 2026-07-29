@@ -465,51 +465,14 @@ function App() {
     ]);
   };
 
-  const queryDeviceFonts = async ({ requireGrantedPermission = false } = {}) => {
+  const queryDeviceFonts = async () => {
     if (typeof window === 'undefined' || typeof window.queryLocalFonts !== 'function') {
       return { supported: false, fonts: [] };
-    }
-
-    if (requireGrantedPermission && navigator.permissions?.query) {
-      try {
-        const permission = await navigator.permissions.query({ name: 'local-fonts' });
-        if (permission?.state !== 'granted') {
-          return { supported: true, fonts: [] };
-        }
-      } catch {
-        // Some Chromium builds do not expose the permission descriptor yet.
-      }
     }
 
     const fonts = await window.queryLocalFonts();
     return { supported: true, fonts };
   };
-
-  const loadLocalFonts = async () => {
-    setFontLoadStatus('fontLoading');
-    try {
-      const result = await queryDeviceFonts();
-      if (!result.supported) {
-        setFontLoadStatus('fontUnsupported');
-        const fallbackFonts = mergeFontFamilies();
-        setAvailableFontFamilies(fallbackFonts);
-        alignSelectedFontsWithAvailable(fallbackFonts);
-        return;
-      }
-      const merged = mergeFontFamilies(result.fonts);
-      setAvailableFontFamilies(merged);
-      alignSelectedFontsWithAvailable(merged);
-      setFontLoadStatus(result.fonts.length > 0 ? 'fontLoaded' : 'fontPermissionNeeded');
-    } catch (error) {
-      console.info('Local font enumeration unavailable:', error);
-      const fallbackFonts = mergeFontFamilies();
-      setAvailableFontFamilies(fallbackFonts);
-      alignSelectedFontsWithAvailable(fallbackFonts);
-      setFontLoadStatus('fontPermissionDenied');
-    }
-  };
-
-  const handleLoadLocalFonts = () => loadLocalFonts();
 
   // Chromium exposes the Local Font Access API behind a permission prompt.
   // Trigger it on startup so the font dropdown is ready without an extra click.
@@ -1321,23 +1284,6 @@ function App() {
             </div>
           </div>
 
-          <section className="inspector-card selection-tools-card">
-            <div className="inspector-card-header">
-              <div>
-                <h3 className="inspector-card-title">{t('selectionTools')}</h3>
-                <p className="inspector-card-description">{t('selectionToolsHelp')}</p>
-              </div>
-            </div>
-            <div className="selection-summary-row">
-              <div className="selection-summary-count">
-                {selectedRegionCount > 0
-                  ? t('selectedBlocks').replace('{count}', String(selectedRegionCount))
-                  : t('placeholder')}
-              </div>
-            </div>
-            <div className="inspector-help-text">{t('selectionToolsHint')}</div>
-          </section>
-
           <section className={`inspector-card ${selectedRegionCount > 0 ? 'is-active' : 'is-idle'}`}>
             <div className="inspector-card-header">
               <div>
@@ -1507,13 +1453,6 @@ function App() {
                     </label>
                   </div>
 
-                  <button
-                    type="button"
-                    className="btn btn-secondary inspector-full-button"
-                    onClick={handleLoadLocalFonts}
-                  >
-                    {t('loadDeviceFonts')} ({availableFontFamilies.length})
-                  </button>
                 </div>
               </details>
 

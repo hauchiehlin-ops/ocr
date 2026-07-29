@@ -612,8 +612,16 @@ const OcrCanvas = forwardRef(({
     if (!canvas) return [];
     const activeObject = canvas.getActiveObject?.();
     if (!activeObject) return [];
-    if (activeObject.type === 'activeSelection' && typeof canvas.getActiveObjects === 'function') {
-      return canvas.getActiveObjects().filter((obj) => obj?.type === 'textbox');
+    const activeType = String(activeObject.type || '').toLowerCase();
+    if (
+      activeType === 'activeselection' ||
+      activeType === 'activeSelection'.toLowerCase() ||
+      typeof activeObject.getObjects === 'function'
+    ) {
+      const groupedObjects = typeof activeObject.getObjects === 'function'
+        ? activeObject.getObjects()
+        : (typeof canvas.getActiveObjects === 'function' ? canvas.getActiveObjects() : []);
+      return groupedObjects.filter((obj) => obj?.type === 'textbox');
     }
     return activeObject.type === 'textbox' ? [activeObject] : [];
   };
