@@ -1284,134 +1284,6 @@ function App() {
             </div>
           </div>
 
-          <section className={`inspector-card ${selectedRegionCount > 0 ? 'is-active' : 'is-idle'}`}>
-            <div className="inspector-card-header">
-              <div>
-                <h3 className="inspector-card-title">{t('currentFormat')}</h3>
-                <p className="inspector-card-description">
-                  {selectedRegionCount > 1 ? t('batchFormatHint') : t('singleFormatHint')}
-                </p>
-              </div>
-            </div>
-
-            <div className="color-presets">
-              {colorPresetColors.map((color) => (
-                <button
-                  key={color}
-                  className="color-btn"
-                  title={color}
-                  style={{
-                    backgroundColor: color,
-                    border: selectedRegionCount === 1 && selectedRegion?.fill?.toUpperCase?.() === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)'
-                  }}
-                  disabled={selectedRegionCount === 0}
-                  onClick={() => {
-                    rememberColorPreset(color);
-                    applyStyleToSelection({ fill: color });
-                  }}
-                />
-              ))}
-
-              <label
-                className="color-btn"
-                style={{
-                  background: 'linear-gradient(45deg, red, orange, yellow, green, blue, purple)',
-                  display: 'inline-block',
-                  cursor: selectedRegionCount ? 'pointer' : 'not-allowed',
-                  position: 'relative',
-                  opacity: selectedRegionCount ? 1 : 0.5
-                }}
-                title={t('customColor')}
-              >
-                <input
-                  type="color"
-                  style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegionCount ? 'pointer' : 'not-allowed' }}
-                  disabled={!selectedRegionCount}
-                  value={selectedFillColor}
-                  onChange={(e) => {
-                    const color = normalizeHexColor(e.target.value);
-                    rememberColorPreset(color);
-                    applyStyleToSelection({ fill: color });
-                  }}
-                />
-              </label>
-            </div>
-
-            <div className="font-style-editor compact">
-              <label className="font-size-control">
-                <span>{t('fontSize')}:</span>
-                <input
-                  type="number"
-                  min="6"
-                  max="200"
-                  step="1"
-                  inputMode="numeric"
-                  value={presetFontSize}
-                  onChange={(e) => {
-                    const next = Math.min(200, Math.max(6, Number(e.target.value) || 6));
-                    setPresetFontSize(next);
-                    localStorage.setItem('preset_font_size', String(next));
-                    setFontApplyStatus('');
-                  }}
-                  aria-label={t('fontSize')}
-                />
-                <span>px</span>
-              </label>
-              <div className="font-style-toggles">
-                <button
-                  type="button"
-                  className={`btn btn-secondary ${presetBold ? 'active' : ''}`}
-                  aria-pressed={presetBold}
-                  onClick={() => {
-                    const next = !presetBold;
-                    setPresetBold(next);
-                    localStorage.setItem('preset_font_bold', String(next));
-                    setFontApplyStatus('');
-                  }}
-                >
-                  {t('bold')}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-secondary ${presetItalic ? 'active' : ''}`}
-                  aria-pressed={presetItalic}
-                  onClick={() => {
-                    const next = !presetItalic;
-                    setPresetItalic(next);
-                    localStorage.setItem('preset_font_italic', String(next));
-                    setFontApplyStatus('');
-                  }}
-                >
-                  {t('italic')}
-                </button>
-              </div>
-            </div>
-
-            <div className="font-format-actions">
-              <div className="inspector-help-text">
-                {fontApplyStatus ? t(fontApplyStatus) : (copiedTextFormat ? t('copiedFormatLoaded') : t('copiedFormatEmpty'))}
-              </div>
-              <div className="font-apply-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={!singleSelectedRegion}
-                  onClick={handleCopySelectedTextFormat}
-                >
-                  {t('copySelectedFormat')}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={!copiedTextFormat || selectedRegionCount === 0}
-                  onClick={handleApplyCopiedTextFormatToSelected}
-                >
-                  {t('applyCopiedFormatSelected')}
-                </button>
-              </div>
-            </div>
-          </section>
-
           <details className="inspector-card inspector-collapsible">
             <summary>{t('presetFonts')}</summary>
             <div className="inspector-collapsible-body">
@@ -1459,58 +1331,6 @@ function App() {
               <details className="inspector-collapsible">
                 <summary>{t('presetFontStyleGroup')}</summary>
                 <div className="inspector-collapsible-body">
-                  <div className="font-apply-options">
-                    <label className="font-apply-option">
-                      <input
-                        type="checkbox"
-                        checked={applyPresetFontFamily}
-                        onChange={(e) => {
-                          setApplyPresetFontFamily(e.target.checked);
-                          localStorage.setItem('apply_preset_font_family', String(e.target.checked));
-                          setFontApplyStatus('');
-                        }}
-                      />
-                      <span>
-                        <strong>{t('applyPresetFontFamily')}</strong>
-                        <small>{t('applyPresetFontFamilyHelp')}</small>
-                      </span>
-                    </label>
-                    <label className="font-apply-option">
-                      <input
-                        type="checkbox"
-                        checked={applyPresetTypography}
-                        onChange={(e) => {
-                          setApplyPresetTypography(e.target.checked);
-                          localStorage.setItem('apply_preset_typography', String(e.target.checked));
-                          setFontApplyStatus('');
-                        }}
-                      />
-                      <span>
-                        <strong>{t('applyPresetTypography')}</strong>
-                        <small>{t('applyPresetTypographyHelp')}</small>
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="font-apply-actions">
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      disabled={!selectedRegionCount || !hasPresetApplySelection}
-                      onClick={handleApplyPresetFontSelected}
-                    >
-                      {t('applyStyleSelected')}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      disabled={!imageLoaded || !hasPresetApplySelection}
-                      onClick={handleApplyDefaultFontAll}
-                    >
-                      {t('applyStyleAll')}
-                    </button>
-                  </div>
-
                   <div className="inspector-toggle-list">
                     <label className="inspector-inline-toggle">
                       <input
@@ -1554,6 +1374,195 @@ function App() {
               )}
             </div>
           </details>
+
+          <section className={`inspector-card ${selectedRegionCount > 0 ? 'is-active' : 'is-idle'}`}>
+            <div className="inspector-card-header">
+              <div>
+                <h3 className="inspector-card-title">{t('currentFormat')}</h3>
+                <p className="inspector-card-description">
+                  {selectedRegionCount > 1 ? t('batchFormatHint') : t('singleFormatHint')}
+                </p>
+              </div>
+            </div>
+
+            <div className="inspector-segment">
+              <div className="inspector-section-label">{t('liveAppearanceAdjustments')}</div>
+              <div className="color-presets">
+                {colorPresetColors.map((color) => (
+                  <button
+                    key={color}
+                    className="color-btn"
+                    title={color}
+                    style={{
+                      backgroundColor: color,
+                      border: selectedRegionCount === 1 && selectedRegion?.fill?.toUpperCase?.() === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)'
+                    }}
+                    disabled={selectedRegionCount === 0}
+                    onClick={() => {
+                      rememberColorPreset(color);
+                      applyStyleToSelection({ fill: color });
+                    }}
+                  />
+                ))}
+
+                <label
+                  className="color-btn"
+                  style={{
+                    background: 'linear-gradient(45deg, red, orange, yellow, green, blue, purple)',
+                    display: 'inline-block',
+                    cursor: selectedRegionCount ? 'pointer' : 'not-allowed',
+                    position: 'relative',
+                    opacity: selectedRegionCount ? 1 : 0.5
+                  }}
+                  title={t('customColor')}
+                >
+                  <input
+                    type="color"
+                    style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegionCount ? 'pointer' : 'not-allowed' }}
+                    disabled={!selectedRegionCount}
+                    value={selectedFillColor}
+                    onChange={(e) => {
+                      const color = normalizeHexColor(e.target.value);
+                      rememberColorPreset(color);
+                      applyStyleToSelection({ fill: color });
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="font-style-editor compact">
+                <label className="font-size-control">
+                  <span>{t('fontSize')}:</span>
+                  <input
+                    type="number"
+                    min="6"
+                    max="200"
+                    step="1"
+                    inputMode="numeric"
+                    value={presetFontSize}
+                    onChange={(e) => {
+                      const next = Math.min(200, Math.max(6, Number(e.target.value) || 6));
+                      setPresetFontSize(next);
+                      localStorage.setItem('preset_font_size', String(next));
+                      setFontApplyStatus('');
+                    }}
+                    aria-label={t('fontSize')}
+                  />
+                  <span>px</span>
+                </label>
+                <div className="font-style-toggles">
+                  <button
+                    type="button"
+                    className={`btn btn-secondary ${presetBold ? 'active' : ''}`}
+                    aria-pressed={presetBold}
+                    onClick={() => {
+                      const next = !presetBold;
+                      setPresetBold(next);
+                      localStorage.setItem('preset_font_bold', String(next));
+                      setFontApplyStatus('');
+                    }}
+                  >
+                    {t('bold')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-secondary ${presetItalic ? 'active' : ''}`}
+                    aria-pressed={presetItalic}
+                    onClick={() => {
+                      const next = !presetItalic;
+                      setPresetItalic(next);
+                      localStorage.setItem('preset_font_italic', String(next));
+                      setFontApplyStatus('');
+                    }}
+                  >
+                    {t('italic')}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="inspector-segment">
+              <div className="inspector-section-label">{t('applyContentSelection')}</div>
+              <div className="font-apply-options">
+                <label className="font-apply-option">
+                  <input
+                    type="checkbox"
+                    checked={applyPresetFontFamily}
+                    onChange={(e) => {
+                      setApplyPresetFontFamily(e.target.checked);
+                      localStorage.setItem('apply_preset_font_family', String(e.target.checked));
+                      setFontApplyStatus('');
+                    }}
+                  />
+                  <span>
+                    <strong>{t('applyPresetFontFamily')}</strong>
+                    <small>{t('applyPresetFontFamilyHelp')}</small>
+                  </span>
+                </label>
+                <label className="font-apply-option">
+                  <input
+                    type="checkbox"
+                    checked={applyPresetTypography}
+                    onChange={(e) => {
+                      setApplyPresetTypography(e.target.checked);
+                      localStorage.setItem('apply_preset_typography', String(e.target.checked));
+                      setFontApplyStatus('');
+                    }}
+                  />
+                  <span>
+                    <strong>{t('applyPresetTypography')}</strong>
+                    <small>{t('applyPresetTypographyHelp')}</small>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="inspector-primary-actions">
+              <div className="inspector-section-label">{t('formatApplyActions')}</div>
+              <div className="font-apply-actions font-apply-actions-primary">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!selectedRegionCount || !hasPresetApplySelection}
+                  onClick={handleApplyPresetFontSelected}
+                >
+                  {t('applyStyleSelected')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!imageLoaded || !hasPresetApplySelection}
+                  onClick={handleApplyDefaultFontAll}
+                >
+                  {t('applyStyleAll')}
+                </button>
+              </div>
+            </div>
+
+            <div className="font-format-actions">
+              <div className="inspector-help-text">
+                {fontApplyStatus ? t(fontApplyStatus) : (copiedTextFormat ? t('copiedFormatLoaded') : t('copiedFormatEmpty'))}
+              </div>
+              <div className="font-apply-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!singleSelectedRegion}
+                  onClick={handleCopySelectedTextFormat}
+                >
+                  {t('copySelectedFormat')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!copiedTextFormat || selectedRegionCount === 0}
+                  onClick={handleApplyCopiedTextFormatToSelected}
+                >
+                  {t('applyCopiedFormatSelected')}
+                </button>
+              </div>
+            </div>
+          </section>
 
           <details className="inspector-card inspector-collapsible">
             <summary>{t('ops')}</summary>

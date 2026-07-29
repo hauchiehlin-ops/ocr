@@ -453,6 +453,12 @@ body {
   gap: 8px;
 }
 
+.inspector-segment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .inspector-textarea {
   width: 100%;
   min-height: 112px;
@@ -756,6 +762,41 @@ body {
   gap: 6px;
 }
 
+.inspector-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255,255,255,0.82);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.inspector-section-label::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(96,205,255,0.35), rgba(255,255,255,0.08));
+}
+
+.inspector-primary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(96, 205, 255, 0.22);
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(96, 205, 255, 0.1), rgba(96, 205, 255, 0.03)),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.font-apply-actions-primary {
+  gap: 10px;
+}
+
 .font-style-toggles .btn,
 .font-apply-actions .btn {
   flex: 1 1 0;
@@ -769,6 +810,20 @@ body {
 .font-apply-actions .btn {
   padding: 7px 5px;
   font-size: 11px;
+}
+
+.font-apply-actions-primary .btn {
+  min-height: 40px;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  border-color: rgba(96, 205, 255, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.font-apply-actions-primary .btn:not(:disabled):hover {
+  border-color: rgba(96, 205, 255, 0.5);
+  background: rgba(96, 205, 255, 0.16);
 }
 
 .font-style-toggles .btn.active {
