@@ -1204,7 +1204,6 @@ function App() {
             enableAiInpaint={enableAiInpaint}
             autoRunOcr={autoRunOcr}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
-            onRegionSelect={(region) => handleLayerSelectionChange(region ? [region] : [])}
             onSelectionChange={handleLayerSelectionChange}
             onLayersUpdate={setLayers}
             onSourceFileNameChange={setSourceFileName}
@@ -1446,61 +1445,26 @@ function App() {
               <div className="inspector-help-text">
                 {fontApplyStatus ? t(fontApplyStatus) : (copiedTextFormat ? t('copiedFormatLoaded') : t('copiedFormatEmpty'))}
               </div>
+              <div className="font-apply-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!singleSelectedRegion}
+                  onClick={handleCopySelectedTextFormat}
+                >
+                  {t('copySelectedFormat')}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={!copiedTextFormat || selectedRegionCount === 0}
+                  onClick={handleApplyCopiedTextFormatToSelected}
+                >
+                  {t('applyCopiedFormatSelected')}
+                </button>
+              </div>
             </div>
           </section>
-
-          <details className="inspector-card inspector-collapsible">
-            <summary>{t('aiOps')}</summary>
-            <div className="inspector-collapsible-body">
-              <div className="inspector-help-text">{t('selectionAiDescription')}</div>
-              <div className="ai-operation-row">
-                <div className="ai-operation-item">
-                  <button
-                    className="btn btn-secondary"
-                    disabled={!singleSelectedRegion || isLoadingLLM}
-                    onClick={handleFixText}
-                  >
-                    {t('fixText')}
-                  </button>
-                  <button
-                    type="button"
-                    className="ai-help-icon"
-                    aria-label={t('fixTextHelp')}
-                    title={t('fixTextHelp')}
-                    data-tooltip={t('fixTextHelp')}
-                  >
-                    ⓘ
-                  </button>
-                </div>
-                <div className="ai-operation-item">
-                  <button
-                    className="btn btn-secondary"
-                    disabled={!singleSelectedRegion || isLoadingLLM}
-                    onClick={handleExtractEntities}
-                  >
-                    {t('extract')}
-                  </button>
-                  <button
-                    type="button"
-                    className="ai-help-icon"
-                    aria-label={t('extractHelp')}
-                    title={t('extractHelp')}
-                    data-tooltip={t('extractHelp')}
-                  >
-                    ⓘ
-                  </button>
-                </div>
-              </div>
-              {llmProgress && (
-                <div className="inspector-inline-status">
-                  💡 {llmProgress}
-                </div>
-              )}
-              {selectedRegionCount > 1 && (
-                <div className="inspector-help-text">{t('aiSingleSelectionOnly')}</div>
-              )}
-            </div>
-          </details>
 
           <details className="inspector-card inspector-collapsible">
             <summary>{t('presetFonts')}</summary>
@@ -1639,19 +1603,6 @@ function App() {
                 </div>
               </details>
 
-              <details className="inspector-collapsible">
-                <summary>{t('presetFontWorkflowTitle')}</summary>
-                <div className="inspector-collapsible-body">
-                  <div className="inspector-help-text">{t('localFontsHint')}</div>
-                  <ol>
-                    <li>{t('presetFontWorkflowStep1')}</li>
-                    <li>{t('presetFontWorkflowStep2')}</li>
-                    <li>{t('presetFontWorkflowStep3')}</li>
-                    <li>{t('presetFontWorkflowStep4')}</li>
-                  </ol>
-                </div>
-              </details>
-
               {fontLoadStatus && (
                 <div className="font-load-status">
                   {t(fontLoadStatus)}
@@ -1711,6 +1662,59 @@ function App() {
               </div>
               {ocrEngineBlockReason && (
                 <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
+              )}
+            </div>
+          </details>
+
+          <details className="inspector-card inspector-collapsible">
+            <summary>{t('aiOps')}</summary>
+            <div className="inspector-collapsible-body">
+              <div className="inspector-help-text">{t('selectionAiDescription')}</div>
+              <div className="ai-operation-row">
+                <div className="ai-operation-item">
+                  <button
+                    className="btn btn-secondary"
+                    disabled={!singleSelectedRegion || isLoadingLLM}
+                    onClick={handleFixText}
+                  >
+                    {t('fixText')}
+                  </button>
+                  <button
+                    type="button"
+                    className="ai-help-icon"
+                    aria-label={t('fixTextHelp')}
+                    title={t('fixTextHelp')}
+                    data-tooltip={t('fixTextHelp')}
+                  >
+                    ⓘ
+                  </button>
+                </div>
+                <div className="ai-operation-item">
+                  <button
+                    className="btn btn-secondary"
+                    disabled={!singleSelectedRegion || isLoadingLLM}
+                    onClick={handleExtractEntities}
+                  >
+                    {t('extract')}
+                  </button>
+                  <button
+                    type="button"
+                    className="ai-help-icon"
+                    aria-label={t('extractHelp')}
+                    title={t('extractHelp')}
+                    data-tooltip={t('extractHelp')}
+                  >
+                    ⓘ
+                  </button>
+                </div>
+              </div>
+              {llmProgress && (
+                <div className="inspector-inline-status">
+                  💡 {llmProgress}
+                </div>
+              )}
+              {selectedRegionCount > 1 && (
+                <div className="inspector-help-text">{t('aiSingleSelectionOnly')}</div>
               )}
             </div>
           </details>
@@ -2087,6 +2091,19 @@ function App() {
                   </div>
                 )}
               </details>
+            </div>
+          </details>
+
+          <details className="inspector-card inspector-collapsible">
+            <summary>{t('presetFontWorkflowTitle')}</summary>
+            <div className="inspector-collapsible-body">
+              <div className="inspector-help-text">{t('localFontsHint')}</div>
+              <ol>
+                <li>{t('presetFontWorkflowStep1')}</li>
+                <li>{t('presetFontWorkflowStep2')}</li>
+                <li>{t('presetFontWorkflowStep3')}</li>
+                <li>{t('presetFontWorkflowStep4')}</li>
+              </ol>
             </div>
           </details>
 
