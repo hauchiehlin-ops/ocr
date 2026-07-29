@@ -412,8 +412,6 @@ function App() {
   // Preset Fonts
   const [chineseFont, setChineseFont] = useState('Microsoft JhengHei');
   const [englishFont, setEnglishFont] = useState('Century Gothic');
-  const [applyPresetFontFamily, setApplyPresetFontFamily] = useState(() => localStorage.getItem('apply_preset_font_family') !== 'false');
-  const [applyPresetTypography, setApplyPresetTypography] = useState(() => localStorage.getItem('apply_preset_typography') !== 'false');
   const [snapAlignmentEnabled, setSnapAlignmentEnabled] = useState(() => localStorage.getItem('snap_alignment_enabled') !== 'false');
   const [presetFontSize, setPresetFontSize] = useState(() => {
     const saved = Number(localStorage.getItem('preset_font_size'));
@@ -1212,8 +1210,6 @@ function App() {
             presetFontSize={presetFontSize}
             presetBold={presetBold}
             presetItalic={presetItalic}
-            applyPresetFontFamily={applyPresetFontFamily}
-            applyPresetTypography={applyPresetTypography}
             forcePresetFont={forcePresetFont}
             snapAlignmentEnabled={snapAlignmentEnabled}
             ocrEngine={ocrEngine}
@@ -1317,10 +1313,28 @@ function App() {
             </div>
           </div>
 
+          <section className="inspector-card">
+            <label className="ai-inpaint-option">
+              <input
+                type="checkbox"
+                checked={autoRunOcr}
+                onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setAutoRunOcr(enabled);
+                  localStorage.setItem('auto_run_ocr', String(enabled));
+                }}
+              />
+              <span>
+                <strong>{t('autoRunOcr')}</strong>
+                <small>{t('autoRunOcrHelp')}</small>
+              </span>
+            </label>
+          </section>
+
           <details className="inspector-card inspector-collapsible">
             <summary>{t('presetFonts')}</summary>
             <div className="inspector-collapsible-body">
-              <div className="inspector-help-text">{t('applyPresetFontFamilyHelp')}</div>
+              <div className="inspector-help-text">{t('presetFontCardHelp')}</div>
               <details className="inspector-collapsible" open>
                 <summary>{t('presetFontFamilyGroup')}</summary>
                 <div className="inspector-collapsible-body">
@@ -1362,39 +1376,6 @@ function App() {
               <details className="inspector-collapsible">
                 <summary>{t('presetFontStyleGroup')}</summary>
                 <div className="inspector-collapsible-body">
-                  <div className="font-apply-options">
-                    <label className="font-apply-option">
-                      <input
-                        type="checkbox"
-                        checked={applyPresetFontFamily}
-                        onChange={(e) => {
-                          setApplyPresetFontFamily(e.target.checked);
-                          localStorage.setItem('apply_preset_font_family', String(e.target.checked));
-                          setFontApplyStatus('');
-                        }}
-                      />
-                      <span>
-                        <strong>{t('applyPresetFontFamily')}</strong>
-                        <small>{t('applyPresetFontFamilyHelp')}</small>
-                      </span>
-                    </label>
-                    <label className="font-apply-option">
-                      <input
-                        type="checkbox"
-                        checked={applyPresetTypography}
-                        onChange={(e) => {
-                          setApplyPresetTypography(e.target.checked);
-                          localStorage.setItem('apply_preset_typography', String(e.target.checked));
-                          setFontApplyStatus('');
-                        }}
-                      />
-                      <span>
-                        <strong>{t('applyPresetTypography')}</strong>
-                        <small>{t('applyPresetTypographyHelp')}</small>
-                      </span>
-                    </label>
-                  </div>
-
                   <div className="inspector-toggle-list">
                     <label className="inspector-inline-toggle">
                       <input
@@ -1851,22 +1832,6 @@ function App() {
                   </div>
                 </details>
               </div>
-
-              <label className="ai-inpaint-option">
-                <input
-                  type="checkbox"
-                  checked={autoRunOcr}
-                  onChange={(event) => {
-                    const enabled = event.target.checked;
-                    setAutoRunOcr(enabled);
-                    localStorage.setItem('auto_run_ocr', String(enabled));
-                  }}
-                />
-                <span>
-                  <strong>{t('autoRunOcr')}</strong>
-                  <small>{t('autoRunOcrHelp')}</small>
-                </span>
-              </label>
 
               <label className="ai-inpaint-option">
                 <input
