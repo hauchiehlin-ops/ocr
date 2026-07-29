@@ -231,19 +231,22 @@
             <img src="app_icon.jpg" alt="OCREditor Logo" style="width: 32px; height: 32px; border-radius: 8px; object-fit: cover;">
             OCREditor
         </a>
-        <select id="lang-select" style="background: var(--bg-surface); color: white; border: 1px solid var(--text-muted); padding: 4px; border-radius: 4px;">
-            <option value="en">English</option>
-            <option value="zh-TW">繁體中文</option>
-            <option value="zh-CN">简体中文</option>
-            <option value="ja">日本語</option>
-            <option value="ko">한국어</option>
-            <option value="th">ไทย</option>
-            <option value="es">Español</option>
-            <option value="pt">Português</option>
-            <option value="ms">Bahasa Melayu</option>
-            <option value="ru">Русский</option>
-            <option value="de">Deutsch</option>
-        </select>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end;">
+            <a id="privacy-link" href="privacy-windows.html" data-i18n="nav_privacy" style="color: var(--secondary); text-decoration: none; font-weight: 700;">🛡️ 隱私權政策</a>
+            <select id="lang-select" style="background: var(--bg-surface); color: white; border: 1px solid var(--text-muted); padding: 4px; border-radius: 4px;">
+                <option value="en">English</option>
+                <option value="zh-TW">繁體中文</option>
+                <option value="zh-CN">简体中文</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="th">ไทย</option>
+                <option value="es">Español</option>
+                <option value="pt">Português</option>
+                <option value="ms">Bahasa Melayu</option>
+                <option value="ru">Русский</option>
+                <option value="de">Deutsch</option>
+            </select>
+        </div>
     </header>
 
     <main class="container">
@@ -356,6 +359,22 @@
     <footer>
         <p data-i18n="footer_copy">© 2026 OCREditor v1.0.0. Open sourced under MIT License.</p>
     </footer>
+    <script>
+        (function() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            const privacyLink = document.getElementById('privacy-link');
+            if (!privacyLink) return;
+            if (/android/i.test(userAgent)) {
+                privacyLink.href = "privacy-android.html";
+            } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                privacyLink.href = "privacy-ios.html";
+            } else if (/Mac/i.test(userAgent)) {
+                privacyLink.href = "privacy-macos.html";
+            } else if (/Win/i.test(userAgent)) {
+                privacyLink.href = "privacy-windows.html";
+            }
+        })();
+    </script>
     <script src="i18n.js"></script>
 </body>
 </html>

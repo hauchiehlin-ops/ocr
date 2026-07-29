@@ -73,6 +73,8 @@ const WINDOWS_OCR_STARTER_URL = 'https://raw.githubusercontent.com/hauchiehlin-o
 const MACOS_OCR_INSTALLER_URL = 'https://raw.githubusercontent.com/hauchiehlin-ops/ocr/main/setup_and_run_ocr.sh';
 const MACOS_OCR_INSTALL_COMMAND = `OCR_SETUP="$(mktemp -t ai_ocr_setup).sh" && curl -fL "${MACOS_OCR_INSTALLER_URL}" -o "$OCR_SETUP" && /bin/bash "$OCR_SETUP"`;
 const WINDOWS_PROJECT_ZIP_URL = 'https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip';
+const DEFAULT_COLOR_PRESETS = ['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'];
+const MAX_COLOR_PRESETS = 8;
 // Shown until ListModels succeeds (or when it fails: offline, invalid key…).
 // Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
 const STATIC_GEMINI_MODEL_OPTIONS = [
@@ -98,7 +100,8 @@ const DOCS_LANGUAGE_CODES = {
 
 function App() {
   const nativeOcrAvailableAtStartup = isNativeOcrAvailable();
-  const [selectedRegion, setSelectedRegion] = useState(null);
+  const [selectedRegionIds, setSelectedRegionIds] = useState([]);
+  const [selectionAnchorId, setSelectionAnchorId] = useState(null);
   const [layers, setLayers] = useState([]);
   const canvasRef = useRef(null);
 
@@ -113,6 +116,7 @@ function App() {
   const [isLoadingLLM, setIsLoadingLLM] = useState(false);
   const [llmProgress, setLlmProgress] = useState('');
   const [zoom, setZoom] = useState(1);
+  const [colorPresetColors, setColorPresetColors] = useState(DEFAULT_COLOR_PRESETS);
 
   // Menu bar dropdowns open on click rather than relying on CSS :hover alone.
   // Hover-only dropdowns proved unreliable on some Windows browser/hardware
@@ -527,11 +531,86 @@ function App() {
   const presetCjkFontFamily = CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont);
   const presetFontFamily = `${presetLatinFontFamily}, ${presetCjkFontFamily}, sans-serif`;
   const hasPresetApplySelection = applyPresetFontFamily || applyPresetTypography;
-  const selectedRegionMeta = selectedRegion
-    ? [selectedRegion.fontFamily, Number.isFinite(selectedRegion.fontSize) ? `${Math.round(selectedRegion.fontSize)}px` : null]
-        .filter(Boolean)
-        .join(' · ')
-    : '';
+  const selectedLayers = selectedRegionIds
+    .map((id) => layers.find((layer) => layer.id === id))
+    .filter(Boolean);
+  const selectedRegion = selectedLayers[0] || null;
+  const selectedRegionCount = selectedLayers.length;
+  const singleSelectedRegion = selectedRegionCount === 1 ? selectedRegion : null;
+
+  const activeSelectionLabel = selectedRegionCount === 0
+    ? t('placeholder')
+    : selectedRegionCount === 1
+      ? (selectedRegion?.text?.trim() || t('emptyLayer'))
+      : t('selectedBlocks').replace('{count}', String(selectedRegionCount));
+
+  const rememberColorPreset = (color) => {
+    setColorPresetColors((current) => {
+      const normalized = String(color || '').toUpperCase();
+      const unique = [normalized, ...current.map((item) => item.toUpperCase()).filter((item) => item !== normalized)];
+      return unique.slice(0, MAX_COLOR_PRESETS);
+    });
+  };
+
+  const syncLayerSelection = (ids, anchorId = null) => {
+    const nextIds = Array.from(new Set(ids)).filter(Boolean);
+    setSelectedRegionIds(nextIds);
+    setSelectionAnchorId(anchorId ?? nextIds[0] ?? null);
+    canvasRef.current?.selectRegions?.(nextIds);
+  };
+
+  const handleLayerSelectionChange = useCallback((selection) => {
+    const nextIds = Array.isArray(selection)
+      ? selection.map((item) => item?.id || item).filter(Boolean)
+      : [];
+    setSelectedRegionIds(nextIds);
+    if (nextIds.length <= 1) {
+      setSelectionAnchorId(nextIds[0] ?? null);
+    }
+  }, []);
+
+  const handleLayerItemClick = (layerId, event) => {
+    const index = layers.findIndex((layer) => layer.id === layerId);
+    if (index < 0) return;
+    const currentIds = new Set(selectedRegionIds);
+    let nextIds = [];
+
+    if (event.shiftKey && selectionAnchorId) {
+      const anchorIndex = layers.findIndex((layer) => layer.id === selectionAnchorId);
+      if (anchorIndex >= 0) {
+        const start = Math.min(anchorIndex, index);
+        const end = Math.max(anchorIndex, index);
+        nextIds = layers.slice(start, end + 1).map((layer) => layer.id);
+      }
+    } else if (event.metaKey || event.ctrlKey) {
+      if (currentIds.has(layerId)) currentIds.delete(layerId);
+      else currentIds.add(layerId);
+      nextIds = [...currentIds];
+    } else {
+      nextIds = [layerId];
+    }
+
+    syncLayerSelection(nextIds, layerId);
+  };
+
+  const handleSelectAllLayers = () => {
+    if (!layers.length) return;
+    syncLayerSelection(layers.map((layer) => layer.id), layers[0]?.id || null);
+  };
+
+  const handleClearLayerSelection = () => {
+    syncLayerSelection([]);
+  };
+
+  const applyStyleToSelection = (style) => {
+    if (!canvasRef.current || selectedRegionCount === 0) return false;
+    const ids = selectedLayers.map((layer) => layer.id);
+    const applied = ids.length === 1
+      ? canvasRef.current.updateRegionStyle(ids[0], style)
+      : canvasRef.current.updateRegionStyleMany?.(ids, style);
+    if (applied && style.fill) rememberColorPreset(style.fill);
+    return Boolean(applied);
+  };
 
   const buildPresetTextStyle = () => {
     const style = {
@@ -549,21 +628,6 @@ function App() {
       style.fontStyle = presetItalic ? 'italic' : 'normal';
     }
     return style;
-  };
-
-  const buildSelectedRegionPresetPatch = () => {
-    const patch = { lineHeight: 1 };
-    if (applyPresetFontFamily) {
-      patch.fontFamily = presetFontFamily;
-      patch.latinFontFamily = presetLatinFontFamily;
-      patch.cjkFontFamily = presetCjkFontFamily;
-    }
-    if (applyPresetTypography) {
-      patch.fontSize = presetFontSize;
-      patch.isBold = presetBold;
-      patch.isItalic = presetItalic;
-    }
-    return patch;
   };
 
   const buildCopiedTextFormat = (region) => {
@@ -619,15 +683,14 @@ function App() {
   };
 
   const handleFixText = async () => {
-    if (!selectedRegion) return;
+    if (!singleSelectedRegion) return;
     setIsLoadingLLM(true);
     setLlmProgress(t('initializingAi'));
     try {
-      const fixed = await fixText(selectedRegion.text, (prog) => {
+      const fixed = await fixText(singleSelectedRegion.text, (prog) => {
          setLlmProgress(prog);
       });
-      setSelectedRegion(prev => ({ ...prev, text: fixed }));
-      if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, fixed);
+      if (canvasRef.current) canvasRef.current.updateRegionText(singleSelectedRegion.id, fixed);
       setLlmProgress(t('textCorrected'));
     } catch (e) {
       alert(`${t('fixText')}: ${e.message}`);
@@ -638,16 +701,15 @@ function App() {
   };
 
   const handleExtractEntities = async () => {
-    if (!selectedRegion) return;
+    if (!singleSelectedRegion) return;
     setIsLoadingLLM(true);
     setLlmProgress(t('initializingAiShort'));
     try {
-      const entities = await extractEntities(selectedRegion.text, (prog) => {
+      const entities = await extractEntities(singleSelectedRegion.text, (prog) => {
          setLlmProgress(prog);
       });
-      const combined = `【Entities】\n${entities}\n\n【Original】\n${selectedRegion.text}`;
-      setSelectedRegion(prev => ({ ...prev, text: combined }));
-      if (canvasRef.current) canvasRef.current.updateRegionText(selectedRegion.id, combined);
+      const combined = `【Entities】\n${entities}\n\n【Original】\n${singleSelectedRegion.text}`;
+      if (canvasRef.current) canvasRef.current.updateRegionText(singleSelectedRegion.id, combined);
       setLlmProgress(t('entitiesExtracted'));
     } catch (e) {
       alert(`${t('extract')}: ${e.message}`);
@@ -658,19 +720,12 @@ function App() {
   };
 
   const handleRemoveText = () => {
-     if (!selectedRegion) return;
+     if (!selectedRegionCount) return;
      if (canvasRef.current) {
         canvasRef.current.removeActiveObject();
-        setSelectedRegion(null);
+        setSelectedRegionIds([]);
+        setSelectionAnchorId(null);
      }
-  };
-
-  const handleSelectedRegionTextChange = (event) => {
-    const nextText = event.target.value;
-    setSelectedRegion((prev) => prev ? { ...prev, text: nextText } : prev);
-    if (canvasRef.current && selectedRegion) {
-      canvasRef.current.updateRegionText(selectedRegion.id, nextText);
-    }
   };
 
   const handleApplyDefaultFontAll = async () => {
@@ -683,29 +738,19 @@ function App() {
         const style = buildPresetTextStyle();
         const appliedCount = canvasRef.current.applyTextStyleToAll(style);
         setFontApplyStatus(appliedCount > 0 ? 'fontAppliedAll' : 'fontApplyNoSelection');
-        if (selectedRegion && appliedCount > 0) {
-          setSelectedRegion(prev => ({
-            ...prev,
-            ...buildSelectedRegionPresetPatch()
-          }));
-        }
      }
   };
 
   const handleApplyPresetFontSelected = async () => {
-     if (canvasRef.current && selectedRegion) {
+     if (canvasRef.current && selectedRegionCount > 0) {
         if (!hasPresetApplySelection) {
           setFontApplyStatus('fontApplyOptionsRequired');
           return;
         }
         if (applyPresetFontFamily) await ensurePresetFontsReady();
         const style = buildPresetTextStyle();
-        const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, style);
+        const applied = applyStyleToSelection(style);
         if (applied) {
-          setSelectedRegion(prev => ({
-            ...prev,
-            ...buildSelectedRegionPresetPatch()
-          }));
           setFontApplyStatus('fontAppliedSelected');
         } else {
           setFontApplyStatus('fontApplyNoSelection');
@@ -714,11 +759,11 @@ function App() {
   };
 
   const handleCopySelectedTextFormat = () => {
-    if (!selectedRegion) {
+    if (!singleSelectedRegion) {
       setFontApplyStatus('fontApplyNoSelection');
       return;
     }
-    const nextFormat = buildCopiedTextFormat(selectedRegion);
+    const nextFormat = buildCopiedTextFormat(singleSelectedRegion);
     if (!nextFormat) {
       setFontApplyStatus('fontApplyNoSelection');
       return;
@@ -732,28 +777,16 @@ function App() {
       setFontApplyStatus('copiedFormatMissing');
       return;
     }
-    if (!canvasRef.current || !selectedRegion) {
+    if (!canvasRef.current || selectedRegionCount === 0) {
       setFontApplyStatus('fontApplyNoSelection');
       return;
     }
     const { sourceText: _sourceText, ...style } = copiedTextFormat;
-    const applied = canvasRef.current.updateRegionStyle(selectedRegion.id, style);
+    const applied = applyStyleToSelection(style);
     if (!applied) {
       setFontApplyStatus('fontApplyNoSelection');
       return;
     }
-    setSelectedRegion(prev => prev ? ({
-      ...prev,
-      fill: style.fill,
-      fontFamily: style.fontFamily,
-      latinFontFamily: style.latinFontFamily,
-      cjkFontFamily: style.cjkFontFamily,
-      fontSize: style.fontSize,
-      isBold: style.fontWeight === 'bold',
-      isItalic: style.fontStyle === 'italic',
-      lineHeight: style.lineHeight,
-      charSpacing: style.charSpacing
-    }) : prev);
     setFontApplyStatus('copiedFormatApplied');
   };
 
@@ -946,7 +979,16 @@ function App() {
   }, [hasCopiedRegion, imageLoaded, t]);
 
   const appBasePath = import.meta.env.BASE_URL || '/';
-  const manualHref = `${appBasePath.endsWith('/') ? appBasePath : `${appBasePath}/`}docs/user-manual.html?lang=${DOCS_LANGUAGE_CODES[uiLanguage] || 'en'}`;
+  const docsLang = DOCS_LANGUAGE_CODES[uiLanguage] || 'en';
+  const docsBase = `${appBasePath.endsWith('/') ? appBasePath : `${appBasePath}/`}docs`;
+  const manualHref = `${docsBase}/user-manual.html?lang=${docsLang}`;
+  const privacyHref = `${docsBase}/${isIOSLikeBrowser
+    ? 'privacy-ios.html'
+    : isAndroidBrowser
+      ? 'privacy-android.html'
+      : isMacDesktopBrowser
+        ? 'privacy-macos.html'
+        : 'privacy-windows.html'}?lang=${docsLang}`;
 
   return (
     <div className="app-container">
@@ -994,7 +1036,11 @@ function App() {
               <div className="dropdown-menu" onClick={() => setOpenMenu(null)}>
                 <div className={`dropdown-item ${!imageLoaded ? 'disabled' : ''}`} onClick={handleInsertText}>{t('insertText')}</div>
                 <div className="dropdown-separator"></div>
-                <div className={`dropdown-item ${!imageLoaded || !selectedRegion ? 'disabled' : ''}`} onClick={imageLoaded && selectedRegion ? handleApplyPresetFontSelected : null}>{t('applyFont')}</div>
+                <div className={`dropdown-item ${layers.length === 0 ? 'disabled' : ''}`} onClick={layers.length ? handleSelectAllLayers : null}>{t('selectAllBlocks')}</div>
+                <div className={`dropdown-item ${selectedRegionCount === 0 ? 'disabled' : ''}`} onClick={selectedRegionCount ? handleClearLayerSelection : null}>{t('clearSelection')}</div>
+                <div className="dropdown-separator"></div>
+                <div className={`dropdown-item ${!singleSelectedRegion ? 'disabled' : ''}`} onClick={singleSelectedRegion ? handleCopySelectedTextFormat : null}>{t('copySelectedFormat')}</div>
+                <div className={`dropdown-item ${!copiedTextFormat || selectedRegionCount === 0 ? 'disabled' : ''}`} onClick={copiedTextFormat && selectedRegionCount ? handleApplyCopiedTextFormatToSelected : null}>{t('applyCopiedFormatSelected')}</div>
                 <div className="dropdown-separator"></div>
                 <div className={`dropdown-item ${!canUndo ? 'disabled' : ''}`} onClick={canUndo ? () => canvasRef.current?.undo() : null}>{t('undo')}</div>
                 <div className={`dropdown-item ${!canRedo ? 'disabled' : ''}`} onClick={canRedo ? () => canvasRef.current?.redo() : null}>{t('redo')}</div>
@@ -1032,6 +1078,9 @@ function App() {
 
             <a className="menu-item menu-link" href={manualHref} target="_blank" rel="noopener noreferrer">
               📖 {t('manualGuide')}
+            </a>
+            <a className="menu-item menu-link" href={privacyHref} target="_blank" rel="noopener noreferrer">
+              🛡️ {t('privacyPolicy')}
             </a>
           </div>
           {sourceFileName && (
@@ -1097,16 +1146,24 @@ function App() {
           </div>
 
           <h2 className="panel-title" style={{ marginTop: '16px' }}>{t('layers')}</h2>
+          <div className="layer-toolbar">
+            <button type="button" className="btn btn-secondary" onClick={handleSelectAllLayers} disabled={layers.length === 0}>
+              {t('selectAllBlocks')}
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={handleClearLayerSelection} disabled={selectedRegionCount === 0}>
+              {t('clearSelection')}
+            </button>
+          </div>
           <div style={{ flex: 1, overflowY: 'auto' }}>
             {layers.map(layer => (
               <div
                 key={layer.id}
-                className={`layer-item ${selectedRegion?.id === layer.id ? 'active' : ''}`}
-                onClick={() => {
-                  if (canvasRef.current) canvasRef.current.selectRegion(layer.id);
+                className={`layer-item ${selectedRegionIds.includes(layer.id) ? 'active' : ''}`}
+                onClick={(event) => {
+                  handleLayerItemClick(layer.id, event);
                 }}
               >
-                <span>📄</span>
+                <span>{selectedRegionIds.includes(layer.id) ? '☑' : '☐'}</span>
                 <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '180px' }}>
                   {layer.text || t('emptyLayer')}
                 </span>
@@ -1131,7 +1188,8 @@ function App() {
             enableAiInpaint={enableAiInpaint}
             autoRunOcr={autoRunOcr}
             onRegionalOcrComplete={() => setIsRegionalOcrActive(false)}
-            onRegionSelect={setSelectedRegion}
+            onRegionSelect={(region) => handleLayerSelectionChange(region ? [region] : [])}
+            onSelectionChange={handleLayerSelectionChange}
             onLayersUpdate={setLayers}
             onSourceFileNameChange={setSourceFileName}
             onImageLoaded={(loaded, details = {}) => {
@@ -1236,101 +1294,59 @@ function App() {
         <aside className="sidebar right-sidebar inspector-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
           <div className="inspector-header">
             <div>
-              <h2 className="panel-title">{t('formatting')}</h2>
+              <h2 className="panel-title">{t('currentFormat')}</h2>
               <p className="inspector-header-copy">
-                {selectedRegion
-                  ? (selectedRegion.text?.trim() || t('emptyLayer'))
-                  : t('placeholder')}
+                {activeSelectionLabel}
               </p>
             </div>
-            {selectedRegionMeta && (
-              <div className="inspector-meta-pill">
-                {selectedRegionMeta}
-              </div>
-            )}
+            <div className="inspector-meta-pill">
+              {selectedRegionCount > 0
+                ? t('selectedBlocks').replace('{count}', String(selectedRegionCount))
+                : t('placeholder')}
+            </div>
           </div>
 
-          <section className={`inspector-card ${selectedRegion ? 'is-active' : 'is-idle'}`}>
+          <section className="inspector-card selection-tools-card">
             <div className="inspector-card-header">
               <div>
-                <h3 className="inspector-card-title">{t('editContent')}</h3>
+                <h3 className="inspector-card-title">{t('selectionTools')}</h3>
+                <p className="inspector-card-description">{t('selectionToolsHelp')}</p>
+              </div>
+            </div>
+            <div className="selection-summary-row">
+              <div className="selection-summary-count">
+                {selectedRegionCount > 0
+                  ? t('selectedBlocks').replace('{count}', String(selectedRegionCount))
+                  : t('placeholder')}
+              </div>
+            </div>
+            <div className="inspector-help-text">{t('selectionToolsHint')}</div>
+          </section>
+
+          <section className={`inspector-card ${selectedRegionCount > 0 ? 'is-active' : 'is-idle'}`}>
+            <div className="inspector-card-header">
+              <div>
+                <h3 className="inspector-card-title">{t('currentFormat')}</h3>
                 <p className="inspector-card-description">
-                  {selectedRegion ? (selectedRegionMeta || t('placeholderActive')) : t('placeholder')}
+                  {selectedRegionCount > 1 ? t('batchFormatHint') : t('singleFormatHint')}
                 </p>
               </div>
             </div>
 
-            <textarea
-              className="inspector-textarea"
-              value={selectedRegion?.text || ''}
-              placeholder={selectedRegion ? t('placeholderActive') : t('placeholder')}
-              disabled={!selectedRegion}
-              onChange={handleSelectedRegionTextChange}
-            />
-
-            <div className="ai-operation-row">
-              <div className="ai-operation-item">
-                <button
-                  className="btn btn-secondary"
-                  disabled={!selectedRegion || isLoadingLLM}
-                  onClick={handleFixText}
-                >
-                  {t('fixText')}
-                </button>
-                <button
-                  type="button"
-                  className="ai-help-icon"
-                  aria-label={t('fixTextHelp')}
-                  title={t('fixTextHelp')}
-                  data-tooltip={t('fixTextHelp')}
-                >
-                  ⓘ
-                </button>
-              </div>
-              <div className="ai-operation-item">
-                <button
-                  className="btn btn-secondary"
-                  disabled={!selectedRegion || isLoadingLLM}
-                  onClick={handleExtractEntities}
-                >
-                  {t('extract')}
-                </button>
-                <button
-                  type="button"
-                  className="ai-help-icon"
-                  aria-label={t('extractHelp')}
-                  title={t('extractHelp')}
-                  data-tooltip={t('extractHelp')}
-                >
-                  ⓘ
-                </button>
-              </div>
-            </div>
-            {llmProgress && (
-              <div className="inspector-inline-status">
-                💡 {llmProgress}
-              </div>
-            )}
-          </section>
-
-          <section className="inspector-card">
-            <div className="inspector-card-header">
-              <div>
-                <h3 className="inspector-card-title">{t('formatting')}</h3>
-                <p className="inspector-card-description">{t('color')}</p>
-              </div>
-            </div>
-
             <div className="color-presets">
-              {['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'].map(color => (
+              {colorPresetColors.map((color) => (
                 <button
                   key={color}
                   className="color-btn"
-                  style={{ backgroundColor: color, border: selectedRegion?.fill === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)' }}
-                  disabled={!selectedRegion}
+                  title={color}
+                  style={{
+                    backgroundColor: color,
+                    border: selectedRegionCount === 1 && selectedRegion?.fill?.toUpperCase?.() === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)'
+                  }}
+                  disabled={selectedRegionCount === 0}
                   onClick={() => {
-                    setSelectedRegion(prev => ({...prev, fill: color}));
-                    canvasRef.current?.updateRegionStyle(selectedRegion.id, { fill: color });
+                    rememberColorPreset(color);
+                    applyStyleToSelection({ fill: color });
                   }}
                 />
               ))}
@@ -1340,21 +1356,21 @@ function App() {
                 style={{
                   background: 'linear-gradient(45deg, red, orange, yellow, green, blue, purple)',
                   display: 'inline-block',
-                  cursor: selectedRegion ? 'pointer' : 'not-allowed',
+                  cursor: selectedRegionCount ? 'pointer' : 'not-allowed',
                   position: 'relative',
-                  opacity: selectedRegion ? 1 : 0.5
+                  opacity: selectedRegionCount ? 1 : 0.5
                 }}
                 title={t('customColor')}
               >
                 <input
                   type="color"
-                  style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegion ? 'pointer' : 'not-allowed' }}
-                  disabled={!selectedRegion}
-                  value={selectedRegion?.fill || '#000000'}
+                  style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegionCount ? 'pointer' : 'not-allowed' }}
+                  disabled={!selectedRegionCount}
+                  value={(selectedRegion?.fill || '#000000').toUpperCase()}
                   onChange={(e) => {
-                    const color = e.target.value;
-                    setSelectedRegion(prev => ({...prev, fill: color}));
-                    canvasRef.current?.updateRegionStyle(selectedRegion.id, { fill: color });
+                    const color = e.target.value.toUpperCase();
+                    rememberColorPreset(color);
+                    applyStyleToSelection({ fill: color });
                   }}
                 />
               </label>
@@ -1410,627 +1426,653 @@ function App() {
               </div>
             </div>
 
-            <div className="font-format-clipboard">
-              <div className="font-format-clipboard-header">
-                <strong>{t('copiedFormatSection')}</strong>
-                {copiedTextFormat ? (
-                  <span>{t('copiedFormatLoaded')}</span>
-                ) : (
-                  <span>{t('copiedFormatEmpty')}</span>
-                )}
+            <div className="font-format-actions">
+              <div className="inspector-help-text">
+                {fontApplyStatus ? t(fontApplyStatus) : (copiedTextFormat ? t('copiedFormatLoaded') : t('copiedFormatEmpty'))}
               </div>
-              <div className="font-format-clipboard-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={!selectedRegion}
-                  onClick={handleCopySelectedTextFormat}
-                >
-                  {t('copySelectedFormat')}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={!selectedRegion || !copiedTextFormat}
-                  onClick={handleApplyCopiedTextFormatToSelected}
-                >
-                  {t('applyCopiedFormatSelected')}
-                </button>
-              </div>
-              {copiedTextFormat?.sourceText && (
-                <div className="font-format-clipboard-preview">
-                  {copiedTextFormat.sourceText}
-                </div>
-              )}
             </div>
           </section>
 
-          <section className="inspector-card">
-            <div className="inspector-card-header">
-              <div>
-                <h3 className="inspector-card-title">{t('presetFonts')}</h3>
-                <p className="inspector-card-description">{t('applyPresetFontFamilyHelp')}</p>
-              </div>
-            </div>
-
-            <div className="inspector-field-grid">
-              <label className="inspector-field">
-                <span>{t('engFont')}</span>
-                <select
-                  value={englishFont}
-                  onChange={(e) => {
-                    setEnglishFont(e.target.value);
-                    setFontApplyStatus('');
-                  }}
-                  className="inspector-select"
-                >
-                  {availableFontFamilies.map((family) => (
-                    <option value={family} key={`english-${family}`}>{family}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="inspector-field">
-                <span>{t('zhFont')}</span>
-                <select
-                  value={chineseFont}
-                  onChange={(e) => {
-                    setChineseFont(e.target.value);
-                    setFontApplyStatus('');
-                  }}
-                  className="inspector-select"
-                >
-                  {sortedChineseFontOptions.map((family) => (
-                    <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="font-apply-options">
-              <label className="font-apply-option">
-                <input
-                  type="checkbox"
-                  checked={applyPresetFontFamily}
-                  onChange={(e) => {
-                    setApplyPresetFontFamily(e.target.checked);
-                    localStorage.setItem('apply_preset_font_family', String(e.target.checked));
-                    setFontApplyStatus('');
-                  }}
-                />
-                <span>
-                  <strong>{t('applyPresetFontFamily')}</strong>
-                  <small>{t('applyPresetFontFamilyHelp')}</small>
-                </span>
-              </label>
-              <label className="font-apply-option">
-                <input
-                  type="checkbox"
-                  checked={applyPresetTypography}
-                  onChange={(e) => {
-                    setApplyPresetTypography(e.target.checked);
-                    localStorage.setItem('apply_preset_typography', String(e.target.checked));
-                    setFontApplyStatus('');
-                  }}
-                />
-                <span>
-                  <strong>{t('applyPresetTypography')}</strong>
-                  <small>{t('applyPresetTypographyHelp')}</small>
-                </span>
-              </label>
-            </div>
-
-            <div className="font-apply-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!selectedRegion || !hasPresetApplySelection}
-                onClick={handleApplyPresetFontSelected}
-              >
-                {t('applyStyleSelected')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                disabled={!imageLoaded || !hasPresetApplySelection}
-                onClick={handleApplyDefaultFontAll}
-              >
-                {t('applyStyleAll')}
-              </button>
-            </div>
-
-            <div className="inspector-toggle-list">
-              <label className="inspector-inline-toggle">
-                <input
-                  type="checkbox"
-                  id="forcePresetFontCheckbox"
-                  checked={forcePresetFont}
-                  onChange={(e) => {
-                    setForcePresetFont(e.target.checked);
-                    localStorage.setItem('force_preset_font', String(e.target.checked));
-                  }}
-                />
-                <span>{t('forceFont')}</span>
-              </label>
-
-              <label className="inspector-inline-toggle">
-                <input
-                  type="checkbox"
-                  id="snapAlignmentEnabledCheckbox"
-                  checked={snapAlignmentEnabled}
-                  onChange={(e) => {
-                    setSnapAlignmentEnabled(e.target.checked);
-                    localStorage.setItem('snap_alignment_enabled', String(e.target.checked));
-                  }}
-                />
-                <span>{t('snapAlignmentEnabled')}</span>
-              </label>
-            </div>
-            <div className="inspector-help-text">{t('snapAlignmentHelp')}</div>
-
-            <details className="inspector-collapsible">
-              <summary>{t('presetFontWorkflowTitle')}</summary>
-              <div className="inspector-collapsible-body">
-                <div className="inspector-help-text">{t('localFontsHint')}</div>
-                <ol>
-                  <li>{t('presetFontWorkflowStep1')}</li>
-                  <li>{t('presetFontWorkflowStep2')}</li>
-                  <li>{t('presetFontWorkflowStep3')}</li>
-                  <li>{t('presetFontWorkflowStep4')}</li>
-                </ol>
-                <button
-                  type="button"
-                  className="btn btn-secondary inspector-full-button"
-                  onClick={handleLoadLocalFonts}
-                >
-                  {t('loadDeviceFonts')} ({availableFontFamilies.length})
-                </button>
-              </div>
-            </details>
-
-            {fontLoadStatus && (
-              <div className="font-load-status">
-                {t(fontLoadStatus)}
-              </div>
-            )}
-            {fontApplyStatus && (
-              <div className="font-load-status">
-                {t(fontApplyStatus)}
-              </div>
-            )}
-          </section>
-
-          <section className="inspector-card">
-            <div className="inspector-card-header">
-              <div>
-                <h3 className="inspector-card-title">{t('ops')}</h3>
-                <p className="inspector-card-description">{t('regionalOcr')}</p>
-              </div>
-            </div>
-
-            <div className="inspector-action-grid">
-            <button
-              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'ocr' ? 'active' : ''}`}
-              disabled={!imageLoaded || ocrActionsBlocked}
-              title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
-              onClick={() => handleRegionTool('ocr')}
-            >
-              {isRegionalOcrActive && regionalAction === 'ocr' ? t('drawingMode') : t('regionalOcr')}
-            </button>
-            <button
-              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'erase' ? 'active' : ''}`}
-              disabled={!imageLoaded}
-              onClick={() => handleRegionTool('erase')}
-            >
-              {isRegionalOcrActive && regionalAction === 'erase' ? t('eraseDrawingMode') : t('eraseRegion')}
-            </button>
-            <button
-              className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'copy' ? 'active' : ''}`}
-              disabled={!imageLoaded}
-              title="Ctrl/Cmd+C"
-              onClick={() => handleRegionTool('copy')}
-            >
-              {isRegionalOcrActive && regionalAction === 'copy' ? t('copyRegionMode') : t('copyRegion')}
-            </button>
-            <button
-              className={`btn btn-secondary ${isPasteModeActive ? 'active' : ''}`}
-              disabled={!imageLoaded || !hasCopiedRegion}
-              title="Ctrl/Cmd+V"
-              onClick={handlePasteRegion}
-            >
-              {isPasteModeActive ? t('pasteRegionMode') : t('pasteRegion')}
-            </button>
-            <button
-              className="btn btn-secondary"
-              disabled={!selectedRegion}
-              onClick={handleRemoveText}
-            >
-              {t('removeText')}
-            </button>
-            </div>
-            {ocrEngineBlockReason && (
-              <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
-            )}
-          </section>
-
-          <section className="inspector-card">
-            <div className="inspector-card-header">
-              <div>
-                <h3 className="inspector-card-title">{t('ocrEngine')}</h3>
-                <p className="inspector-card-description">{t('nativeOcrPrimary')}</p>
-              </div>
-            </div>
-            <div className="ocr-engine-panel">
-            {ocrEngine !== 'custom' && (
-              <div className="fallback-active-notice">
-                <span>{t('fallbackEngineActive')}</span>
-                <button className="btn btn-secondary" onClick={() => handleOcrEngineChange('custom')}>
-                  {t('switchToNativeOcr')}
-                </button>
-              </div>
-            )}
-
-            <div className={`native-ocr-card ${ocrEngine === 'custom' ? 'active' : ''}`}>
-              <div className="native-ocr-header">
-                <div>
-                  <strong>{t('nativeOcrPrimary')}</strong>
-                  <div>{t('nativeOcrMainDescription')}</div>
-                </div>
-                <button
-                  className={`btn btn-secondary ${ocrEngine === 'custom' ? 'active' : ''}`}
-                  onClick={() => handleOcrEngineChange('custom')}
-                >
-                  {ocrEngine === 'custom' ? t('nativeOcrActive') : t('useNativeOcr')}
-                </button>
-              </div>
-
-              {!mobileNativeOcrAvailable && (
-                <>
-                  <span style={{ fontSize: '11px', opacity: 0.8 }}>
-                    {t('localServerUrl')}:
-                  </span>
-                  <input
-                    type="text"
-                    value={localServerUrl}
-                    onChange={(e) => handleLocalServerUrlChange(e.target.value)}
-                    placeholder="http://127.0.0.1:5001/ocr"
-                    style={{
-                      background: '#111111',
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '4px',
-                      padding: '6px 8px',
-                      fontSize: '12px',
-                      width: '100%'
-                    }}
-                  />
-                </>
-              )}
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
-                <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: localServerStatus === 'connected' ? '#4ADE80' : localServerStatus === 'checking' ? '#FBBF24' : '#EF4444',
-                    display: 'inline-block'
-                  }} />
-                  <span style={{ opacity: 0.85 }}>
-                    {localServerStatus === 'connected'
-                      ? `${t('connected')} (${localServerEngine || 'OCR'})`
-                      : localServerStatus === 'checking'
-                      ? t('checking')
-                      : t('serverNotFound')}
-                  </span>
-                </span>
-                <button
-                  onClick={testLocalServerConnection}
-                  disabled={mobileNativeOcrAvailable}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '4px',
-                    color: '#fff',
-                    padding: '2px 6px',
-                    fontSize: '10px',
-                    cursor: mobileNativeOcrAvailable ? 'default' : 'pointer',
-                    opacity: mobileNativeOcrAvailable ? 0.55 : 1
-                  }}
-                >
-                  {t('testConnection')}
-                </button>
-              </div>
-              {isWindowsBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
-                <div className="native-ocr-warning">
-                  <div>{t('windowsServerStartHint')}</div>
+          <details className="inspector-card inspector-collapsible">
+            <summary>{t('aiOps')}</summary>
+            <div className="inspector-collapsible-body">
+              <div className="inspector-help-text">{t('selectionAiDescription')}</div>
+              <div className="ai-operation-row">
+                <div className="ai-operation-item">
+                  <button
+                    className="btn btn-secondary"
+                    disabled={!singleSelectedRegion || isLoadingLLM}
+                    onClick={handleFixText}
+                  >
+                    {t('fixText')}
+                  </button>
                   <button
                     type="button"
-                    className="windows-ocr-download"
-                    onClick={handleDownloadWindowsOcrStarter}
+                    className="ai-help-icon"
+                    aria-label={t('fixTextHelp')}
+                    title={t('fixTextHelp')}
+                    data-tooltip={t('fixTextHelp')}
                   >
-                    ⬇ {t('downloadWindowsOcrStarter')}
+                    ⓘ
                   </button>
-                  <details className="windows-ocr-help">
-                    <summary>{t('windowsTroubleshootingTitle')}</summary>
-                    <ol>
-                      <li>{t('windowsTroubleshootingDownload')}</li>
-                      <li>
-                        {t('windowsTroubleshootingUnblock')}
-                        <code>cd /d "%USERPROFILE%\Downloads"</code>
-                        <code>powershell -NoProfile -Command "Unblock-File -Path '.\setup_and_run_ocr.bat'"</code>
-                      </li>
-                      <li>
-                        {t('windowsTroubleshootingRun')}
-                        <code>setup_and_run_ocr.bat</code>
-                      </li>
-                      <li>{t('windowsTroubleshootingReady')}</li>
-                      <li>
-                        {t('windowsTroubleshootingPython')}
-                        <code>winget install -e --id Python.Python.3.12</code>
-                      </li>
-                      <li>
-                        {t('windowsTroubleshootingVerify')}
-                        <code>powershell -NoProfile -Command "Invoke-RestMethod http://127.0.0.1:5001/status"</code>
-                      </li>
-                      <li>{t('windowsTroubleshootingBackground')}</li>
-                      <li>{t('windowsTroubleshootingFiles')}</li>
-                    </ol>
-                    <a href={WINDOWS_PROJECT_ZIP_URL} target="_blank" rel="noopener noreferrer">
-                      {t('downloadWindowsProjectZip')}
-                    </a>
-                  </details>
                 </div>
-              )}
-              {isMacDesktopBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
-                <div className="native-ocr-warning">
-                  <div>{t('macServerStartHint')}</div>
+                <div className="ai-operation-item">
+                  <button
+                    className="btn btn-secondary"
+                    disabled={!singleSelectedRegion || isLoadingLLM}
+                    onClick={handleExtractEntities}
+                  >
+                    {t('extract')}
+                  </button>
                   <button
                     type="button"
-                    className="windows-ocr-download"
-                    onClick={handleCopyMacOcrInstallCommand}
+                    className="ai-help-icon"
+                    aria-label={t('extractHelp')}
+                    title={t('extractHelp')}
+                    data-tooltip={t('extractHelp')}
                   >
-                    📋 {t('copyMacOcrInstallCommand')}
+                    ⓘ
                   </button>
-                  <details className="windows-ocr-help">
-                    <summary>{t('macTroubleshootingTitle')}</summary>
-                    <ol>
-                      <li>{t('macTroubleshootingDownload')}</li>
-                      <li>
-                        {t('macTroubleshootingRun')}
-                        <code>{MACOS_OCR_INSTALL_COMMAND}</code>
-                      </li>
-                      <li>{t('macTroubleshootingPassword')}</li>
-                      <li>{t('macTroubleshootingReady')}</li>
-                      <li>
-                        {t('macTroubleshootingVerify')}
-                        <code>curl http://127.0.0.1:5001/status</code>
-                      </li>
-                      <li>{t('macTroubleshootingFiles')}</li>
-                    </ol>
-                  </details>
+                </div>
+              </div>
+              {llmProgress && (
+                <div className="inspector-inline-status">
+                  💡 {llmProgress}
                 </div>
               )}
-              {isMobileWebBrowser && localServerStatus === 'disconnected' && (
-                <div className="native-ocr-warning">
-                  <div>{isIOSLikeBrowser ? t('ipadWebNativeOcrHint') : t('mobileWebNativeOcrHint')}</div>
-                  <div className="native-ocr-warning-actions">
-                    <button
-                      type="button"
-                      onClick={() => setOcrEngine('gemini')}
-                    >
-                      {t('switchToCloudOcr')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOcrEngine('local')}
-                    >
-                      {t('switchToTesseractOcr')}
-                    </button>
-                  </div>
-                </div>
+              {selectedRegionCount > 1 && (
+                <div className="inspector-help-text">{t('aiSingleSelectionOnly')}</div>
               )}
+            </div>
+          </details>
 
-              <details className="native-ocr-purpose">
-                <summary>{mobileNativeOcrAvailable ? t('onDeviceOcrPurpose') : t('localServerPurpose')}</summary>
-                <div className="native-ocr-purpose-body">
-                  <div>
-                    {mobileNativeOcrAvailable ? t('onDeviceOcrPurposeDescription') : t('localServerPurposeDescription')}
+          <details className="inspector-card inspector-collapsible">
+            <summary>{t('presetFonts')}</summary>
+            <div className="inspector-collapsible-body">
+              <div className="inspector-help-text">{t('applyPresetFontFamilyHelp')}</div>
+              <details className="inspector-collapsible" open>
+                <summary>{t('presetFontFamilyGroup')}</summary>
+                <div className="inspector-collapsible-body">
+                  <div className="inspector-field-grid">
+                    <label className="inspector-field">
+                      <span>{t('engFont')}</span>
+                      <select
+                        value={englishFont}
+                        onChange={(e) => {
+                          setEnglishFont(e.target.value);
+                          setFontApplyStatus('');
+                        }}
+                        className="inspector-select"
+                      >
+                        {availableFontFamilies.map((family) => (
+                          <option value={family} key={`english-${family}`}>{family}</option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="inspector-field">
+                      <span>{t('zhFont')}</span>
+                      <select
+                        value={chineseFont}
+                        onChange={(e) => {
+                          setChineseFont(e.target.value);
+                          setFontApplyStatus('');
+                        }}
+                        className="inspector-select"
+                      >
+                        {sortedChineseFontOptions.map((family) => (
+                          <option value={family} key={`cjk-${family}`}>{getChineseFontLabel(family)}</option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
-                  <div className="native-ocr-warning">
-                    {mobileNativeOcrAvailable ? t('onDeviceOcrOfflineNote') : t('mobileNativeOcrNote')}
-                  </div>
-                  <div className="native-ocr-current">
-                    {mobileNativeOcrAvailable
-                      ? `${t('onDeviceOcrCurrentEngine')} ${localServerEngine || getNativeOcrEngineLabel()}`
-                      : t('localServerCurrentDescription')}
-                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary inspector-full-button"
+                    onClick={handleLoadLocalFonts}
+                  >
+                    {t('loadDeviceFonts')} ({availableFontFamilies.length})
+                  </button>
                 </div>
               </details>
-            </div>
 
-            <label className="ai-inpaint-option">
-              <input
-                type="checkbox"
-                checked={autoRunOcr}
-                onChange={(event) => {
-                  const enabled = event.target.checked;
-                  setAutoRunOcr(enabled);
-                  localStorage.setItem('auto_run_ocr', String(enabled));
-                }}
-              />
-              <span>
-                <strong>{t('autoRunOcr')}</strong>
-                <small>{t('autoRunOcrHelp')}</small>
-              </span>
-            </label>
+              <details className="inspector-collapsible">
+                <summary>{t('presetFontStyleGroup')}</summary>
+                <div className="inspector-collapsible-body">
+                  <div className="font-apply-options">
+                    <label className="font-apply-option">
+                      <input
+                        type="checkbox"
+                        checked={applyPresetFontFamily}
+                        onChange={(e) => {
+                          setApplyPresetFontFamily(e.target.checked);
+                          localStorage.setItem('apply_preset_font_family', String(e.target.checked));
+                          setFontApplyStatus('');
+                        }}
+                      />
+                      <span>
+                        <strong>{t('applyPresetFontFamily')}</strong>
+                        <small>{t('applyPresetFontFamilyHelp')}</small>
+                      </span>
+                    </label>
+                    <label className="font-apply-option">
+                      <input
+                        type="checkbox"
+                        checked={applyPresetTypography}
+                        onChange={(e) => {
+                          setApplyPresetTypography(e.target.checked);
+                          localStorage.setItem('apply_preset_typography', String(e.target.checked));
+                          setFontApplyStatus('');
+                        }}
+                      />
+                      <span>
+                        <strong>{t('applyPresetTypography')}</strong>
+                        <small>{t('applyPresetTypographyHelp')}</small>
+                      </span>
+                    </label>
+                  </div>
 
-            <label className="ai-inpaint-option">
-              <input
-                type="checkbox"
-                checked={enableAiInpaint}
-                onChange={(event) => {
-                  const enabled = event.target.checked;
-                  setEnableAiInpaint(enabled);
-                  localStorage.setItem('enable_ai_inpaint', String(enabled));
-                  if (!enabled) {
-                    cancelLamaOperation();
-                    setAiStatus(null);
-                  }
-                }}
-              />
-              <span>
-                <strong>{t('enableAiInpaint')}</strong>
-                <small>{t('enableAiInpaintHelp')}</small>
-              </span>
-            </label>
-            <div className={`ai-model-storage ${aiModelStorage}`} role="status">
-              <span>{t(`aiModelStorage_${aiModelStorage}`)}</span>
-              {aiModelStorage === 'missing' && (
-                <button type="button" className="btn-secondary" onClick={downloadAiInpaintModel} disabled={isPreparingAiModel}>
-                  {isPreparingAiModel ? t('aiModelDownloading') : t('downloadAndEnableAiModel')}
-                </button>
-              )}
-              {aiModelStorage === 'unavailable' && (
-                <button type="button" className="btn-secondary" onClick={refreshAiModelStorage}>{t('checkAgain')}</button>
-              )}
-            </div>
-            <div className={`ai-inpaint-run-status ${aiStatus?.phase || 'idle'}`} role="status" aria-live="polite">
-              <strong>{t('aiCurrentImageStatus')}</strong>
-              <span>{aiStatus?.message || (enableAiInpaint ? t('aiWaitingForImage') : t('aiInferenceDisabled'))}</span>
-            </div>
-            <details className="ai-inpaint-guide">
-              <summary>{t('aiInpaintGuideTitle')}</summary>
-              <ol>
-                <li>{t('aiInpaintGuideStep1')}</li>
-                <li>{t('aiInpaintGuideStep2')}</li>
-                <li>{t('aiInpaintGuideStep3')}</li>
-                <li>{t('aiInpaintGuideStep4')}</li>
-              </ol>
-            </details>
+                  <div className="font-apply-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={!selectedRegionCount || !hasPresetApplySelection}
+                      onClick={handleApplyPresetFontSelected}
+                    >
+                      {t('applyStyleSelected')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      disabled={!imageLoaded || !hasPresetApplySelection}
+                      onClick={handleApplyDefaultFontAll}
+                    >
+                      {t('applyStyleAll')}
+                    </button>
+                  </div>
 
-            <button
-              className="btn btn-primary"
-              style={{ width: '100%', padding: '8px', fontSize: '12px', fontWeight: 'bold' }}
-              disabled={!imageLoaded || isOcrProcessing || ocrActionsBlocked}
-              title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
-              onClick={() => canvasRef.current?.rerunOcr()}
-            >
-              {isOcrProcessing ? t('recognizing') : t('rerunOcr')}
-            </button>
-            {ocrEngineBlockReason && (
-              <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
-            )}
+                  <div className="inspector-toggle-list">
+                    <label className="inspector-inline-toggle">
+                      <input
+                        type="checkbox"
+                        id="forcePresetFontCheckbox"
+                        checked={forcePresetFont}
+                        onChange={(e) => {
+                          setForcePresetFont(e.target.checked);
+                          localStorage.setItem('force_preset_font', String(e.target.checked));
+                        }}
+                      />
+                      <span>{t('forceFont')}</span>
+                    </label>
 
-            <details className="fallback-engine-panel">
-              <summary>{t('fallbackEngines')}</summary>
-              <div className="fallback-engine-description">{t('fallbackEnginesDescription')}</div>
-              <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
-                <button
-                  className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
-                  style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                  title={t('localEngineHelp')}
-                  onClick={() => handleOcrEngineChange('local')}
-                >
-                  {t('localEngine')}
-                </button>
-                <button
-                  className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
-                  style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
-                  title={t('cloudEngineHelp')}
-                  onClick={() => handleOcrEngineChange('cloud')}
-                >
-                  {t('cloudEngine')}
-                </button>
-              </div>
+                    <label className="inspector-inline-toggle">
+                      <input
+                        type="checkbox"
+                        id="snapAlignmentEnabledCheckbox"
+                        checked={snapAlignmentEnabled}
+                        onChange={(e) => {
+                          setSnapAlignmentEnabled(e.target.checked);
+                          localStorage.setItem('snap_alignment_enabled', String(e.target.checked));
+                        }}
+                      />
+                      <span>{t('snapAlignmentEnabled')}</span>
+                    </label>
+                  </div>
+                  <div className="inspector-help-text">{t('snapAlignmentHelp')}</div>
+                </div>
+              </details>
 
-              {ocrEngine === 'cloud' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
-                  <span style={{ fontSize: '11px', opacity: 0.8 }}>{t('geminiKey')}:</span>
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={geminiApiKey}
-                    onChange={(e) => handleGeminiApiKeyChange(e.target.value)}
-                    placeholder="AI_zaSy..."
-                    style={{
-                      background: '#111111',
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '4px',
-                      padding: '6px 8px',
-                      fontSize: '12px',
-                      width: '100%'
-                    }}
-                  />
+              <details className="inspector-collapsible">
+                <summary>{t('presetFontWorkflowTitle')}</summary>
+                <div className="inspector-collapsible-body">
+                  <div className="inspector-help-text">{t('localFontsHint')}</div>
+                  <ol>
+                    <li>{t('presetFontWorkflowStep1')}</li>
+                    <li>{t('presetFontWorkflowStep2')}</li>
+                    <li>{t('presetFontWorkflowStep3')}</li>
+                    <li>{t('presetFontWorkflowStep4')}</li>
+                  </ol>
+                </div>
+              </details>
 
-                  <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
-                    {t('cloudModel')}:
-                  </span>
-                  <select
-                    value={geminiModel}
-                    onChange={(e) => handleGeminiModelChange(e.target.value)}
-                    style={{
-                      background: '#2D2D2D',
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '4px',
-                      padding: '6px 8px',
-                      fontSize: '12px',
-                      width: '100%',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {!activeGeminiModelOptions.some(model => model.id === geminiModel) && (
-                      <option value={geminiModel}>{geminiModel}</option>
-                    )}
-                    {activeGeminiModelOptions.map(model => (
-                      <option value={model.id} key={model.id}>{model.displayName}</option>
-                    ))}
-                  </select>
-                  <span style={{
-                    fontSize: '10px',
-                    opacity: 0.75,
-                    color: geminiModelListStatus === 'error' ? '#FBBF24' : '#60CDFF'
-                  }}>
-                    {geminiModelListStatus === 'loading' && t('modelListLoading')}
-                    {geminiModelListStatus === 'loaded' && `✓ ${t('modelListLoaded')} (${geminiModelOptions.length})`}
-                    {geminiModelListStatus === 'error' && `⚠ ${t('modelListFailed')}`}
-                  </span>
-
-                  <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
-                    {t('customBaseUrl')}:
-                  </span>
-                  <input
-                    type="text"
-                    value={geminiApiUrl}
-                    onChange={(e) => handleGeminiApiUrlChange(e.target.value)}
-                    placeholder="https://generativelanguage.googleapis.com"
-                    style={{
-                      background: '#111111',
-                      color: '#fff',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '4px',
-                      padding: '6px 8px',
-                      fontSize: '12px',
-                      width: '100%'
-                    }}
-                  />
-
-                  <a
-                    href="https://aistudio.google.com/"
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ fontSize: '11px', color: '#60CDFF', textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}
-                  >
-                    {t('getKeyLink')}
-                  </a>
+              {fontLoadStatus && (
+                <div className="font-load-status">
+                  {t(fontLoadStatus)}
                 </div>
               )}
-            </details>
+              {fontApplyStatus && (
+                <div className="font-load-status">
+                  {t(fontApplyStatus)}
+                </div>
+              )}
             </div>
-          </section>
+          </details>
+
+          <details className="inspector-card inspector-collapsible">
+            <summary>{t('ops')}</summary>
+            <div className="inspector-collapsible-body">
+              <div className="inspector-help-text">{t('regionalOcr')}</div>
+              <div className="inspector-action-grid">
+                <button
+                  className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'ocr' ? 'active' : ''}`}
+                  disabled={!imageLoaded || ocrActionsBlocked}
+                  title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
+                  onClick={() => handleRegionTool('ocr')}
+                >
+                  {isRegionalOcrActive && regionalAction === 'ocr' ? t('drawingMode') : t('regionalOcr')}
+                </button>
+                <button
+                  className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'erase' ? 'active' : ''}`}
+                  disabled={!imageLoaded}
+                  onClick={() => handleRegionTool('erase')}
+                >
+                  {isRegionalOcrActive && regionalAction === 'erase' ? t('eraseDrawingMode') : t('eraseRegion')}
+                </button>
+                <button
+                  className={`btn btn-secondary ${isRegionalOcrActive && regionalAction === 'copy' ? 'active' : ''}`}
+                  disabled={!imageLoaded}
+                  title="Ctrl/Cmd+C"
+                  onClick={() => handleRegionTool('copy')}
+                >
+                  {isRegionalOcrActive && regionalAction === 'copy' ? t('copyRegionMode') : t('copyRegion')}
+                </button>
+                <button
+                  className={`btn btn-secondary ${isPasteModeActive ? 'active' : ''}`}
+                  disabled={!imageLoaded || !hasCopiedRegion}
+                  title="Ctrl/Cmd+V"
+                  onClick={handlePasteRegion}
+                >
+                  {isPasteModeActive ? t('pasteRegionMode') : t('pasteRegion')}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  disabled={!selectedRegionCount}
+                  onClick={handleRemoveText}
+                >
+                  {t('removeText')}
+                </button>
+              </div>
+              {ocrEngineBlockReason && (
+                <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
+              )}
+            </div>
+          </details>
+
+          <details className="inspector-card inspector-collapsible ocr-engine-panel">
+            <summary>{t('ocrEngine')}</summary>
+            <div className="inspector-collapsible-body">
+              <div className="inspector-help-text">{t('nativeOcrPrimary')}</div>
+              {ocrEngine !== 'custom' && (
+                <div className="fallback-active-notice">
+                  <span>{t('fallbackEngineActive')}</span>
+                  <button className="btn btn-secondary" onClick={() => handleOcrEngineChange('custom')}>
+                    {t('switchToNativeOcr')}
+                  </button>
+                </div>
+              )}
+
+              <div className={`native-ocr-card ${ocrEngine === 'custom' ? 'active' : ''}`}>
+                <div className="native-ocr-header">
+                  <div>
+                    <strong>{t('nativeOcrPrimary')}</strong>
+                    <div>{t('nativeOcrMainDescription')}</div>
+                  </div>
+                  <button
+                    className={`btn btn-secondary ${ocrEngine === 'custom' ? 'active' : ''}`}
+                    onClick={() => handleOcrEngineChange('custom')}
+                  >
+                    {ocrEngine === 'custom' ? t('nativeOcrActive') : t('useNativeOcr')}
+                  </button>
+                </div>
+
+                {!mobileNativeOcrAvailable && (
+                  <>
+                    <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                      {t('localServerUrl')}:
+                    </span>
+                    <input
+                      type="text"
+                      value={localServerUrl}
+                      onChange={(e) => handleLocalServerUrlChange(e.target.value)}
+                      placeholder="http://127.0.0.1:5001/ocr"
+                      style={{
+                        background: '#111111',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '4px',
+                        padding: '6px 8px',
+                        fontSize: '12px',
+                        width: '100%'
+                      }}
+                    />
+                  </>
+                )}
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: localServerStatus === 'connected' ? '#4ADE80' : localServerStatus === 'checking' ? '#FBBF24' : '#EF4444',
+                      display: 'inline-block'
+                    }} />
+                    <span style={{ opacity: 0.85 }}>
+                      {localServerStatus === 'connected'
+                        ? `${t('connected')} (${localServerEngine || 'OCR'})`
+                        : localServerStatus === 'checking'
+                        ? t('checking')
+                        : t('serverNotFound')}
+                    </span>
+                  </span>
+                  <button
+                    onClick={testLocalServerConnection}
+                    disabled={mobileNativeOcrAvailable}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      borderRadius: '4px',
+                      color: '#fff',
+                      padding: '2px 6px',
+                      fontSize: '10px',
+                      cursor: mobileNativeOcrAvailable ? 'default' : 'pointer',
+                      opacity: mobileNativeOcrAvailable ? 0.55 : 1
+                    }}
+                  >
+                    {t('testConnection')}
+                  </button>
+                </div>
+                {isWindowsBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
+                  <div className="native-ocr-warning">
+                    <div>{t('windowsServerStartHint')}</div>
+                    <button
+                      type="button"
+                      className="windows-ocr-download"
+                      onClick={handleDownloadWindowsOcrStarter}
+                    >
+                      ⬇ {t('downloadWindowsOcrStarter')}
+                    </button>
+                    <details className="windows-ocr-help">
+                      <summary>{t('windowsTroubleshootingTitle')}</summary>
+                      <ol>
+                        <li>{t('windowsTroubleshootingDownload')}</li>
+                        <li>
+                          {t('windowsTroubleshootingUnblock')}
+                          <code>cd /d "%USERPROFILE%\Downloads"</code>
+                          <code>powershell -NoProfile -Command "Unblock-File -Path '.\setup_and_run_ocr.bat'"</code>
+                        </li>
+                        <li>
+                          {t('windowsTroubleshootingRun')}
+                          <code>setup_and_run_ocr.bat</code>
+                        </li>
+                        <li>{t('windowsTroubleshootingReady')}</li>
+                        <li>
+                          {t('windowsTroubleshootingPython')}
+                          <code>winget install -e --id Python.Python.3.12</code>
+                        </li>
+                        <li>
+                          {t('windowsTroubleshootingVerify')}
+                          <code>powershell -NoProfile -Command "Invoke-RestMethod http://127.0.0.1:5001/status"</code>
+                        </li>
+                        <li>{t('windowsTroubleshootingBackground')}</li>
+                        <li>{t('windowsTroubleshootingFiles')}</li>
+                      </ol>
+                      <a href={WINDOWS_PROJECT_ZIP_URL} target="_blank" rel="noopener noreferrer">
+                        {t('downloadWindowsProjectZip')}
+                      </a>
+                    </details>
+                  </div>
+                )}
+                {isMacDesktopBrowser && !mobileNativeOcrAvailable && localServerStatus === 'disconnected' && (
+                  <div className="native-ocr-warning">
+                    <div>{t('macServerStartHint')}</div>
+                    <button
+                      type="button"
+                      className="windows-ocr-download"
+                      onClick={handleCopyMacOcrInstallCommand}
+                    >
+                      📋 {t('copyMacOcrInstallCommand')}
+                    </button>
+                    <details className="windows-ocr-help">
+                      <summary>{t('macTroubleshootingTitle')}</summary>
+                      <ol>
+                        <li>{t('macTroubleshootingDownload')}</li>
+                        <li>
+                          {t('macTroubleshootingRun')}
+                          <code>{MACOS_OCR_INSTALL_COMMAND}</code>
+                        </li>
+                        <li>{t('macTroubleshootingPassword')}</li>
+                        <li>{t('macTroubleshootingReady')}</li>
+                        <li>
+                          {t('macTroubleshootingVerify')}
+                          <code>curl http://127.0.0.1:5001/status</code>
+                        </li>
+                        <li>{t('macTroubleshootingFiles')}</li>
+                      </ol>
+                    </details>
+                  </div>
+                )}
+                {isMobileWebBrowser && localServerStatus === 'disconnected' && (
+                  <div className="native-ocr-warning">
+                    <div>{isIOSLikeBrowser ? t('ipadWebNativeOcrHint') : t('mobileWebNativeOcrHint')}</div>
+                    <div className="native-ocr-warning-actions">
+                      <button
+                        type="button"
+                        onClick={() => setOcrEngine('gemini')}
+                      >
+                        {t('switchToCloudOcr')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOcrEngine('local')}
+                      >
+                        {t('switchToTesseractOcr')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <details className="native-ocr-purpose">
+                  <summary>{mobileNativeOcrAvailable ? t('onDeviceOcrPurpose') : t('localServerPurpose')}</summary>
+                  <div className="native-ocr-purpose-body">
+                    <div>
+                      {mobileNativeOcrAvailable ? t('onDeviceOcrPurposeDescription') : t('localServerPurposeDescription')}
+                    </div>
+                    <div className="native-ocr-warning">
+                      {mobileNativeOcrAvailable ? t('onDeviceOcrOfflineNote') : t('mobileNativeOcrNote')}
+                    </div>
+                    <div className="native-ocr-current">
+                      {mobileNativeOcrAvailable
+                        ? `${t('onDeviceOcrCurrentEngine')} ${localServerEngine || getNativeOcrEngineLabel()}`
+                        : t('localServerCurrentDescription')}
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <label className="ai-inpaint-option">
+                <input
+                  type="checkbox"
+                  checked={autoRunOcr}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setAutoRunOcr(enabled);
+                    localStorage.setItem('auto_run_ocr', String(enabled));
+                  }}
+                />
+                <span>
+                  <strong>{t('autoRunOcr')}</strong>
+                  <small>{t('autoRunOcrHelp')}</small>
+                </span>
+              </label>
+
+              <label className="ai-inpaint-option">
+                <input
+                  type="checkbox"
+                  checked={enableAiInpaint}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setEnableAiInpaint(enabled);
+                    localStorage.setItem('enable_ai_inpaint', String(enabled));
+                    if (!enabled) {
+                      cancelLamaOperation();
+                      setAiStatus(null);
+                    }
+                  }}
+                />
+                <span>
+                  <strong>{t('enableAiInpaint')}</strong>
+                  <small>{t('enableAiInpaintHelp')}</small>
+                </span>
+              </label>
+              <div className={`ai-model-storage ${aiModelStorage}`} role="status">
+                <span>{t(`aiModelStorage_${aiModelStorage}`)}</span>
+                {aiModelStorage === 'missing' && (
+                  <button type="button" className="btn-secondary" onClick={downloadAiInpaintModel} disabled={isPreparingAiModel}>
+                    {isPreparingAiModel ? t('aiModelDownloading') : t('downloadAndEnableAiModel')}
+                  </button>
+                )}
+                {aiModelStorage === 'unavailable' && (
+                  <button type="button" className="btn-secondary" onClick={refreshAiModelStorage}>{t('checkAgain')}</button>
+                )}
+              </div>
+              <div className={`ai-inpaint-run-status ${aiStatus?.phase || 'idle'}`} role="status" aria-live="polite">
+                <strong>{t('aiCurrentImageStatus')}</strong>
+                <span>{aiStatus?.message || (enableAiInpaint ? t('aiWaitingForImage') : t('aiInferenceDisabled'))}</span>
+              </div>
+              <details className="ai-inpaint-guide">
+                <summary>{t('aiInpaintGuideTitle')}</summary>
+                <ol>
+                  <li>{t('aiInpaintGuideStep1')}</li>
+                  <li>{t('aiInpaintGuideStep2')}</li>
+                  <li>{t('aiInpaintGuideStep3')}</li>
+                  <li>{t('aiInpaintGuideStep4')}</li>
+                </ol>
+              </details>
+
+              <button
+                className="btn btn-primary"
+                style={{ width: '100%', padding: '8px', fontSize: '12px', fontWeight: 'bold' }}
+                disabled={!imageLoaded || isOcrProcessing || ocrActionsBlocked}
+                title={ocrEngineBlockReason ? t(ocrEngineBlockReason) : undefined}
+                onClick={() => canvasRef.current?.rerunOcr()}
+              >
+                {isOcrProcessing ? t('recognizing') : t('rerunOcr')}
+              </button>
+              {ocrEngineBlockReason && (
+                <div className="engine-gate-hint">⚠ {t(ocrEngineBlockReason)}</div>
+              )}
+
+              <details className="fallback-engine-panel">
+                <summary>{t('fallbackEngines')}</summary>
+                <div className="fallback-engine-description">{t('fallbackEnginesDescription')}</div>
+                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
+                  <button
+                    className={`btn btn-secondary ${ocrEngine === 'local' ? 'active' : ''}`}
+                    style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                    title={t('localEngineHelp')}
+                    onClick={() => handleOcrEngineChange('local')}
+                  >
+                    {t('localEngine')}
+                  </button>
+                  <button
+                    className={`btn btn-secondary ${ocrEngine === 'cloud' ? 'active' : ''}`}
+                    style={{ flex: 1, minWidth: '90px', padding: '6px 2px', fontSize: '11px' }}
+                    title={t('cloudEngineHelp')}
+                    onClick={() => handleOcrEngineChange('cloud')}
+                  >
+                    {t('cloudEngine')}
+                  </button>
+                </div>
+
+                {ocrEngine === 'cloud' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' }}>
+                    <span style={{ fontSize: '11px', opacity: 0.8 }}>{t('geminiKey')}:</span>
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={geminiApiKey}
+                      onChange={(e) => handleGeminiApiKeyChange(e.target.value)}
+                      placeholder="AI_zaSy..."
+                      style={{
+                        background: '#111111',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '4px',
+                        padding: '6px 8px',
+                        fontSize: '12px',
+                        width: '100%'
+                      }}
+                    />
+
+                    <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+                      {t('cloudModel')}:
+                    </span>
+                    <select
+                      value={geminiModel}
+                      onChange={(e) => handleGeminiModelChange(e.target.value)}
+                      style={{
+                        background: '#2D2D2D',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '4px',
+                        padding: '6px 8px',
+                        fontSize: '12px',
+                        width: '100%',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {!activeGeminiModelOptions.some(model => model.id === geminiModel) && (
+                        <option value={geminiModel}>{geminiModel}</option>
+                      )}
+                      {activeGeminiModelOptions.map(model => (
+                        <option value={model.id} key={model.id}>{model.displayName}</option>
+                      ))}
+                    </select>
+                    <span style={{
+                      fontSize: '10px',
+                      opacity: 0.75,
+                      color: geminiModelListStatus === 'error' ? '#FBBF24' : '#60CDFF'
+                    }}>
+                      {geminiModelListStatus === 'loading' && t('modelListLoading')}
+                      {geminiModelListStatus === 'loaded' && `✓ ${t('modelListLoaded')} (${geminiModelOptions.length})`}
+                      {geminiModelListStatus === 'error' && `⚠ ${t('modelListFailed')}`}
+                    </span>
+
+                    <span style={{ fontSize: '11px', opacity: 0.8, marginTop: '4px' }}>
+                      {t('customBaseUrl')}:
+                    </span>
+                    <input
+                      type="text"
+                      value={geminiApiUrl}
+                      onChange={(e) => handleGeminiApiUrlChange(e.target.value)}
+                      placeholder="https://generativelanguage.googleapis.com"
+                      style={{
+                        background: '#111111',
+                        color: '#fff',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '4px',
+                        padding: '6px 8px',
+                        fontSize: '12px',
+                        width: '100%'
+                      }}
+                    />
+
+                    <a
+                      href="https://aistudio.google.com/"
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: '11px', color: '#60CDFF', textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}
+                    >
+                      {t('getKeyLink')}
+                    </a>
+                  </div>
+                )}
+              </details>
+            </div>
+          </details>
 
         </aside>
 

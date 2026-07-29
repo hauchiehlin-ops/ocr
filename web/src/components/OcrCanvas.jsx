@@ -455,6 +455,7 @@ function normalizeCustomOcrItems(result) {
 
 const OcrCanvas = forwardRef(({
   onRegionSelect,
+  onSelectionChange,
   onLayersUpdate,
   onImageLoaded,
   onOcrProcessing,
@@ -606,10 +607,26 @@ const OcrCanvas = forwardRef(({
     };
   };
 
-  const syncSelectedTextbox = () => {
+  const getSelectedTextboxes = () => {
     const canvas = fabricCanvas.current;
-    const activeObject = canvas?.getActiveObject?.();
-    onRegionSelect?.(describeTextbox(activeObject));
+    if (!canvas) return [];
+    const activeObject = canvas.getActiveObject?.();
+    if (!activeObject) return [];
+    if (activeObject.type === 'activeSelection' && typeof canvas.getActiveObjects === 'function') {
+      return canvas.getActiveObjects().filter((obj) => obj?.type === 'textbox');
+    }
+    return activeObject.type === 'textbox' ? [activeObject] : [];
+  };
+
+  const emitSelectionState = () => {
+    const selected = getSelectedTextboxes();
+    const described = selected.map((textbox) => describeTextbox(textbox)).filter(Boolean);
+    onSelectionChange?.(described);
+    onRegionSelect?.(described[0] || null);
+  };
+
+  const syncSelectedTextbox = () => {
+    emitSelectionState();
   };
 
   const clearAlignmentGuides = () => {
@@ -890,6 +907,11 @@ const OcrCanvas = forwardRef(({
       }
 
       const evt = opt.e;
+      const wantsMarqueeSelect = Boolean(evt?.shiftKey) && !isRegionalOcrActiveRef.current && (!target || target === bgImage.current);
+      if (wantsMarqueeSelect) {
+        canvas.selection = true;
+        return;
+      }
       if (!isRegionalOcrActiveRef.current && (!target || target === bgImage.current)) {
         canvas.isDragging = true;
         canvas.selection = false;
@@ -929,8 +951,13 @@ const OcrCanvas = forwardRef(({
       opt.e.preventDefault();
       opt.e.stopPropagation();
       if (!onZoomChangeRef.current) return;
-      const step = opt.e.deltaY > 0 ? -0.05 : 0.05;
-      onZoomChangeRef.current((prev) => Math.min(5, Math.max(0.1, Math.round((prev + step) * 100) / 100)));
+      const rawDelta = Number.isFinite(opt.e.deltaY) ? opt.e.deltaY : 0;
+      const clampedDelta = Math.max(-120, Math.min(120, rawDelta));
+      const direction = clampedDelta > 0 ? -1 : 1;
+      const magnitude = Math.min(1, Math.abs(clampedDelta) / 120);
+      const baseStep = opt.e.ctrlKey ? 0.003 : 0.006;
+      const step = direction * baseStep * magnitude;
+      onZoomChangeRef.current((prev) => Math.min(5, Math.max(0.1, Math.round((prev + step) * 1000) / 1000)));
     });
 
     canvas.on('object:modified', () => {
@@ -1639,6 +1666,7 @@ const OcrCanvas = forwardRef(({
       canvas.setActiveObject(pastedImage);
       canvas.renderAll();
       onRegionSelect?.(null);
+      onSelectionChange?.([]);
       saveHistory();
       syncLayers();
       onWorkerStatusChange?.(t('pasteRegionReady'));
@@ -2174,8 +2202,11 @@ const OcrCanvas = forwardRef(({
   };
 
   const handleSelection = (e) => {
-    const activeObject = e.selected?.[0];
-    onRegionSelect?.(describeTextbox(activeObject));
+    const selected = (e.selected || [])
+      .map((item) => describeTextbox(item))
+      .filter(Boolean);
+    onSelectionChange?.(selected);
+    onRegionSelect?.(selected[0] || null);
   };
 
   const materializeReviewLayer = async (textbox) => {
@@ -2313,6 +2344,38 @@ const OcrCanvas = forwardRef(({
     await writable.close();
   };
 
+  const applyStyleToTextboxes = (textboxes, styleObject) => {
+    const canvas = fabricCanvas.current;
+    if (!canvas || !textboxes.length) return 0;
+    const normalizedStyle = normalizeTextboxStyle(styleObject);
+    let appliedCount = 0;
+    isHistoryDisabled.current = true;
+    textboxes.forEach((obj) => {
+      if (!obj || obj.type !== 'textbox') return;
+      const nextStyle = { ...normalizedStyle };
+      if (obj.isOcrReview && nextStyle.fill) {
+        obj.originalTextColor = nextStyle.fill;
+        nextStyle.fill = withReviewTint(nextStyle.fill);
+      }
+      obj.set(nextStyle);
+      applyScriptAwareFontFamilies(obj, nextStyle.fontFamily || obj.fontFamily);
+      refreshTextboxMetrics(obj);
+      if (obj.isOcrReview) {
+        void materializeReviewLayer(obj).then(() => {
+          refreshTextboxMetrics(obj);
+          canvas.renderAll();
+        });
+      }
+      appliedCount += 1;
+    });
+    isHistoryDisabled.current = false;
+    if (appliedCount > 0) saveHistory();
+    canvas.renderAll();
+    syncLayers();
+    syncSelectedTextbox();
+    return appliedCount;
+  };
+
   const addManualTextBox = (left, top, initialText = t('manualRegionText'), width = 140) => {
     const canvas = fabricCanvas.current;
     if (!canvas) return null;
@@ -2433,87 +2496,70 @@ const OcrCanvas = forwardRef(({
     updateRegionStyle: (id, styleObject) => {
       const canvas = fabricCanvas.current;
       if (!canvas) return false;
-      const obj = canvas.getObjects().find(o => o.id === id);
-      if (obj) {
-        const normalizedStyle = normalizeTextboxStyle(styleObject);
-        if (obj.isOcrReview && normalizedStyle.fill) {
-          obj.originalTextColor = normalizedStyle.fill;
-          normalizedStyle.fill = withReviewTint(normalizedStyle.fill);
-        }
-        obj.set(normalizedStyle);
-        applyScriptAwareFontFamilies(obj, normalizedStyle.fontFamily || obj.fontFamily);
-        refreshTextboxMetrics(obj);
-        if (obj.isOcrReview) {
-          void materializeReviewLayer(obj).then(() => {
-            refreshTextboxMetrics(obj);
-            canvas.renderAll();
-          });
-        }
-        canvas.renderAll();
-        saveHistory();
-        syncLayers();
-        syncSelectedTextbox();
-        return true;
-      }
-      return false;
+      const obj = canvas.getObjects().find((o) => o.id === id);
+      return applyStyleToTextboxes(obj ? [obj] : [], styleObject) > 0;
+    },
+    updateRegionStyleMany: (ids, styleObject) => {
+      const canvas = fabricCanvas.current;
+      if (!canvas || !Array.isArray(ids) || ids.length === 0) return 0;
+      const objects = ids
+        .map((id) => canvas.getObjects().find((o) => o.id === id))
+        .filter((obj) => obj && obj.type === 'textbox');
+      return applyStyleToTextboxes(objects, styleObject);
     },
     selectRegion: (id) => {
       const canvas = fabricCanvas.current;
       if (!canvas) return;
-      const obj = canvas.getObjects().find(o => o.id === id);
+      const obj = canvas.getObjects().find((o) => o.id === id);
       if (obj) {
         canvas.setActiveObject(obj);
         centerCanvasOnObject(obj);
         onRegionSelect?.(describeTextbox(obj));
+        onSelectionChange?.([describeTextbox(obj)].filter(Boolean));
         canvas.renderAll();
       }
+    },
+    selectRegions: (ids) => {
+      const canvas = fabricCanvas.current;
+      if (!canvas) return;
+      const objects = (Array.isArray(ids) ? ids : [])
+        .map((id) => canvas.getObjects().find((o) => o.id === id))
+        .filter((obj) => obj && obj.type === 'textbox');
+      canvas.discardActiveObject();
+      if (objects.length === 1) {
+        canvas.setActiveObject(objects[0]);
+        centerCanvasOnObject(objects[0]);
+      } else if (objects.length > 1) {
+        const activeSelection = new fabric.ActiveSelection(objects, { canvas });
+        canvas.setActiveObject(activeSelection);
+      }
+      canvas.requestRenderAll();
+      syncSelectedTextbox();
     },
     getActiveObject: () => fabricCanvas.current?.getActiveObject?.() || null,
     nudgeSelectedTextbox: (deltaX, deltaY) => nudgeActiveTextbox(deltaX, deltaY),
     removeActiveObject: () => {
       const canvas = fabricCanvas.current;
       if (!canvas) return;
-      const activeObj = canvas.getActiveObject();
-      if (activeObj) {
+      const activeObjects = typeof canvas.getActiveObjects === 'function' ? canvas.getActiveObjects() : [];
+      const removable = (activeObjects.length > 0 ? activeObjects : [canvas.getActiveObject()]).filter(Boolean);
+      if (removable.length > 0) {
         // Keep the cover patch: it is what erased the source glyphs. Removing
         // it along with the textbox uncovers the original, un-corrected OCR
         // text underneath instead of leaving the area cleanly erased.
-        canvas.remove(activeObj);
+        removable.forEach((obj) => canvas.remove(obj));
         canvas.discardActiveObject();
         canvas.renderAll();
         saveHistory();
         syncLayers();
+        syncSelectedTextbox();
       }
     },
     applyTextStyleToAll: (styleObject) => {
       const canvas = fabricCanvas.current;
       if (!canvas) return 0;
-      let appliedCount = 0;
-      isHistoryDisabled.current = true;
-      canvas.getObjects().forEach(obj => {
-        if (obj.type === 'textbox') {
-          const normalizedStyle = normalizeTextboxStyle(styleObject);
-          if (obj.isOcrReview && normalizedStyle.fill) {
-            obj.originalTextColor = normalizedStyle.fill;
-            normalizedStyle.fill = withReviewTint(normalizedStyle.fill);
-          }
-          obj.set(normalizedStyle);
-          applyScriptAwareFontFamilies(obj, normalizedStyle.fontFamily || obj.fontFamily);
-          refreshTextboxMetrics(obj);
-          if (obj.isOcrReview) {
-            void materializeReviewLayer(obj).then(() => {
-              refreshTextboxMetrics(obj);
-              canvas.renderAll();
-            });
-          }
-          appliedCount += 1;
-        }
-      });
-      isHistoryDisabled.current = false;
-      if (appliedCount > 0) saveHistory();
-      canvas.renderAll();
-      syncLayers();
-      return appliedCount;
+      const objects = canvas.getObjects().filter((obj) => obj.type === 'textbox');
+      return applyStyleToTextboxes(objects, styleObject);
     },
     undo: () => {
       const canvas = fabricCanvas.current;
@@ -2595,6 +2641,7 @@ const OcrCanvas = forwardRef(({
       if (onImageLoaded) onImageLoaded(false);
       if (onLayersUpdate) onLayersUpdate([]);
       if (onRegionSelect) onRegionSelect(null);
+      if (onSelectionChange) onSelectionChange([]);
 
       history.current = [];
       historyIndex.current = -1;

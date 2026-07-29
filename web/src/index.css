@@ -405,6 +405,54 @@ body {
   line-height: 1.45;
 }
 
+.layer-toolbar {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 10px;
+  flex-wrap: wrap;
+}
+
+.layer-toolbar .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 11px;
+}
+
+.selection-summary-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.selection-summary-count {
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: rgba(96, 205, 255, 0.08);
+  border: 1px solid rgba(96, 205, 255, 0.15);
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.selection-summary-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.selection-summary-actions .btn,
+.font-format-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  font-size: 11px;
+}
+
+.font-format-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .inspector-textarea {
   width: 100%;
   min-height: 112px;
@@ -538,6 +586,35 @@ body {
   padding-left: 18px;
 }
 
+.ocr-engine-panel {
+  padding: 8px 10px;
+}
+
+.ocr-engine-panel > summary {
+  cursor: pointer;
+  color: #60CDFF;
+  font-size: 11px;
+  font-weight: 700;
+  list-style: none;
+}
+
+.ocr-engine-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ocr-engine-panel > summary::before {
+  content: '▸';
+  margin-right: 6px;
+}
+
+.ocr-engine-panel[open] > summary::before {
+  content: '▾';
+}
+
+.ocr-engine-panel > .inspector-collapsible-body {
+  margin-top: 10px;
+}
+
 .inspector-full-button {
   width: 100%;
   padding: 7px 8px;
@@ -644,56 +721,6 @@ body {
   color: var(--text-tertiary);
   font-size: 10px;
   line-height: 1.4;
-}
-
-.font-format-clipboard {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.035);
-}
-
-.font-format-clipboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.font-format-clipboard-header strong {
-  color: var(--text-primary);
-  font-size: 11px;
-}
-
-.font-format-clipboard-header span {
-  color: var(--text-tertiary);
-  font-size: 10px;
-}
-
-.font-format-clipboard-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.font-format-clipboard-actions .btn {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 7px 5px;
-  font-size: 11px;
-}
-
-.font-format-clipboard-preview {
-  padding: 7px 8px;
-  border-radius: 5px;
-  background: rgba(0, 0, 0, 0.16);
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 10px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .font-size-control {
