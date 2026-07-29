@@ -531,6 +531,7 @@ function App() {
   const presetCjkFontFamily = CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont);
   const presetFontFamily = `${presetLatinFontFamily}, ${presetCjkFontFamily}, sans-serif`;
   const hasPresetApplySelection = applyPresetFontFamily || applyPresetTypography;
+  const t = useCallback((key) => getTranslation(uiLanguage, key), [uiLanguage]);
   const selectedLayers = selectedRegionIds
     .map((id) => layers.find((layer) => layer.id === id))
     .filter(Boolean);
@@ -923,8 +924,6 @@ function App() {
     setIsRegionalOcrActive(false);
     setIsPasteModeActive((current) => !current);
   };
-
-  const t = useCallback((key) => getTranslation(uiLanguage, key), [uiLanguage]);
   useEffect(() => {
     const isEditableTarget = (target) => {
       if (!target || !(target instanceof HTMLElement)) return false;
