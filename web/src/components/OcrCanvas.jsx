@@ -960,7 +960,8 @@ const OcrCanvas = forwardRef(({
       onZoomChangeRef.current((prev) => Math.min(5, Math.max(0.1, Math.round((prev + step) * 1000) / 1000)));
     });
 
-    canvas.on('object:modified', () => {
+    canvas.on('object:modified', (event) => {
+      eventHandlersRef.current.normalizeModifiedTextboxes?.(event.target);
       eventHandlersRef.current.clearAlignmentGuides?.();
       eventHandlersRef.current.saveHistory?.();
       canvas.requestRenderAll();
@@ -2272,6 +2273,36 @@ const OcrCanvas = forwardRef(({
     textbox.setCoords();
   };
 
+  const normalizeTextboxTransform = (textbox) => {
+    if (!textbox || textbox.type !== 'textbox') return false;
+    const scaleX = Number.isFinite(textbox.scaleX) ? textbox.scaleX : 1;
+    const scaleY = Number.isFinite(textbox.scaleY) ? textbox.scaleY : 1;
+    if (Math.abs(scaleX - 1) < 0.001 && Math.abs(scaleY - 1) < 0.001) return false;
+
+    textbox.set({
+      width: Math.max(2, (textbox.width || 0) * scaleX),
+      fontSize: Math.max(3, (textbox.fontSize || 16) * scaleY),
+      scaleX: 1,
+      scaleY: 1
+    });
+    refreshTextboxMetrics(textbox);
+    return true;
+  };
+
+  const normalizeModifiedTextboxes = (target) => {
+    const canvas = fabricCanvas.current;
+    if (!canvas || !target) return;
+    const textboxes = target.type === 'activeSelection' && typeof canvas.getActiveObjects === 'function'
+      ? canvas.getActiveObjects().filter((obj) => obj?.type === 'textbox')
+      : [target].filter((obj) => obj?.type === 'textbox');
+    const changed = textboxes.some((textbox) => normalizeTextboxTransform(textbox));
+    if (changed) {
+      canvas.requestRenderAll();
+      syncLayers();
+      syncSelectedTextbox();
+    }
+  };
+
   const nudgeActiveTextbox = (deltaX, deltaY) => {
     const canvas = fabricCanvas.current;
     const activeObject = canvas?.getActiveObject?.();
@@ -2463,6 +2494,7 @@ const OcrCanvas = forwardRef(({
     handleEditingExited,
     handleSelection,
     handleTextChanged,
+    normalizeModifiedTextboxes,
     notifyWorker: onWorkerStatusChange,
     pasteCopiedRegion,
     saveHistory,
