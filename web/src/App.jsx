@@ -75,6 +75,14 @@ const MACOS_OCR_INSTALL_COMMAND = `OCR_SETUP="$(mktemp -t ai_ocr_setup).sh" && c
 const WINDOWS_PROJECT_ZIP_URL = 'https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip';
 const DEFAULT_COLOR_PRESETS = ['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'];
 const MAX_COLOR_PRESETS = 8;
+const normalizeHexColor = (color, fallback = '#000000') => {
+  const value = String(color || '').trim();
+  if (/^#[0-9a-f]{6}$/i.test(value)) return value.toUpperCase();
+  if (/^#[0-9a-f]{3}$/i.test(value)) {
+    return `#${value.slice(1).split('').map((char) => char + char).join('')}`.toUpperCase();
+  }
+  return fallback;
+};
 // Shown until ListModels succeeds (or when it fails: offline, invalid key…).
 // Live stable models per ai.google.dev/gemini-api/docs/models, checked 2026-07.
 const STATIC_GEMINI_MODEL_OPTIONS = [
@@ -477,7 +485,7 @@ function App() {
     return { supported: true, fonts };
   };
 
-  const handleLoadLocalFonts = async () => {
+  const loadLocalFonts = async () => {
     setFontLoadStatus('fontLoading');
     try {
       const result = await queryDeviceFonts();
@@ -501,25 +509,33 @@ function App() {
     }
   };
 
+  const handleLoadLocalFonts = () => loadLocalFonts();
+
   // Chromium exposes the Local Font Access API behind a permission prompt.
-  // On first render, only enumerate when permission is already granted; the
-  // explicit button below provides the required user gesture for the full list.
+  // Trigger it on startup so the font dropdown is ready without an extra click.
   useEffect(() => {
     let cancelled = false;
-    const loadLocalFonts = async () => {
+    const loadInitialLocalFonts = async () => {
       let merged = mergeFontFamilies();
       try {
-        const result = await queryDeviceFonts({ requireGrantedPermission: true });
+        setFontLoadStatus('fontLoading');
+        const result = await queryDeviceFonts();
         if (result.supported && result.fonts.length > 0) merged = mergeFontFamilies(result.fonts);
+        if (!cancelled) {
+          setFontLoadStatus(result.supported
+            ? (result.fonts.length > 0 ? 'fontLoaded' : 'fontPermissionNeeded')
+            : 'fontUnsupported');
+        }
       } catch (error) {
         console.info('Initial local font enumeration unavailable:', error);
+        if (!cancelled) setFontLoadStatus('fontPermissionDenied');
       }
       if (!cancelled) {
         setAvailableFontFamilies(merged);
         alignSelectedFontsWithAvailable(merged);
       }
     };
-    loadLocalFonts();
+    loadInitialLocalFonts();
     return () => { cancelled = true; };
   }, [alignSelectedFontsWithAvailable, mergeFontFamilies]);
 
@@ -547,7 +563,7 @@ function App() {
 
   const rememberColorPreset = (color) => {
     setColorPresetColors((current) => {
-      const normalized = String(color || '').toUpperCase();
+      const normalized = normalizeHexColor(color);
       const unique = [normalized, ...current.map((item) => item.toUpperCase()).filter((item) => item !== normalized)];
       return unique.slice(0, MAX_COLOR_PRESETS);
     });
@@ -673,6 +689,7 @@ function App() {
   const getChineseFontLabel = (family) => localizedCjkLabels[family]
     ? `${localizedCjkLabels[family]} (${family})`
     : family;
+  const selectedFillColor = normalizeHexColor(selectedRegion?.fill, colorPresetColors[0] || '#000000');
 
   // Undo/Redo states
   const [canUndo, setCanUndo] = useState(false);
@@ -1365,9 +1382,9 @@ function App() {
                   type="color"
                   style={{ opacity: 0, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', cursor: selectedRegionCount ? 'pointer' : 'not-allowed' }}
                   disabled={!selectedRegionCount}
-                  value={(selectedRegion?.fill || '#000000').toUpperCase()}
+                  value={selectedFillColor}
                   onChange={(e) => {
-                    const color = e.target.value.toUpperCase();
+                    const color = normalizeHexColor(e.target.value);
                     rememberColorPreset(color);
                     applyStyleToSelection({ fill: color });
                   }}

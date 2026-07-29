@@ -494,7 +494,7 @@ const OcrCanvas = forwardRef(({
   const canvasEl = useRef(null);
   const fabricCanvas = useRef(null);
   const shouldUsePresetFontFamily = forcePresetFont && applyPresetFontFamily;
-  const shouldUsePresetTypography = forcePresetFont && applyPresetTypography;
+  const shouldUsePresetTypographyForManualText = forcePresetFont && applyPresetTypography;
   const bgImage = useRef(null);
   const sampleCanvasRef = useRef(null);
   const batchInpaintCanvasRef = useRef(null);
@@ -1954,7 +1954,9 @@ const OcrCanvas = forwardRef(({
           sharedInkRatios,
           fontToUse
         );
-        const effectiveFontSize = shouldUsePresetTypography ? presetFontSize : regionalFontSize;
+        const effectiveFontSize = block.manual && shouldUsePresetTypographyForManualText
+          ? presetFontSize
+          : regionalFontSize;
         const fittedWidth = keepTextBoxInsideOcrBox(block.width);
         const text = new fabric.Textbox(block.text, {
           ...normalizeTextboxStyle(),
@@ -1962,8 +1964,8 @@ const OcrCanvas = forwardRef(({
           top: sourceInkBounds?.top || block.top,
           width: fittedWidth,
           fontSize: effectiveFontSize,
-          fontWeight: shouldUsePresetTypography && presetBold ? 'bold' : 'normal',
-          fontStyle: shouldUsePresetTypography && presetItalic ? 'italic' : 'normal',
+          fontWeight: block.manual && shouldUsePresetTypographyForManualText && presetBold ? 'bold' : 'normal',
+          fontStyle: block.manual && shouldUsePresetTypographyForManualText && presetItalic ? 'italic' : 'normal',
           fill: block.manual ? '#000000' : 'rgba(0,0,0,0.78)',
           backgroundColor: 'transparent',
           id: block.id,
@@ -2115,7 +2117,7 @@ const OcrCanvas = forwardRef(({
         sharedInkRatios,
         fontToUse
       );
-      const effectiveFontSize = shouldUsePresetTypography ? presetFontSize : calculatedFontSize;
+      const effectiveFontSize = calculatedFontSize;
       const fittedWidth = keepTextBoxInsideOcrBox(block.bbox.w);
       const detectedColor = textColorById.get(block.id) || null;
 
@@ -2125,8 +2127,8 @@ const OcrCanvas = forwardRef(({
         top: sourceInkBounds?.top || block.bbox.y,
         width: fittedWidth,
         fontSize: effectiveFontSize,
-        fontWeight: shouldUsePresetTypography && presetBold ? 'bold' : 'normal',
-        fontStyle: shouldUsePresetTypography && presetItalic ? 'italic' : 'normal',
+        fontWeight: 'normal',
+        fontStyle: 'normal',
         // OCR output is a review/replacement layer. The patch removes only the
         // recognized glyph pixels; surrounding diagram content remains intact.
         // A slight transparency (tinted with the detected source colour) makes
@@ -2202,11 +2204,11 @@ const OcrCanvas = forwardRef(({
   };
 
   const handleSelection = (e) => {
-    const selected = (e.selected || [])
-      .map((item) => describeTextbox(item))
-      .filter(Boolean);
-    onSelectionChange?.(selected);
-    onRegionSelect?.(selected[0] || null);
+    if (e?.selected?.length) {
+      requestAnimationFrame(emitSelectionState);
+    } else {
+      emitSelectionState();
+    }
   };
 
   const materializeReviewLayer = async (textbox) => {
@@ -2389,9 +2391,9 @@ const OcrCanvas = forwardRef(({
       left,
       top,
       width,
-      fontSize: shouldUsePresetTypography ? presetFontSize : 16,
-      fontWeight: shouldUsePresetTypography && presetBold ? 'bold' : 'normal',
-      fontStyle: shouldUsePresetTypography && presetItalic ? 'italic' : 'normal',
+      fontSize: shouldUsePresetTypographyForManualText ? presetFontSize : 16,
+      fontWeight: shouldUsePresetTypographyForManualText && presetBold ? 'bold' : 'normal',
+      fontStyle: shouldUsePresetTypographyForManualText && presetItalic ? 'italic' : 'normal',
       fill: '#000000',
       backgroundColor: 'transparent',
       id: `layer_${Date.now()}`,
