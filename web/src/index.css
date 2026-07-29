@@ -351,6 +351,39 @@ body {
   overflow: hidden;
 }
 
+.inspector-format-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.inspector-format-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.inspector-format-color {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.inspector-format-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex: 0 0 auto;
+}
+
 .inspector-meta-pill {
   align-self: flex-start;
   padding: 4px 8px;
@@ -780,23 +813,6 @@ body {
   background: linear-gradient(90deg, rgba(96,205,255,0.35), rgba(255,255,255,0.08));
 }
 
-.inspector-primary-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid rgba(96, 205, 255, 0.22);
-  border-radius: 10px;
-  background:
-    linear-gradient(180deg, rgba(96, 205, 255, 0.1), rgba(96, 205, 255, 0.03)),
-    rgba(255, 255, 255, 0.02);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
-}
-
-.font-apply-actions-primary {
-  gap: 10px;
-}
-
 .font-style-toggles .btn,
 .font-apply-actions .btn {
   flex: 1 1 0;
@@ -810,20 +826,6 @@ body {
 .font-apply-actions .btn {
   padding: 7px 5px;
   font-size: 11px;
-}
-
-.font-apply-actions-primary .btn {
-  min-height: 40px;
-  padding: 10px 12px;
-  font-size: 12px;
-  font-weight: 700;
-  border-color: rgba(96, 205, 255, 0.28);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.font-apply-actions-primary .btn:not(:disabled):hover {
-  border-color: rgba(96, 205, 255, 0.5);
-  background: rgba(96, 205, 255, 0.16);
 }
 
 .font-style-toggles .btn.active {

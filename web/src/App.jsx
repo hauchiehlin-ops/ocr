@@ -74,7 +74,7 @@ const MACOS_OCR_INSTALLER_URL = 'https://raw.githubusercontent.com/hauchiehlin-o
 const MACOS_OCR_INSTALL_COMMAND = `OCR_SETUP="$(mktemp -t ai_ocr_setup).sh" && curl -fL "${MACOS_OCR_INSTALLER_URL}" -o "$OCR_SETUP" && /bin/bash "$OCR_SETUP"`;
 const WINDOWS_PROJECT_ZIP_URL = 'https://github.com/hauchiehlin-ops/ocr/archive/refs/heads/main.zip';
 const DEFAULT_COLOR_PRESETS = ['#000000', '#FFFFFF', '#FF0000', '#0000FF', '#008000'];
-const MAX_COLOR_PRESETS = 8;
+const MAX_COLOR_PRESETS = 10;
 const normalizeHexColor = (color, fallback = '#000000') => {
   const value = String(color || '').trim();
   if (/^#[0-9a-f]{6}$/i.test(value)) return value.toUpperCase();
@@ -509,7 +509,6 @@ function App() {
   const presetLatinFontFamily = EN_FONT_STACKS[englishFont] || quoteFontFamily(englishFont);
   const presetCjkFontFamily = CJK_FONT_STACKS[chineseFont] || quoteFontFamily(chineseFont);
   const presetFontFamily = `${presetLatinFontFamily}, ${presetCjkFontFamily}, sans-serif`;
-  const hasPresetApplySelection = applyPresetFontFamily || applyPresetTypography;
   const t = useCallback((key) => getTranslation(uiLanguage, key), [uiLanguage]);
   const selectedLayers = selectedRegionIds
     .map((id) => layers.find((layer) => layer.id === id))
@@ -523,12 +522,24 @@ function App() {
     : selectedRegionCount === 1
       ? (selectedRegion?.text?.trim() || t('emptyLayer'))
       : t('selectedBlocks').replace('{count}', String(selectedRegionCount));
+  const selectedFontSizeValue = Math.round(Number(selectedRegion?.fontSize) || presetFontSize);
+  const selectedIsBold = String(selectedRegion?.fontWeight || '').toLowerCase() === 'bold' || Boolean(selectedRegion?.isBold);
+  const selectedIsItalic = String(selectedRegion?.fontStyle || '').toLowerCase() === 'italic' || Boolean(selectedRegion?.isItalic);
+  const selectedFontFamilyLabel = selectedRegion?.fontFamily || presetFontFamily;
 
   const rememberColorPreset = (color) => {
     setColorPresetColors((current) => {
       const normalized = normalizeHexColor(color);
-      const unique = [normalized, ...current.map((item) => item.toUpperCase()).filter((item) => item !== normalized)];
-      return unique.slice(0, MAX_COLOR_PRESETS);
+      const defaults = DEFAULT_COLOR_PRESETS.map((item) => item.toUpperCase());
+      if (defaults.includes(normalized)) {
+        return defaults;
+      }
+      const currentCustomColors = current
+        .map((item) => item.toUpperCase())
+        .filter((item) => !defaults.includes(item) && item !== normalized);
+      const maxCustomColors = Math.max(0, MAX_COLOR_PRESETS - defaults.length);
+      const nextCustomColors = [...currentCustomColors, normalized].slice(-maxCustomColors);
+      return [...defaults, ...nextCustomColors];
     });
   };
 
@@ -592,22 +603,14 @@ function App() {
     return Boolean(applied);
   };
 
-  const buildPresetTextStyle = () => {
-    const style = {
-      lineHeight: 1,
-      charSpacing: 0
+  const buildFontFamilyStyle = (latinFamily = englishFont, cjkFamily = chineseFont) => {
+    const latinStack = EN_FONT_STACKS[latinFamily] || quoteFontFamily(latinFamily);
+    const cjkStack = CJK_FONT_STACKS[cjkFamily] || quoteFontFamily(cjkFamily);
+    return {
+      fontFamily: `${latinStack}, ${cjkStack}, sans-serif`,
+      latinFontFamily: latinStack,
+      cjkFontFamily: cjkStack
     };
-    if (applyPresetFontFamily) {
-      style.fontFamily = presetFontFamily;
-      style.latinFontFamily = presetLatinFontFamily;
-      style.cjkFontFamily = presetCjkFontFamily;
-    }
-    if (applyPresetTypography) {
-      style.fontSize = presetFontSize;
-      style.fontWeight = presetBold ? 'bold' : 'normal';
-      style.fontStyle = presetItalic ? 'italic' : 'normal';
-    }
-    return style;
   };
 
   const buildCopiedTextFormat = (region) => {
@@ -709,34 +712,52 @@ function App() {
      }
   };
 
-  const handleApplyDefaultFontAll = async () => {
-     if (canvasRef.current) {
-        if (!hasPresetApplySelection) {
-          setFontApplyStatus('fontApplyOptionsRequired');
-          return;
-        }
-        if (applyPresetFontFamily) await ensurePresetFontsReady();
-        const style = buildPresetTextStyle();
-        const appliedCount = canvasRef.current.applyTextStyleToAll(style);
-        setFontApplyStatus(appliedCount > 0 ? 'fontAppliedAll' : 'fontApplyNoSelection');
-     }
+  const handleEnglishFontChange = async (nextEnglishFont) => {
+    setEnglishFont(nextEnglishFont);
+    setFontApplyStatus('');
+    if (!selectedRegionCount) return;
+    await ensurePresetFontsReady();
+    const applied = applyStyleToSelection(buildFontFamilyStyle(nextEnglishFont, chineseFont));
+    if (!applied) setFontApplyStatus('fontApplyNoSelection');
   };
 
-  const handleApplyPresetFontSelected = async () => {
-     if (canvasRef.current && selectedRegionCount > 0) {
-        if (!hasPresetApplySelection) {
-          setFontApplyStatus('fontApplyOptionsRequired');
-          return;
-        }
-        if (applyPresetFontFamily) await ensurePresetFontsReady();
-        const style = buildPresetTextStyle();
-        const applied = applyStyleToSelection(style);
-        if (applied) {
-          setFontApplyStatus('fontAppliedSelected');
-        } else {
-          setFontApplyStatus('fontApplyNoSelection');
-        }
-     }
+  const handleChineseFontChange = async (nextChineseFont) => {
+    setChineseFont(nextChineseFont);
+    setFontApplyStatus('');
+    if (!selectedRegionCount) return;
+    await ensurePresetFontsReady();
+    const applied = applyStyleToSelection(buildFontFamilyStyle(englishFont, nextChineseFont));
+    if (!applied) setFontApplyStatus('fontApplyNoSelection');
+  };
+
+  const handleLiveFontSizeChange = (value) => {
+    const next = Math.min(200, Math.max(6, Number(value) || 6));
+    setPresetFontSize(next);
+    localStorage.setItem('preset_font_size', String(next));
+    setFontApplyStatus('');
+    if (!selectedRegionCount) return;
+    const applied = applyStyleToSelection({ fontSize: next });
+    if (!applied) setFontApplyStatus('fontApplyNoSelection');
+  };
+
+  const handleLiveBoldToggle = () => {
+    const next = !selectedIsBold;
+    setPresetBold(next);
+    localStorage.setItem('preset_font_bold', String(next));
+    setFontApplyStatus('');
+    if (!selectedRegionCount) return;
+    const applied = applyStyleToSelection({ fontWeight: next ? 'bold' : 'normal' });
+    if (!applied) setFontApplyStatus('fontApplyNoSelection');
+  };
+
+  const handleLiveItalicToggle = () => {
+    const next = !selectedIsItalic;
+    setPresetItalic(next);
+    localStorage.setItem('preset_font_italic', String(next));
+    setFontApplyStatus('');
+    if (!selectedRegionCount) return;
+    const applied = applyStyleToSelection({ fontStyle: next ? 'italic' : 'normal' });
+    if (!applied) setFontApplyStatus('fontApplyNoSelection');
   };
 
   const handleCopySelectedTextFormat = () => {
@@ -1272,10 +1293,22 @@ function App() {
         <aside className="sidebar right-sidebar inspector-sidebar" style={{ display: showRightPanel ? 'flex' : 'none' }}>
           <div className="inspector-header">
             <div>
-              <h2 className="panel-title">{t('currentFormat')}</h2>
+              <h2 className="panel-title">{t('textBoxFormat')}</h2>
               <p className="inspector-header-copy">
                 {activeSelectionLabel}
               </p>
+              {singleSelectedRegion && (
+                <div className="inspector-format-summary">
+                  <span className="inspector-format-chip">{selectedFontFamilyLabel}</span>
+                  <span className="inspector-format-chip">{selectedFontSizeValue}px</span>
+                  <span className="inspector-format-chip">{selectedIsBold ? t('bold') : t('normalWeight')}</span>
+                  <span className="inspector-format-chip">{selectedIsItalic ? t('italic') : t('normalStyle')}</span>
+                  <span className="inspector-format-chip inspector-format-color">
+                    <span className="inspector-format-swatch" style={{ backgroundColor: selectedFillColor }} />
+                    {selectedFillColor}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="inspector-meta-pill">
               {selectedRegionCount > 0
@@ -1297,8 +1330,7 @@ function App() {
                       <select
                         value={englishFont}
                         onChange={(e) => {
-                          setEnglishFont(e.target.value);
-                          setFontApplyStatus('');
+                          void handleEnglishFontChange(e.target.value);
                         }}
                         className="inspector-select"
                       >
@@ -1313,8 +1345,7 @@ function App() {
                       <select
                         value={chineseFont}
                         onChange={(e) => {
-                          setChineseFont(e.target.value);
-                          setFontApplyStatus('');
+                          void handleChineseFontChange(e.target.value);
                         }}
                         className="inspector-select"
                       >
@@ -1331,6 +1362,39 @@ function App() {
               <details className="inspector-collapsible">
                 <summary>{t('presetFontStyleGroup')}</summary>
                 <div className="inspector-collapsible-body">
+                  <div className="font-apply-options">
+                    <label className="font-apply-option">
+                      <input
+                        type="checkbox"
+                        checked={applyPresetFontFamily}
+                        onChange={(e) => {
+                          setApplyPresetFontFamily(e.target.checked);
+                          localStorage.setItem('apply_preset_font_family', String(e.target.checked));
+                          setFontApplyStatus('');
+                        }}
+                      />
+                      <span>
+                        <strong>{t('applyPresetFontFamily')}</strong>
+                        <small>{t('applyPresetFontFamilyHelp')}</small>
+                      </span>
+                    </label>
+                    <label className="font-apply-option">
+                      <input
+                        type="checkbox"
+                        checked={applyPresetTypography}
+                        onChange={(e) => {
+                          setApplyPresetTypography(e.target.checked);
+                          localStorage.setItem('apply_preset_typography', String(e.target.checked));
+                          setFontApplyStatus('');
+                        }}
+                      />
+                      <span>
+                        <strong>{t('applyPresetTypography')}</strong>
+                        <small>{t('applyPresetTypographyHelp')}</small>
+                      </span>
+                    </label>
+                  </div>
+
                   <div className="inspector-toggle-list">
                     <label className="inspector-inline-toggle">
                       <input
@@ -1397,12 +1461,11 @@ function App() {
                       backgroundColor: color,
                       border: selectedRegionCount === 1 && selectedRegion?.fill?.toUpperCase?.() === color ? '2px solid #60CDFF' : '1px solid rgba(255,255,255,0.2)'
                     }}
-                    disabled={selectedRegionCount === 0}
-                    onClick={() => {
-                      rememberColorPreset(color);
-                      applyStyleToSelection({ fill: color });
-                    }}
-                  />
+                  disabled={selectedRegionCount === 0}
+                  onClick={() => {
+                    applyStyleToSelection({ fill: color });
+                  }}
+                />
                 ))}
 
                 <label
@@ -1439,13 +1502,9 @@ function App() {
                     max="200"
                     step="1"
                     inputMode="numeric"
-                    value={presetFontSize}
-                    onChange={(e) => {
-                      const next = Math.min(200, Math.max(6, Number(e.target.value) || 6));
-                      setPresetFontSize(next);
-                      localStorage.setItem('preset_font_size', String(next));
-                      setFontApplyStatus('');
-                    }}
+                    value={selectedFontSizeValue}
+                    onChange={(e) => handleLiveFontSizeChange(e.target.value)}
+                    disabled={!selectedRegionCount}
                     aria-label={t('fontSize')}
                   />
                   <span>px</span>
@@ -1453,89 +1512,23 @@ function App() {
                 <div className="font-style-toggles">
                   <button
                     type="button"
-                    className={`btn btn-secondary ${presetBold ? 'active' : ''}`}
-                    aria-pressed={presetBold}
-                    onClick={() => {
-                      const next = !presetBold;
-                      setPresetBold(next);
-                      localStorage.setItem('preset_font_bold', String(next));
-                      setFontApplyStatus('');
-                    }}
+                    className={`btn btn-secondary ${selectedIsBold ? 'active' : ''}`}
+                    aria-pressed={selectedIsBold}
+                    disabled={!selectedRegionCount}
+                    onClick={handleLiveBoldToggle}
                   >
                     {t('bold')}
                   </button>
                   <button
                     type="button"
-                    className={`btn btn-secondary ${presetItalic ? 'active' : ''}`}
-                    aria-pressed={presetItalic}
-                    onClick={() => {
-                      const next = !presetItalic;
-                      setPresetItalic(next);
-                      localStorage.setItem('preset_font_italic', String(next));
-                      setFontApplyStatus('');
-                    }}
+                    className={`btn btn-secondary ${selectedIsItalic ? 'active' : ''}`}
+                    aria-pressed={selectedIsItalic}
+                    disabled={!selectedRegionCount}
+                    onClick={handleLiveItalicToggle}
                   >
                     {t('italic')}
                   </button>
                 </div>
-              </div>
-            </div>
-
-            <div className="inspector-segment">
-              <div className="inspector-section-label">{t('applyContentSelection')}</div>
-              <div className="font-apply-options">
-                <label className="font-apply-option">
-                  <input
-                    type="checkbox"
-                    checked={applyPresetFontFamily}
-                    onChange={(e) => {
-                      setApplyPresetFontFamily(e.target.checked);
-                      localStorage.setItem('apply_preset_font_family', String(e.target.checked));
-                      setFontApplyStatus('');
-                    }}
-                  />
-                  <span>
-                    <strong>{t('applyPresetFontFamily')}</strong>
-                    <small>{t('applyPresetFontFamilyHelp')}</small>
-                  </span>
-                </label>
-                <label className="font-apply-option">
-                  <input
-                    type="checkbox"
-                    checked={applyPresetTypography}
-                    onChange={(e) => {
-                      setApplyPresetTypography(e.target.checked);
-                      localStorage.setItem('apply_preset_typography', String(e.target.checked));
-                      setFontApplyStatus('');
-                    }}
-                  />
-                  <span>
-                    <strong>{t('applyPresetTypography')}</strong>
-                    <small>{t('applyPresetTypographyHelp')}</small>
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            <div className="inspector-primary-actions">
-              <div className="inspector-section-label">{t('formatApplyActions')}</div>
-              <div className="font-apply-actions font-apply-actions-primary">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={!selectedRegionCount || !hasPresetApplySelection}
-                  onClick={handleApplyPresetFontSelected}
-                >
-                  {t('applyStyleSelected')}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={!imageLoaded || !hasPresetApplySelection}
-                  onClick={handleApplyDefaultFontAll}
-                >
-                  {t('applyStyleAll')}
-                </button>
               </div>
             </div>
 
